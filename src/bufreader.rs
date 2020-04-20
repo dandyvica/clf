@@ -3,27 +3,36 @@ use std::io::{BufRead, BufReader, Error, ErrorKind, Read, Seek, SeekFrom};
 
 use flate2::read::GzDecoder;
 
-/// A custom BufReader, as GzDecoder<File> doesn't implement the Seel trait.
+/// A simple trait for using read_line() on ClfBufReader
+pub trait ClfBufRead {
+    fn read_line(&mut self, buf: &mut String) -> Result<usize, std::io::Error>;
+}
+
+/// A custom BufReader, as GzDecoder<File> doesn't implement the Seek trait.
 pub struct ClfBufReader<R> {
     reader: BufReader<R>,
     current_line: u64,
     current_byte: u64,
 }
 
-/// A reimplementation of a dedicated BufReader, because GzDecoder<File> doesn't
-/// implement the Seek trait.
-impl ClfBufReader<File> {
-    /// Creates a new ClfBufReader<File>. Nothing special here.
-    pub fn new(file: File) -> Self {
+impl<T> ClfBufReader<T> {
+    pub fn new(stream: T) -> ClfBufReader<T>
+    where
+        T: Read,
+    {
         ClfBufReader {
-            reader: BufReader::new(file),
+            reader: BufReader::new(stream),
             current_line: 0,
             current_byte: 0,
         }
     }
+}
 
+/// A reimplementation of a dedicated BufReader, because GzDecoder<File> doesn't
+/// implement the Seek trait.
+impl ClfBufRead for ClfBufReader<File> {
     /// A mere call to BufReader<File>::read_line()
-    pub fn read_line(&mut self, buf: &mut String) -> Result<usize, std::io::Error> {
+    fn read_line(&mut self, buf: &mut String) -> Result<usize, std::io::Error> {
         self.reader.read_line(buf)
     }
 }
@@ -31,19 +40,10 @@ impl ClfBufReader<File> {
 /// As GzDecoder<File> doesn't implement Seek, we need to provide a custome pseudo seek() function.
 /// A a seek reset is not provided, the SeekFrom(Start) will only be possible just after opening the
 /// gzipped stream, before any read.
-impl ClfBufReader<GzDecoder<File>> {
-    /// Creates a new ClfBufReader<GzDecoder<File>>. Nothing special here.
-    pub fn new(file: File) -> Self {
-        ClfBufReader {
-            reader: BufReader::new(GzDecoder::new(file)),
-            current_line: 0,
-            current_byte: 0,
-        }
-    }
-
+impl ClfBufRead for ClfBufReader<GzDecoder<File>> {
     /// A mere call to BufReader<File>::read_line(), but in addition, sets some internal
     /// values to keep offset internally.
-    pub fn read_line(&mut self, buf: &mut String) -> Result<usize, std::io::Error> {
+    fn read_line(&mut self, buf: &mut String) -> Result<usize, std::io::Error> {
         match self.reader.read_line(buf) {
             Err(e) => Err(e),
             Ok(nb_read) => {
@@ -97,65 +97,17 @@ impl Seek for ClfBufReader<GzDecoder<File>> {
 #[cfg(test)]
 mod tests {
     use std::fs::File;
-    use std::io::{Seek, SeekFrom, Write};
+    use std::io::{Seek, SeekFrom};
 
-    use flate2::{read::GzDecoder, Compression, GzBuilder};
+    use flate2::read::GzDecoder;
 
-    use crate::reader::{tests, ClfBufReader};
-
-    // create a temporary file to test our BufReader
-    fn create_ascii() -> std::path::PathBuf {
-        let az = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".repeat(2);
-
-        let mut ascii_file = std::env::temp_dir();
-        ascii_file.push("az_ascii.txt");
-
-        let mut f = File::create(&ascii_file)
-            .expect("unable to create temporary ASCII file for unit tests");
-        for i in 0..26 {
-            f.write(az[i..i + 26].as_bytes()).unwrap();
-            if cfg!(unix) {
-                f.write("\n".as_bytes()).unwrap();
-            } else if cfg!(windows) {
-                f.write("\r\n".as_bytes()).unwrap();
-            } else {
-                unimplemented!("create_ascii(): not yet implemented");
-            }
-        }
-
-        ascii_file
-    }
-
-    // create a temporary gzipped file to test our BufReader
-    fn create_gzip() -> std::path::PathBuf {
-        let az = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".repeat(2);
-
-        let mut gzip_file = std::env::temp_dir();
-        gzip_file.push("az.gz");
-
-        let mut f =
-            File::create(&gzip_file).expect("unable to create temporary gzip file for unit tests");
-        let mut gz = GzBuilder::new()
-            .filename("az_gzip.txt")
-            .write(f, Compression::default());
-
-        for i in 0..26 {
-            gz.write(az[i..i + 26].as_bytes()).unwrap();
-            if cfg!(unix) {
-                gz.write("\n".as_bytes()).unwrap();
-            } else if cfg!(windows) {
-                gz.write("\r\n".as_bytes()).unwrap();
-            } else {
-                unimplemented!("create_ascii(): not yet implemented");
-            }
-        }
-
-        gzip_file
-    }
+    use crate::bufreader::{tests, ClfBufRead, ClfBufReader};
+    use crate::setup::{create_ascii, create_gzip};
 
     #[test]
     fn test_bufreader_file() {
-        let mut bufreader = ClfBufReader::<File>::new(File::open(tests::create_ascii()).unwrap());
+        let ascii_file = create_ascii("az_ascii.txt");
+        let mut bufreader = ClfBufReader::new(File::open(ascii_file).unwrap());
         let mut s = String::new();
 
         let _ = bufreader.read_line(&mut s);
@@ -176,36 +128,38 @@ mod tests {
 
     #[test]
     fn test_bufreader_gzip() {
-        let gzip_file = tests::create_gzip();
-
-        let mut bufreader =
-            ClfBufReader::<GzDecoder<File>>::new(File::open(&gzip_file).unwrap());
+        // prepare test
+        let gzip_file_name = tests::create_gzip("az_gzip.txt.gz");
+        let gzip_file = File::open(&gzip_file_name).unwrap();
+        let decoder = GzDecoder::new(gzip_file);
+        let mut bufreader = ClfBufReader::new(decoder);
         let mut s = String::new();
 
+        // test seek & read_line()
         let _ = bufreader.seek(SeekFrom::Start(10));
         let _ = bufreader.read_line(&mut s);
         assert_eq!(s, "KLMNOPQRSTUVWXYZ\n");
         s.clear();
 
-        let mut bufreader2 =
-            ClfBufReader::<GzDecoder<File>>::new(File::open(&gzip_file).unwrap());
-
-        let _ = bufreader2.read_line(&mut s);
-        assert_eq!(s, "ABCDEFGHIJKLMNOPQRSTUVWXYZ\n");
-        s.clear();
-        assert_eq!(bufreader2.seek(SeekFrom::Current(0)).unwrap(), 27);
-
-        let _ = bufreader2.read_line(&mut s);
+        let _ = bufreader.read_line(&mut s);
         assert_eq!(s, "BCDEFGHIJKLMNOPQRSTUVWXYZA\n");
         s.clear();
-        assert_eq!(bufreader2.seek(SeekFrom::Current(0)).unwrap(), 54);
+        assert_eq!(bufreader.seek(SeekFrom::Current(0)).unwrap(), 44);
+
+        let _ = bufreader.read_line(&mut s);
+        assert_eq!(s, "CDEFGHIJKLMNOPQRSTUVWXYZAB\n");
+        s.clear();
+        assert_eq!(bufreader.seek(SeekFrom::Current(0)).unwrap(), 71);
     }
 
     #[test]
     #[should_panic]
     fn test_bufreader_gzip_fromend() {
-        let mut bufreader =
-            ClfBufReader::<GzDecoder<File>>::new(File::open(tests::create_gzip()).unwrap());
+        // prepare test
+        let gzip_file_name = tests::create_gzip("az_gzip.txt.gz");
+        let gzip_file = File::open(&gzip_file_name).unwrap();
+        let decoder = GzDecoder::new(gzip_file);
+        let mut bufreader = ClfBufReader::new(decoder);        
 
         let _ = bufreader.seek(SeekFrom::End(0));
     }
@@ -213,16 +167,22 @@ mod tests {
     #[test]
     #[should_panic]
     fn test_bufreader_gzip_current() {
-        let mut bufreader =
-            ClfBufReader::<GzDecoder<File>>::new(File::open(tests::create_gzip()).unwrap());
+        // prepare test
+        let gzip_file_name = tests::create_gzip("az_gzip.txt.gz");
+        let gzip_file = File::open(&gzip_file_name).unwrap();
+        let decoder = GzDecoder::new(gzip_file);
+        let mut bufreader = ClfBufReader::new(decoder);
 
         let _ = bufreader.seek(SeekFrom::Current(10));
     }
 
     #[test]
     fn test_bufreader_gzip_eof() {
-        let mut bufreader =
-            ClfBufReader::<GzDecoder<File>>::new(File::open(tests::create_gzip()).unwrap());
+        // prepare test
+        let gzip_file_name = tests::create_gzip("az_gzip.txt.gz");
+        let gzip_file = File::open(&gzip_file_name).unwrap();
+        let decoder = GzDecoder::new(gzip_file);
+        let mut bufreader = ClfBufReader::new(decoder);        
 
         assert_eq!(
             bufreader.seek(SeekFrom::Start(1000)).unwrap_err().kind(),

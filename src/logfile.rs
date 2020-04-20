@@ -2,8 +2,8 @@ use std::default::Default;
 use std::ffi::OsString;
 use std::fs::File;
 use std::fs::Metadata;
-use std::io::{BufRead, BufReader, Seek, SeekFrom};
-use std::path::PathBuf;
+use std::io::{BufRead, BufReader, Read, Seek, SeekFrom};
+use std::path::{Path, PathBuf};
 
 #[cfg(target_os = "linux")]
 use std::os::unix::fs::MetadataExt;
@@ -41,8 +41,8 @@ pub struct LogFile {
 
 impl LogFile {
     /// A simple initializer. Only sets path & extension from the provided file name.
-    pub fn new(file: &str) -> LogFile {
-        let path = PathBuf::from(file);
+    pub fn new<P: AsRef<Path>>(file: P) -> LogFile {
+        let path = PathBuf::from(file.as_ref());
         let extension = path.extension().map(|x| x.to_os_string());
 
         LogFile {
