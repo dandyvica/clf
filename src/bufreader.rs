@@ -159,7 +159,7 @@ mod tests {
         let gzip_file_name = tests::create_gzip("az_gzip.txt.gz");
         let gzip_file = File::open(&gzip_file_name).unwrap();
         let decoder = GzDecoder::new(gzip_file);
-        let mut bufreader = ClfBufReader::new(decoder);        
+        let mut bufreader = ClfBufReader::new(decoder);
 
         let _ = bufreader.seek(SeekFrom::End(0));
     }
@@ -182,7 +182,7 @@ mod tests {
         let gzip_file_name = tests::create_gzip("az_gzip.txt.gz");
         let gzip_file = File::open(&gzip_file_name).unwrap();
         let decoder = GzDecoder::new(gzip_file);
-        let mut bufreader = ClfBufReader::new(decoder);        
+        let mut bufreader = ClfBufReader::new(decoder);
 
         assert_eq!(
             bufreader.seek(SeekFrom::Start(1000)).unwrap_err().kind(),
