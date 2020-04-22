@@ -27,6 +27,7 @@ pub enum AppCustomError {
     FileNotAccessible,
     NotAFile,
     SeekPosBeyondEof,
+    NoPathForScript,
 }
 
 // define our own application error type

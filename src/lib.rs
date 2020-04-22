@@ -6,6 +6,7 @@ pub mod logfile;
 pub mod bufreader;
 pub mod search;
 //pub mod file_iter;
+pub mod config;
 pub mod pattern;
 
 mod setup {
