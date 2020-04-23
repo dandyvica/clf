@@ -2,6 +2,7 @@ use std::fs::File;
 use std::io::{BufReader, Error, ErrorKind, Read};
 use std::path::{Path, PathBuf};
 
+use regex::RegexSet;
 use serde::{Deserialize, Serialize};
 
 use crate::error::*;
@@ -101,17 +102,17 @@ pub struct Search {
     pub script: Option<Script>,
 
     // vector of patterns to look for
-    pub patterns: Vec<Pattern<String>>,
+    pub patterns: Vec<Pattern<String,RegexSet>>,
     // logfile data as name, etc
     //pub status_file: StatusFile,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Deserialize)]
 pub struct Global {
     pathlist: Vec<PathBuf>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Deserialize)]
 pub struct Config {
     global: Global,
     searches: Vec<Search>,
@@ -200,8 +201,8 @@ mod tests {
 
     #[test]
     fn test_canonicalize() {
-        use std::path::PathBuf;
         use std::io::ErrorKind;
+        use std::path::PathBuf;
 
         let script = Script {
             name: PathBuf::from("foo"),
