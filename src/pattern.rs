@@ -1,6 +1,7 @@
 /// A list of compiled regexes used to find matches into log files.
 use std::collections::HashMap;
 use std::convert::TryFrom;
+//use std::convert::From;
 
 use regex::{Captures, Regex, RegexSet};
 use serde::{Deserialize, Serialize};
@@ -10,34 +11,31 @@ use crate::error::*;
 //#[doc(hidden)]
 
 #[derive(Debug, Deserialize)]
-#[serde(try_from = "RegexList")]
+#[serde(try_from = "Vec<String>")]
 pub struct RegexVec(pub Vec<Regex>);
 
 #[derive(Debug, Deserialize)]
-#[serde(try_from = "RegexList")]
+#[serde(try_from = "Vec<String>")]
 pub struct RegexBundle(pub RegexSet);
 
-#[derive(Debug, Deserialize)]
-pub struct RegexList(pub Vec<String>);
-
-impl TryFrom<RegexList> for RegexVec {
+impl TryFrom<Vec<String>> for RegexVec {
     type Error = AppError;
 
-    fn try_from(list: RegexList) -> Result<Self, Self::Error> {
+    fn try_from(list: Vec<String>) -> Result<Self, Self::Error> {
         let mut v: Vec<Regex> = Vec::new();
-        for re in &list.0 {
-            // replace 
-            v.push(Regex::new(&re.replace(r"\", r"\\"))?);
+        for re in &list {
+            // replace
+            v.push(Regex::new(re)?);
         }
         Ok(RegexVec(v))
     }
 }
 
-impl TryFrom<RegexList> for RegexBundle {
+impl TryFrom<Vec<String>> for RegexBundle {
     type Error = AppError;
 
-    fn try_from(list: RegexList) -> Result<Self, Self::Error> {
-        let set = RegexSet::new(list.0)?;
+    fn try_from(list: Vec<String>) -> Result<Self, Self::Error> {
+        let set = RegexSet::new(list)?;
         Ok(RegexBundle(set))
     }
 }
@@ -49,10 +47,27 @@ impl TryFrom<RegexList> for RegexBundle {
 /// previously matched patterns.
 #[derive(Debug, Deserialize, PartialEq)]
 #[allow(non_camel_case_types)]
+//#[serde(try_from = "&str")]
 pub enum PatternType {
     critical,
     warning,
     ok,
+}
+
+impl TryFrom<&str> for PatternType {
+    type Error = AppError;
+
+    fn try_from(s: &str) -> Result<Self, Self::Error> {
+        match s {
+            "critical" => Ok(PatternType::critical),
+            "warning" => Ok(PatternType::warning),
+            "ok" => Ok(PatternType::ok),
+            _ => Err(AppError::App {
+                err: AppCustomError::UnsupportedPatternType,
+                msg: format!("{} pattern type is not supported", s),
+            }),
+        }
+    }
 }
 
 /// A list of compiled regexes which will be used to match Unicode strings coming from
@@ -86,28 +101,28 @@ impl Pattern {
     /// use regex::Regex;
     /// use clf::pattern::{Pattern, PatternType};
     ///
-    /// let mut json = r#"
+    /// let mut yaml = r#"
     /// {
-    ///     "type": "critical",
-    ///     "regexes": ["^ERROR", "FATAL", "PANIC"],
-    ///     "exceptions": ["^SLIGHT_ERROR", "WARNING", "NOT IMPORTANT"]
+    ///     type: critical,
+    ///     regexes: [
+    ///         "^ERROR", 
+    ///         "FATAL", 
+    ///     "PANIC"
+    ///     ],
+    ///     exceptions: [
+    ///         "^SLIGHT_ERROR", 
+    ///         "WARNING", 
+    ///     "NOT IMPORTANT$"
+    ///     ]
     /// }"#;
-    /// let p = Pattern::from_str(json).unwrap();
+    ///
+    /// let p = Pattern::from_str(yaml).unwrap();
     /// assert_eq!(p.r#type, PatternType::critical);
     /// assert_eq!(p.regexes.0.len(), 3);
     /// assert_eq!(p.exceptions.unwrap().0.len(), 3);
-    ///
-    /// json = r#"
-    /// {
-    ///     "type": "critical",
-    ///     "regexes": ["^(ERROR", "FATAL", "PANIC"],
-    ///     "exceptions": ["^SLIGHT_ERROR", "WARNING", "NOT IMPORTANT"]
-    /// }"#;
-    /// let p = Pattern::from_str(json);
-    /// assert!(p.is_err());
     /// ```
-    pub fn from_str(json: &str) -> Result<Pattern, AppError> {
-        let p: Pattern = serde_json::from_str(json)?;
+    pub fn from_str(yaml: &str) -> Result<Pattern, AppError> {
+        let p: Pattern = serde_yaml::from_str(yaml)?;
         Ok(p)
     }
 
@@ -119,13 +134,22 @@ impl Pattern {
     /// use regex::Regex;
     /// use clf::pattern::{Pattern, PatternType};
     ///
-    /// let mut json = r#"
+    /// let mut yaml = r#"
     /// {
-    ///     "type": "critical",
-    ///     "regexes": ["^ERROR", "FATAL", "PANIC"],
-    ///     "exceptions": ["^SLIGHT_ERROR", "WARNING", "NOT IMPORTANT$"]
+    ///     type: critical,
+    ///     regexes: [
+    ///         "^ERROR", 
+    ///         "FATAL", 
+    ///         "PANIC",
+    ///     ],
+    ///     exceptions: [
+    ///         "^SLIGHT_ERROR", 
+    ///         "WARNING", 
+    ///         "NOT IMPORTANT$",
+    ///     ]
     /// }"#;
-    /// let p = Pattern::from_str(json).unwrap();
+    ///
+    /// let p = Pattern::from_str(yaml).unwrap();
     /// assert!(p.is_exception("this is NOT IMPORTANT"));
     /// ```
     pub fn is_exception(&self, text: &str) -> bool {
@@ -143,21 +167,29 @@ impl Pattern {
     /// ```rust
     /// use regex::Regex;
     /// use clf::pattern::{Pattern, PatternType};
-    ///
-    /// let mut json = r#"
+    /// 
+    /// let mut yaml = r#"
     /// {
-    ///     "type": "critical",
-    ///     "regexes": [
-    ///         "^([0-9]{1,3})-([0-9]{3})-[0-9]{3}-[0-9]{4}$",
-    ///         "^([0-9]{3})-[0-9]{3}-[0-9]{4}$"
-    ///     ]
+    ///     type: critical,
+    ///     regexes: [
+    ///         '^\+?([0-9]{1,3})-([0-9]{3})-[0-9]{3}-[0-9]{4}$', 
+    ///         '^([0-9]{3})-[0-9]{3}-[0-9]{4}$', 
+    ///     ],
     /// }"#;
     ///
-    /// let p = Pattern::from_str(json).unwrap();
-    /// let caps = p.captures("541-754-3010").unwrap();
-    ///
-    /// assert_eq!(caps.get(1).unwrap().as_str(), "1");
+    /// let p = Pattern::from_str(yaml).unwrap();
+    /// let mut caps = p.captures("541-754-3010").unwrap();
+    /// assert_eq!(caps.get(1).unwrap().as_str(), "541");
+    /// 
+    /// caps = p.captures("1-541-754-3010").unwrap();
+    /// assert_eq!(caps.get(1).unwrap().as_str(), "1");   
+    /// assert_eq!(caps.get(2).unwrap().as_str(), "541");   
+    /// 
+    /// caps = p.captures("+1-541-754-3010").unwrap();
+    /// assert_eq!(caps.get(1).unwrap().as_str(), "1");   
     /// assert_eq!(caps.get(2).unwrap().as_str(), "541");
+    /// 
+    /// assert!(p.captures("foo").is_none());   
     /// ```
     pub fn captures<'t>(&self, text: &'t str) -> Option<Captures<'t>> {
         // use RegexSet first
@@ -170,7 +202,9 @@ impl Pattern {
             }
 
             // we ended up here, so return the captures
-            return caps;
+            if caps.is_some() {
+                return caps;
+            }
         }
         None
     }

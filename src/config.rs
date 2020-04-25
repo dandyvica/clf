@@ -109,13 +109,13 @@ pub struct Search {
 
 #[derive(Debug, Deserialize)]
 pub struct Global {
-    pathlist: Vec<PathBuf>,
+    pathlist: String,
 }
 
 #[derive(Debug, Deserialize)]
 pub struct Config {
     global: Global,
-    searches: Vec<Search>,
+    searches: Search,
 }
 
 impl Config {
@@ -123,80 +123,47 @@ impl Config {
     ///
     /// # Example
     ///
-    pub fn from_reader<R: Read>(rdr: R) -> Result<Config, AppError> {
-        // open the file in read-only mode with buffer.
-        //let file = File::open(config_file)?;
-        let reader = BufReader::new(rdr);
-
-        // load JSON
-        let json = serde_json::from_reader(reader)?;
-
-        Ok(json)
+    pub fn from_str(s: &str) -> Result<Config, AppError> {
+        // load YAML data
+        let yaml = serde_yaml::from_str(s)?;
+        Ok(yaml)
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use std::path::PathBuf;
     use crate::config::{Config, Script};
 
     #[test]
     fn test_load() {
-        let json = r#"
-            {
-                "global": {
-                    "pathlist": ["/usr/bin"]
-                },
-                "searches": [
-                    {
-                        "tag": "tag1",
-                        "logfile": "/var/log/syslog",
-                        "patterns": [
-                            {
-                                "type": "critical",
-                                "regexes": [
-                                    "^ERROR"
-                                ],
-                                "exceptions": [
-                                    "^SLIGHT_ERROR"
-                                ]
-                            },
-                            {
-                                "type": "warning",
-                                "regexes": [
-                                    "^WARN"
-                                ]
-                            }               
-                        ]
-                    },
-                    {
-                        "tag": "tag2",
-                        "logfile": "/var/log/boot.log",
-                        "patterns": [
-                            {
-                                "type": "warning",
-                                "regexes": [
-                                    "^WARN"
-                                ]
-                            }               
-                        ]
-                    }                    
-                ]
-            }
-        "#;
+        let toml = r#"
+global:
+    pathlist: "/usr/bin"
 
-        let buffer = std::io::Cursor::new(json);
-        let config = Config::from_reader(buffer).unwrap();
+searches:
+    tag: "tag1"
+    logfile: "/var/log/syslog"
+    script:
+        name: /tmp/my_script.sh,
+        args: ['arg1', 'arg2', 'arg3']
+    patterns:
+        - type: critical
+          regexes: ["^ERROR", "FATAL", "PANIC"]
+          exceptions: ["^SLIGHT_ERROR", "WARNING", "NOT IMPORTANT$"]
 
-        assert_eq!(config.searches[0].tag, "tag1");
-        assert_eq!(
-            config.searches[0].logfile.as_ref().unwrap().as_os_str(),
-            "/var/log/syslog"
-        );
-        assert_eq!(config.searches[1].tag, "tag2");
-        assert_eq!(
-            config.searches[1].logfile.as_ref().unwrap().as_os_str(),
-            "/var/log/boot.log"
-        );
+        - type: warning
+          regexes: ["^ERROR", "FATAL", "PANIC"]
+          exceptions: ["^SLIGHT_ERROR", "WARNING", "NOT IMPORTANT$"]
+
+        - type: ok
+          regexes: ["^ERROR", "FATAL", "PANIC"]
+"#;
+
+        let config = Config::from_str(toml).unwrap();
+
+        assert_eq!(config.global.pathlist, "/usr/bin");
+
     }
 
     #[test]

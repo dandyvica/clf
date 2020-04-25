@@ -28,6 +28,7 @@ pub enum AppCustomError {
     NotAFile,
     SeekPosBeyondEof,
     NoPathForScript,
+    UnsupportedPatternType,
 }
 
 // define our own application error type
@@ -36,7 +37,7 @@ pub enum AppError {
     Io(io::Error),
     Regex(regex::Error),
     Parse(num::ParseIntError),
-    JSON(serde_json::error::Error),
+    Yaml(serde_yaml::Error),
     App { err: AppCustomError, msg: String },
 }
 
@@ -57,7 +58,7 @@ impl fmt::Display for AppError {
             AppError::Io(ref err) => err.fmt(f),
             AppError::Regex(ref err) => err.fmt(f),
             AppError::Parse(ref err) => err.fmt(f),
-            AppError::JSON(ref err) => err.fmt(f),
+            AppError::Yaml(ref err) => err.fmt(f),
             AppError::App { ref err, ref msg } => {
                 write!(f, "A custom error occurred {:?}, custom msg {:?}", err, msg)
             }
@@ -78,9 +79,9 @@ impl From<regex::Error> for AppError {
     }
 }
 
-impl From<serde_json::error::Error> for AppError {
-    fn from(err: serde_json::Error) -> AppError {
-        AppError::JSON(err)
+impl From<serde_yaml::Error> for AppError {
+    fn from(err: serde_yaml::Error) -> AppError {
+        AppError::Yaml(err)
     }
 }
 
