@@ -87,7 +87,7 @@ impl Script {
     // pub fn replace_args
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Deserialize)]
 pub struct Search {
     // a unique identifier
     pub tag: String,
@@ -102,7 +102,7 @@ pub struct Search {
     pub script: Option<Script>,
 
     // vector of patterns to look for
-    pub patterns: Vec<Pattern<String,RegexSet>>,
+    pub patterns: Vec<Pattern>,
     // logfile data as name, etc
     //pub status_file: StatusFile,
 }
