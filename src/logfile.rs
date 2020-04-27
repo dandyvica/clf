@@ -100,7 +100,7 @@ impl LogFile {
     /// #[cfg(target_os = "linux")]
     /// use clf::logfile::LogFile;
     ///
-    /// let file = LogFile::new("/usr/share/man/man1/man.1.gz");
+    /// let file = LogFile::new("/usr/share/man/man1/man.1.gz").unwrap();
     /// assert!(file.is_compressed());
     /// ```
     pub fn is_compressed(&self) -> bool {

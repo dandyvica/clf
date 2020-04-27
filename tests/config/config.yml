@@ -8,15 +8,15 @@ searches:
           name: /tmp/my_script.sh,
           args: ['arg1', 'arg2', 'arg3']
       patterns:
-          - type: critical
+          critical:
             regexes: ["^ERROR", "FATAL", "PANIC"]
             exceptions: ["^SLIGHT_ERROR", "WARNING", "NOT IMPORTANT$"]
 
-          - type: warning
+          warning:
             regexes: ["^ERROR", "FATAL", "PANIC"]
             exceptions: ["^SLIGHT_ERROR", "WARNING", "NOT IMPORTANT$"]
 
-          - type: ok
+          ok:
             regexes: ["^ERROR", "FATAL", "PANIC"]
 
     - tag: "tag2"
@@ -25,13 +25,13 @@ searches:
           name: /tmp/my_script.sh,
           args: ['arg1', 'arg2', 'arg3']
       patterns:
-          - type: critical
-            regexes: ["^ERROR", "FATAL", "PANIC"]
+          critical:
+            regexes: ["(error)", "FATAL", "PANIC"]
             exceptions: ["^SLIGHT_ERROR", "WARNING", "NOT IMPORTANT$"]
 
-          - type: warning
-            regexes: ["^ERROR", "FATAL", "PANIC"]
+          warning:
+            regexes: ["^error", "FATAL", "PANIC"]
             exceptions: ["^SLIGHT_ERROR", "WARNING", "NOT IMPORTANT$"]
           
-          - type: ok
+          ok:
             regexes: ["^ERROR", "FATAL", "PANIC"]

@@ -3,8 +3,8 @@ pub mod error;
 pub mod bufreader;
 pub mod config;
 pub mod logfile;
+pub mod lookup;
 pub mod pattern;
-pub mod search;
 pub mod util;
 
 mod setup {

@@ -5,6 +5,7 @@ use std::convert::TryFrom;
 use regex::{Captures, Regex, RegexSet};
 use serde::Deserialize;
 
+use crate::config::Match;
 use crate::error::*;
 
 //#[doc(hidden)]
@@ -79,7 +80,7 @@ pub enum PatternType {
 #[derive(Debug, Deserialize)]
 pub struct Pattern {
     /// the type of a pattern, related to its severity
-    pub r#type: PatternType,
+    //pub r#type: PatternType,
 
     /// a vector of compiled *Regex* structs which are hence all valid
     pub regexes: RegexVec,
@@ -102,7 +103,6 @@ impl Pattern {
     ///
     /// let mut yaml = r#"
     /// {
-    ///     type: critical,
     ///     regexes: [
     ///         "^ERROR",
     ///         "FATAL",
@@ -116,7 +116,6 @@ impl Pattern {
     /// }"#;
     ///
     /// let p = Pattern::from_str(yaml).unwrap();
-    /// assert_eq!(p.r#type, PatternType::critical);
     /// assert_eq!(p.regexes.0.len(), 3);
     /// assert_eq!(p.exceptions.unwrap().0.len(), 3);
     /// ```
@@ -135,7 +134,6 @@ impl Pattern {
     ///
     /// let mut yaml = r#"
     /// {
-    ///     type: critical,
     ///     regexes: [
     ///         "^ERROR",
     ///         "FATAL",
@@ -209,22 +207,23 @@ impl Pattern {
     }
 }
 
-pub trait Candidate {
-    fn captures(&self, text: &str);
+pub trait Matcher {
+    fn captures<'t>(&self, text: &'t str) -> Option<Captures<'t>>;
 }
 
-impl Candidate for Vec<Pattern> {
-    fn captures(&self, text: &str) {
-        // try to match critical pattern(s) first. If several pattern are found, ?
-        let critical: Vec<_> = self.iter().filter(|p| p.r#type == PatternType::critical).collect();
-        
-        for p in self {
-            match p.r#type {
-                PatternType::critical => {
-
-                }
-            }
+impl Matcher for Match {
+    fn captures<'t>(&self, text: &'t str) -> Option<Captures<'t>> {
+        // try to match critical pattern first
+        if let Some(critical) = &self.critical {
+            return critical.captures(text);
         }
+
+        // and then warning
+        if let Some(warning) = &self.warning {
+            return warning.captures(text);
+        }
+
+        None
     }
 }
 

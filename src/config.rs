@@ -1,4 +1,5 @@
 use std::convert::From;
+use std::convert::TryFrom;
 use std::fs::File;
 use std::io::{BufReader, Error, ErrorKind, Read};
 use std::path::{Path, PathBuf};
@@ -125,9 +126,14 @@ pub struct Search {
     pub script: Option<Script>,
 
     // vector of patterns to look for
-    pub patterns: Vec<Pattern>,
-    // logfile data as name, etc
-    //pub status_file: StatusFile,
+    pub patterns: Match,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct Match {
+    pub critical: Option<Pattern>,
+    pub warning: Option<Pattern>,
+    pub ok: Option<Pattern>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -186,36 +192,29 @@ searches:
     - tag: "tag1"
       logfile: "/var/log/syslog"
       script:
-          name: /tmp/my_script.sh,
-          args: ['arg1', 'arg2', 'arg3']
+            name: /tmp/my_script.sh,
+            args: ['arg1', 'arg2', 'arg3']
       patterns:
-          - type: critical
-            regexes: ["^ERROR", "FATAL", "PANIC"]
-            exceptions: ["^SLIGHT_ERROR", "WARNING", "NOT IMPORTANT$"]
+            critical:
+                regexes: ["^ERROR", "FATAL", "PANIC"]
+                exceptions: ["^SLIGHT_ERROR", "WARNING", "NOT IMPORTANT$"]
 
-          - type: warning
-            regexes: ["^ERROR", "FATAL", "PANIC"]
-            exceptions: ["^SLIGHT_ERROR", "WARNING", "NOT IMPORTANT$"]
-
-          - type: ok
-            regexes: ["^ERROR", "FATAL", "PANIC"]
+            warning:
+                regexes: ["^ERROR", "FATAL", "PANIC"]
+                exceptions: ["^SLIGHT_ERROR", "WARNING", "NOT IMPORTANT$"]
+        
+            ok:
+                regexes: ["^ERROR", "FATAL", "PANIC"]
 
     - tag: "tag2"
       logfile: "/var/log/syslog"
       script:
-          name: /tmp/my_script.sh,
-          args: ['arg1', 'arg2', 'arg3']
+            name: /tmp/my_script.sh,
+            args: ['arg1', 'arg2', 'arg3']
       patterns:
-          - type: critical
-            regexes: ["^ERROR", "FATAL", "PANIC"]
-            exceptions: ["^SLIGHT_ERROR", "WARNING", "NOT IMPORTANT$"]
-
-          - type: warning
-            regexes: ["^ERROR", "FATAL", "PANIC"]
-            exceptions: ["^SLIGHT_ERROR", "WARNING", "NOT IMPORTANT$"]
-          
-          - type: ok
-            regexes: ["^ERROR", "FATAL", "PANIC"]
+            critical:
+                regexes: ["^ERROR", "FATAL", "PANIC"]
+                exceptions: ["^SLIGHT_ERROR", "WARNING", "NOT IMPORTANT$"]
 "#;
 
         let config = Config::from_str(toml).unwrap();
