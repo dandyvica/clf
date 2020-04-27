@@ -12,23 +12,21 @@ macro_rules! app_err {
 }
 
 // list here all error messages
-pub type ErrorBundle = (AppCustomError, &'static str);
-pub const MSG001: ErrorBundle = (AppCustomError::FileHasNoRoot, "file <{}> has no root");
-pub const MSG002: ErrorBundle = (
-    AppCustomError::FileNotAccessible,
-    "file <{}> is not accessible",
-);
-pub const MSG003: ErrorBundle = (AppCustomError::NotAFile, "file <{}> is not a file");
+// pub type ErrorBundle = (AppCustomError, &'static str);
+// pub const MSG001: ErrorBundle = (AppCustomError::FileHasNoRoot, "file <{}> has no root");
+// pub const MSG002: ErrorBundle = (
+//     AppCustomError::FileNotAccessible,
+//     "file <{}> is not accessible",
+// );
+// pub const MSG003: ErrorBundle = (AppCustomError::NotAFile, "file <{}> is not a file");
 
 // define our own custom error type
 #[derive(Debug, PartialEq)]
 pub enum AppCustomError {
-    FileHasNoRoot,
-    FileNotAccessible,
-    NotAFile,
     SeekPosBeyondEof,
     NoPathForScript,
     UnsupportedPatternType,
+    FileNotUsable,
 }
 
 // define our own application error type

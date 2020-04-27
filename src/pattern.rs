@@ -1,10 +1,9 @@
 /// A list of compiled regexes used to find matches into log files.
-use std::collections::HashMap;
+//use std::collections::HashMap;
 use std::convert::TryFrom;
-//use std::convert::From;
 
 use regex::{Captures, Regex, RegexSet};
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 
 use crate::error::*;
 
@@ -54,21 +53,21 @@ pub enum PatternType {
     ok,
 }
 
-impl TryFrom<&str> for PatternType {
-    type Error = AppError;
+// impl TryFrom<&str> for PatternType {
+//     type Error = AppError;
 
-    fn try_from(s: &str) -> Result<Self, Self::Error> {
-        match s {
-            "critical" => Ok(PatternType::critical),
-            "warning" => Ok(PatternType::warning),
-            "ok" => Ok(PatternType::ok),
-            _ => Err(AppError::App {
-                err: AppCustomError::UnsupportedPatternType,
-                msg: format!("{} pattern type is not supported", s),
-            }),
-        }
-    }
-}
+//     fn try_from(s: &str) -> Result<Self, Self::Error> {
+//         match s {
+//             "critical" => Ok(PatternType::critical),
+//             "warning" => Ok(PatternType::warning),
+//             "ok" => Ok(PatternType::ok),
+//             _ => Err(AppError::App {
+//                 err: AppCustomError::UnsupportedPatternType,
+//                 msg: format!("{} pattern type is not supported", s),
+//             }),
+//         }
+//     }
+// }
 
 /// A list of compiled regexes which will be used to match Unicode strings coming from
 /// a logfile.
@@ -105,13 +104,13 @@ impl Pattern {
     /// {
     ///     type: critical,
     ///     regexes: [
-    ///         "^ERROR", 
-    ///         "FATAL", 
+    ///         "^ERROR",
+    ///         "FATAL",
     ///     "PANIC"
     ///     ],
     ///     exceptions: [
-    ///         "^SLIGHT_ERROR", 
-    ///         "WARNING", 
+    ///         "^SLIGHT_ERROR",
+    ///         "WARNING",
     ///     "NOT IMPORTANT$"
     ///     ]
     /// }"#;
@@ -138,13 +137,13 @@ impl Pattern {
     /// {
     ///     type: critical,
     ///     regexes: [
-    ///         "^ERROR", 
-    ///         "FATAL", 
+    ///         "^ERROR",
+    ///         "FATAL",
     ///         "PANIC",
     ///     ],
     ///     exceptions: [
-    ///         "^SLIGHT_ERROR", 
-    ///         "WARNING", 
+    ///         "^SLIGHT_ERROR",
+    ///         "WARNING",
     ///         "NOT IMPORTANT$",
     ///     ]
     /// }"#;
@@ -167,28 +166,28 @@ impl Pattern {
     /// ```rust
     /// use regex::Regex;
     /// use clf::pattern::{Pattern, PatternType};
-    /// 
+    ///
     /// let mut yaml = r#"
     /// {
     ///     type: critical,
     ///     regexes: [
-    ///         '^\+?([0-9]{1,3})-([0-9]{3})-[0-9]{3}-[0-9]{4}$', 
-    ///         '^([0-9]{3})-[0-9]{3}-[0-9]{4}$', 
+    ///         '^\+?([0-9]{1,3})-([0-9]{3})-[0-9]{3}-[0-9]{4}$',
+    ///         '^([0-9]{3})-[0-9]{3}-[0-9]{4}$',
     ///     ],
     /// }"#;
     ///
     /// let p = Pattern::from_str(yaml).unwrap();
     /// let mut caps = p.captures("541-754-3010").unwrap();
     /// assert_eq!(caps.get(1).unwrap().as_str(), "541");
-    /// 
+    ///
     /// caps = p.captures("1-541-754-3010").unwrap();
     /// assert_eq!(caps.get(1).unwrap().as_str(), "1");   
     /// assert_eq!(caps.get(2).unwrap().as_str(), "541");   
-    /// 
+    ///
     /// caps = p.captures("+1-541-754-3010").unwrap();
     /// assert_eq!(caps.get(1).unwrap().as_str(), "1");   
     /// assert_eq!(caps.get(2).unwrap().as_str(), "541");
-    /// 
+    ///
     /// assert!(p.captures("foo").is_none());   
     /// ```
     pub fn captures<'t>(&self, text: &'t str) -> Option<Captures<'t>> {
@@ -207,6 +206,25 @@ impl Pattern {
             }
         }
         None
+    }
+}
+
+pub trait Candidate {
+    fn captures(&self, text: &str);
+}
+
+impl Candidate for Vec<Pattern> {
+    fn captures(&self, text: &str) {
+        // try to match critical pattern(s) first. If several pattern are found, ?
+        let critical: Vec<_> = self.iter().filter(|p| p.r#type == PatternType::critical).collect();
+        
+        for p in self {
+            match p.r#type {
+                PatternType::critical => {
+
+                }
+            }
+        }
     }
 }
 

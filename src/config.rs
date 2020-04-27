@@ -1,3 +1,4 @@
+use std::convert::From;
 use std::fs::File;
 use std::io::{BufReader, Error, ErrorKind, Read};
 use std::path::{Path, PathBuf};
@@ -7,6 +8,22 @@ use serde::{Deserialize, Serialize};
 
 use crate::error::*;
 use crate::pattern::{Pattern, PatternType};
+
+#[cfg(target_os = "linux")]
+const SEPARATOR: char = ':';
+
+#[cfg(target_os = "windows")]
+const SEPARATOR: char = ';';
+
+#[derive(Debug, Deserialize)]
+#[serde(from = "String")]
+pub struct PathList(Vec<PathBuf>);
+
+impl From<String> for PathList {
+    fn from(list: String) -> Self {
+        PathList(list.split(SEPARATOR).map(|p| PathBuf::from(p)).collect())
+    }
+}
 
 /// A helper structure to represent a script or command to be run on each match.
 #[derive(Debug, Serialize, Deserialize)]
@@ -87,13 +104,19 @@ impl Script {
     // pub fn replace_args
 }
 
+// pub struct Options {
+//     exec_script: bool,
+//     keep_output: bool,
+
+// }
+
 #[derive(Debug, Deserialize)]
 pub struct Search {
     // a unique identifier
     pub tag: String,
 
     // logfile name
-    pub logfile: Option<PathBuf>,
+    pub logfile: PathBuf,
 
     // options specific to a search
     //pub options: Options,
@@ -109,61 +132,99 @@ pub struct Search {
 
 #[derive(Debug, Deserialize)]
 pub struct Global {
-    pathlist: String,
+    // A list of paths, separated by either ':' for unix, or ';' for windows. This is
+    // where the script, if any, will be searched for.
+    pathlist: Option<PathList>,
+
+    // A directory where matches lines will be stored.
+    #[serde(default = "std::env::temp_dir")]
+    outputdir: PathBuf,
+
+    // A directory where the snapshot file is kept.
+    #[serde(default = "std::env::temp_dir")]
+    snapshotdir: PathBuf,
 }
 
 #[derive(Debug, Deserialize)]
 pub struct Config {
-    global: Global,
-    searches: Search,
+    pub global: Global,
+    pub searches: Vec<Search>,
 }
 
 impl Config {
     /// Loads a configuration file as a Config struct.
-    ///
-    /// # Example
-    ///
     pub fn from_str(s: &str) -> Result<Config, AppError> {
         // load YAML data
         let yaml = serde_yaml::from_str(s)?;
+        Ok(yaml)
+    }
+
+    /// Loads a configuration file as a Config struct.
+    pub fn from_file(file_name: &str) -> Result<Config, AppError> {
+        // open YAML file
+        let file = File::open(file_name)?;
+
+        // load YAML data
+        let yaml = serde_yaml::from_reader(file)?;
         Ok(yaml)
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use std::path::PathBuf;
     use crate::config::{Config, Script};
+    //use std::path::PathBuf;
 
     #[test]
+    #[cfg(target_os = "linux")]
     fn test_load() {
         let toml = r#"
 global:
-    pathlist: "/usr/bin"
+    pathlist: "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 
 searches:
-    tag: "tag1"
-    logfile: "/var/log/syslog"
-    script:
-        name: /tmp/my_script.sh,
-        args: ['arg1', 'arg2', 'arg3']
-    patterns:
-        - type: critical
-          regexes: ["^ERROR", "FATAL", "PANIC"]
-          exceptions: ["^SLIGHT_ERROR", "WARNING", "NOT IMPORTANT$"]
+    - tag: "tag1"
+      logfile: "/var/log/syslog"
+      script:
+          name: /tmp/my_script.sh,
+          args: ['arg1', 'arg2', 'arg3']
+      patterns:
+          - type: critical
+            regexes: ["^ERROR", "FATAL", "PANIC"]
+            exceptions: ["^SLIGHT_ERROR", "WARNING", "NOT IMPORTANT$"]
 
-        - type: warning
-          regexes: ["^ERROR", "FATAL", "PANIC"]
-          exceptions: ["^SLIGHT_ERROR", "WARNING", "NOT IMPORTANT$"]
+          - type: warning
+            regexes: ["^ERROR", "FATAL", "PANIC"]
+            exceptions: ["^SLIGHT_ERROR", "WARNING", "NOT IMPORTANT$"]
 
-        - type: ok
-          regexes: ["^ERROR", "FATAL", "PANIC"]
+          - type: ok
+            regexes: ["^ERROR", "FATAL", "PANIC"]
+
+    - tag: "tag2"
+      logfile: "/var/log/syslog"
+      script:
+          name: /tmp/my_script.sh,
+          args: ['arg1', 'arg2', 'arg3']
+      patterns:
+          - type: critical
+            regexes: ["^ERROR", "FATAL", "PANIC"]
+            exceptions: ["^SLIGHT_ERROR", "WARNING", "NOT IMPORTANT$"]
+
+          - type: warning
+            regexes: ["^ERROR", "FATAL", "PANIC"]
+            exceptions: ["^SLIGHT_ERROR", "WARNING", "NOT IMPORTANT$"]
+          
+          - type: ok
+            regexes: ["^ERROR", "FATAL", "PANIC"]
 "#;
 
         let config = Config::from_str(toml).unwrap();
 
-        assert_eq!(config.global.pathlist, "/usr/bin");
+        // test global struct
+        assert_eq!(config.global.pathlist.unwrap().0.len(), 6);
+        //assert_eq!(config.global.snapshotdir, PathBuf::from("/tmp"));
 
+        assert_eq!(config.searches.len(), 2);
     }
 
     #[test]

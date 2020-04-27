@@ -1,13 +1,11 @@
 #[macro_use]
 pub mod error;
-pub mod logfile;
-//pub mod lookup;
-//pub mod serdeser;
 pub mod bufreader;
-pub mod search;
-//pub mod file_iter;
 pub mod config;
+pub mod logfile;
 pub mod pattern;
+pub mod search;
+pub mod util;
 
 mod setup {
     use std::fs::File;
@@ -16,6 +14,7 @@ mod setup {
     use flate2::{Compression, GzBuilder};
 
     // create a temporary file to test our modules
+    #[allow(dead_code)]
     pub fn create_ascii(name: &str) -> std::path::PathBuf {
         let az = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".repeat(2);
 
@@ -39,6 +38,7 @@ mod setup {
     }
 
     // create a temporary gzipped file to test our BufReader
+    #[allow(dead_code)]
     pub fn create_gzip(name: &str) -> std::path::PathBuf {
         let az = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".repeat(2);
 

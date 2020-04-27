@@ -1,0 +1,37 @@
+global:
+    pathlist: "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+
+searches:
+    - tag: "tag1"
+      logfile: /var/log/boot.log
+      script:
+          name: /tmp/my_script.sh,
+          args: ['arg1', 'arg2', 'arg3']
+      patterns:
+          - type: critical
+            regexes: ["^ERROR", "FATAL", "PANIC"]
+            exceptions: ["^SLIGHT_ERROR", "WARNING", "NOT IMPORTANT$"]
+
+          - type: warning
+            regexes: ["^ERROR", "FATAL", "PANIC"]
+            exceptions: ["^SLIGHT_ERROR", "WARNING", "NOT IMPORTANT$"]
+
+          - type: ok
+            regexes: ["^ERROR", "FATAL", "PANIC"]
+
+    - tag: "tag2"
+      logfile: "/var/log/syslog"
+      script:
+          name: /tmp/my_script.sh,
+          args: ['arg1', 'arg2', 'arg3']
+      patterns:
+          - type: critical
+            regexes: ["^ERROR", "FATAL", "PANIC"]
+            exceptions: ["^SLIGHT_ERROR", "WARNING", "NOT IMPORTANT$"]
+
+          - type: warning
+            regexes: ["^ERROR", "FATAL", "PANIC"]
+            exceptions: ["^SLIGHT_ERROR", "WARNING", "NOT IMPORTANT$"]
+          
+          - type: ok
+            regexes: ["^ERROR", "FATAL", "PANIC"]
