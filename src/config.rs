@@ -8,7 +8,7 @@ use regex::RegexSet;
 use serde::{Deserialize, Serialize};
 
 use crate::error::*;
-use crate::pattern::{Pattern, PatternType};
+use crate::pattern::{Pattern, PatternSet};
 
 #[cfg(target_os = "linux")]
 const SEPARATOR: char = ':';
@@ -27,7 +27,7 @@ impl From<String> for PathList {
 }
 
 /// A helper structure to represent a script or command to be run on each match.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Deserialize)]
 pub struct Script {
     // name of the script to spawn without path
     pub name: PathBuf,
@@ -105,35 +105,44 @@ impl Script {
     // pub fn replace_args
 }
 
-// pub struct Options {
-//     exec_script: bool,
-//     keep_output: bool,
+#[derive(Debug, Deserialize, Default)]
+#[serde(default)]
+pub struct SearchOptions {
+    /// if `true`, the defined script will be run a first match
+    pub runscript: bool,
 
-// }
+    /// if `true`, the matching line will be saved in an output file
+    pub keep_output: bool,
 
-#[derive(Debug, Deserialize)]
-pub struct Search {
-    // a unique identifier
-    pub tag: String,
-
-    // logfile name
-    pub logfile: PathBuf,
-
-    // options specific to a search
-    //pub options: Options,
-
-    // script details like path, name, parameters, delay etc
-    pub script: Option<Script>,
-
-    // vector of patterns to look for
-    pub patterns: Match,
+    /// if `true`, the logfile will be search from the beginning, regardless of any saved offset
+    pub rewind: bool,
 }
 
 #[derive(Debug, Deserialize)]
-pub struct Match {
-    pub critical: Option<Pattern>,
-    pub warning: Option<Pattern>,
-    pub ok: Option<Pattern>,
+#[allow(non_camel_case_types)]
+pub enum LogSource {
+    logfile(String),
+    loglist(String),
+}
+
+#[derive(Debug, Deserialize)]
+pub struct Search {
+    /// a unique identifier for this search
+    pub tag: String,
+
+    /// the logfile name to check
+    pub logfile: PathBuf,
+
+    /// a list of options specific to this search. As such options are optional, add a default serde
+    /// directive
+    #[serde(default)]
+    pub options: SearchOptions,
+
+    /// a script details like path, name, parameters, delay etc to be possibly run for a match
+    pub script: Option<Script>,
+
+    /// patterns to be checked against
+    pub patterns: PatternSet,
 }
 
 #[derive(Debug, Deserialize)]
@@ -191,6 +200,8 @@ global:
 searches:
     - tag: "tag1"
       logfile: "/var/log/syslog"
+      options:
+            runscript: true
       script:
             name: /tmp/my_script.sh,
             args: ['arg1', 'arg2', 'arg3']

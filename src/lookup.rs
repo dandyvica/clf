@@ -1,10 +1,11 @@
 use std::io::{BufRead, BufReader, Read, Seek, SeekFrom};
+use std::time::SystemTime;
 
 use crate::bufreader::{ClfBufRead, ClfBufReader};
 use crate::config::Search;
 use crate::error::*;
 use crate::logfile::LogFile;
-use crate::pattern::Matcher;
+use crate::pattern::PatternSet;
 
 pub trait Lookup {
     fn lookup(&mut self, search: &Search) -> Result<(), AppError>;
@@ -37,12 +38,24 @@ impl Lookup for LogFile {
         // uses the same buffer
         let mut line = String::with_capacity(1024);
 
+        // initialize counters
+        let mut bytes_count = self.last_pos;
+        let mut line_number = self.last_line;
+
         // create a bufreader
         let file = std::fs::File::open(&self.path)?;
         let mut reader = BufReader::new(file);
 
-        // move to position if already recorded
-        reader.seek(SeekFrom::Start(self.last_pos))?;
+        // move to position if already recorded, and not rewind
+        if !search.options.rewind {
+            // if file is compressed, the Seek trait is not implemented. So directly move
+            // to the offset
+            if self.compressed {
+                //reader.by_ref().bytes().nth((self.last_pos - 1) as usize)?;
+            } else {
+                reader.seek(SeekFrom::Start(self.last_pos))?;
+            }
+        }
 
         loop {
             // read until \n (which is included in the buffer)
@@ -57,12 +70,16 @@ impl Lookup for LogFile {
                         break;
                     }
 
+                    // we've been reading a new line successfully
+                    line_number += 1;
+                    bytes_count += bytes_read as u64;
+
                     // check. if somethin found
                     if let Some(caps) = search.patterns.captures(&line) {
                         println!("file {:?}, line match: {:?}", self.path, caps);
 
                         // if option.script, replace capture groups and call script
-                        // time out if any, 
+                        // time out if any,
                     }
 
                     // reset buffer to not accumulate data
@@ -75,8 +92,17 @@ impl Lookup for LogFile {
             };
         }
 
-        // save current offset
-        self.last_pos = reader.seek(SeekFrom::Current(0))?;
+        // save current offset and line number
+        if self.compressed {
+            self.last_pos = bytes_count;
+        } else {
+            self.last_pos = reader.seek(SeekFrom::Current(0))?;
+        }
+        self.last_line = line_number;
+
+        // and last run
+        let time =  SystemTime::now().duration_since(SystemTime::UNIX_EPOCH)?;
+        self.last_run = time.as_secs();
 
         Ok(())
     }
@@ -88,7 +114,7 @@ mod tests {
 
     use crate::error::*;
     use crate::logfile::LogFile;
-    use crate::search::Search;
+    use crate::lookup::Lookup;
 
     use regex::Regex;
 
@@ -115,8 +141,8 @@ mod tests {
             Some(re.is_match(s))
         }
 
-        let output = logfile.search(file, seeker);
+        //let output = logfile.search(file, seeker);
 
-        assert_eq!(output.unwrap(), Some(true));
+        //assert_eq!(output.unwrap(), Some(true));
     }
 }

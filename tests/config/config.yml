@@ -3,7 +3,7 @@ global:
 
 searches:
     - tag: "tag1"
-      logfile: /var/log/boot.log
+      logfile: /var/log/syslog.7.gz
       script:
           name: /tmp/my_script.sh,
           args: ['arg1', 'arg2', 'arg3']

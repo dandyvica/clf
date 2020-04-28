@@ -1,15 +1,17 @@
+//! All structures involved in error management. It combines a list a Rust standard library
+//! error types, used crates error types and a specific one to the application.
 use std::{fmt, io, num};
 
 // a macro helper to return custom app errors
-#[macro_export]
-macro_rules! app_err {
-    ($err:expr, $x:expr) => {
-        Err(AppError::App {
-            err: $err.0,
-            msg: $err.1.replace("{}", $x),
-        })
-    };
-}
+// #[macro_export]
+// macro_rules! app_err {
+//     ($err:expr, $x:expr) => {
+//         Err(AppError::App {
+//             err: $err.0,
+//             msg: $err.1.replace("{}", $x),
+//         })
+//     };
+// }
 
 // list here all error messages
 // pub type ErrorBundle = (AppCustomError, &'static str);
@@ -20,23 +22,28 @@ macro_rules! app_err {
 // );
 // pub const MSG003: ErrorBundle = (AppCustomError::NotAFile, "file <{}> is not a file");
 
-// define our own custom error type
+/// Error kind specific to an application error, different from standard errors.
 #[derive(Debug, PartialEq)]
-pub enum AppCustomError {
+pub enum AppCustomErrorKind {
     SeekPosBeyondEof,
     NoPathForScript,
     UnsupportedPatternType,
     FileNotUsable,
 }
 
-// define our own application error type
+/// A specific error type combining all error types.
 #[derive(Debug)]
 pub enum AppError {
     Io(io::Error),
     Regex(regex::Error),
     Parse(num::ParseIntError),
     Yaml(serde_yaml::Error),
-    App { err: AppCustomError, msg: String },
+    Json(serde_json::Error),
+    SystemTime(std::time::SystemTimeError),
+    App {
+        err: AppCustomErrorKind,
+        msg: String,
+    },
 }
 
 // impl Error for AppError {
@@ -57,6 +64,8 @@ impl fmt::Display for AppError {
             AppError::Regex(ref err) => err.fmt(f),
             AppError::Parse(ref err) => err.fmt(f),
             AppError::Yaml(ref err) => err.fmt(f),
+            AppError::Json(ref err) => err.fmt(f),
+            AppError::SystemTime(ref err) => err.fmt(f),
             AppError::App { ref err, ref msg } => {
                 write!(f, "A custom error occurred {:?}, custom msg {:?}", err, msg)
             }
@@ -80,6 +89,18 @@ impl From<regex::Error> for AppError {
 impl From<serde_yaml::Error> for AppError {
     fn from(err: serde_yaml::Error) -> AppError {
         AppError::Yaml(err)
+    }
+}
+
+impl From<serde_json::Error> for AppError {
+    fn from(err: serde_json::Error) -> AppError {
+        AppError::Json(err)
+    }
+}
+
+impl From<std::time::SystemTimeError> for AppError {
+    fn from(err: std::time::SystemTimeError) -> AppError {
+        AppError::SystemTime(err)
     }
 }
 

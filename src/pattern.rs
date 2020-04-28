@@ -1,23 +1,40 @@
-/// A list of compiled regexes used to find matches into log files.
-//use std::collections::HashMap;
+//! A list of structures dedicated to matching text data from a logfile.
+//!
 use std::convert::TryFrom;
 
 use regex::{Captures, Regex, RegexSet};
 use serde::Deserialize;
 
-use crate::config::Match;
 use crate::error::*;
 
 //#[doc(hidden)]
 
+/// A helper structure for deserializing into a `Vec<Regex>` automatically from a vector a `String`.
 #[derive(Debug, Deserialize)]
 #[serde(try_from = "Vec<String>")]
 pub struct RegexVec(pub Vec<Regex>);
 
+/// A helper structure for deserializing into a `RegexSet` automatically from a vector a `String`.
 #[derive(Debug, Deserialize)]
 #[serde(try_from = "Vec<String>")]
 pub struct RegexBundle(pub RegexSet);
 
+/// An implementation of `TryFrom` for the help tuple struct `RegexVec`.
+///
+/// This just creates a `RegexVec` structure from a vector of regexes strings. This is
+/// used by the `serde` deserialize process in order to automatically transforms a vector
+/// of strings read from the YAML config file into a `RegexVec` structure, which contains
+/// a vector of compiled `Regex` structs.
+///
+/// # Example
+///
+/// ```rust
+/// use std::convert::TryFrom;
+/// use clf::pattern::RegexVec;
+///
+/// let regs = RegexVec::try_from(vec!["^#".to_string(), ";$".to_string()]).unwrap();
+/// assert_eq!(regs.0.len(), 2);
+/// ```
 impl TryFrom<Vec<String>> for RegexVec {
     type Error = AppError;
 
@@ -31,6 +48,22 @@ impl TryFrom<Vec<String>> for RegexVec {
     }
 }
 
+/// An implementation of `TryFrom` for the help tuple struct `RegexBundle`.
+///
+/// This just creates a `RegexBundle` structure from a vector of regexes strings. This is
+/// used by the `serde` deserialize process in order to automatically transforms a vector
+/// of strings read from the YAML config file into a `RegexBundle` structure, which contains
+/// a vector of compiled `RegexSet` structure.
+///
+/// # Example
+///
+/// ```rust
+/// use std::convert::TryFrom;
+/// use clf::pattern::RegexBundle;
+///
+/// let regs = RegexBundle::try_from(vec!["^#".to_string(), ";$".to_string()]).unwrap();
+/// assert_eq!(regs.0.len(), 2);
+/// ```
 impl TryFrom<Vec<String>> for RegexBundle {
     type Error = AppError;
 
@@ -39,36 +72,6 @@ impl TryFrom<Vec<String>> for RegexBundle {
         Ok(RegexBundle(set))
     }
 }
-
-/// Defines the type of a search.
-///
-/// As a logfile can be searched for patterns, some are considered critical because
-/// they need to be tackled ASAP, and some are just warning. *Ok* are meant to disable
-/// previously matched patterns.
-#[derive(Debug, Deserialize, PartialEq)]
-#[allow(non_camel_case_types)]
-//#[serde(try_from = "&str")]
-pub enum PatternType {
-    critical,
-    warning,
-    ok,
-}
-
-// impl TryFrom<&str> for PatternType {
-//     type Error = AppError;
-
-//     fn try_from(s: &str) -> Result<Self, Self::Error> {
-//         match s {
-//             "critical" => Ok(PatternType::critical),
-//             "warning" => Ok(PatternType::warning),
-//             "ok" => Ok(PatternType::ok),
-//             _ => Err(AppError::App {
-//                 err: AppCustomError::UnsupportedPatternType,
-//                 msg: format!("{} pattern type is not supported", s),
-//             }),
-//         }
-//     }
-// }
 
 /// A list of compiled regexes which will be used to match Unicode strings coming from
 /// a logfile.
@@ -79,27 +82,24 @@ pub enum PatternType {
 /// is returned.
 #[derive(Debug, Deserialize)]
 pub struct Pattern {
-    /// the type of a pattern, related to its severity
-    //pub r#type: PatternType,
-
-    /// a vector of compiled *Regex* structs which are hence all valid
+    /// a vector of compiled `Regex` structs which are hence all valid
     pub regexes: RegexVec,
 
-    /// a *RegexSet* struct, as it's not necessary to get neither which regex triggers the match, nor
+    /// a `RegexSet` struct, as it's not necessary to get neither which regex triggers the match, nor
     /// capture groups
     pub exceptions: Option<RegexBundle>,
 }
 
 impl Pattern {
-    /// Builds a `Pattern` set form a JSON string. Useful for unit tests, because this structure
-    /// is used by the `Config` structure, directly loading the whole configuration from a JSON
+    /// Builds a `Pattern` set form a YAML string. Useful for unit tests, because this structure
+    /// is used by the `Config` structure, directly loading the whole configuration from a YAML
     /// file.
     ///
     /// # Example
     ///
     /// ```rust
     /// use regex::Regex;
-    /// use clf::pattern::{Pattern, PatternType};
+    /// use clf::pattern::Pattern;
     ///
     /// let mut yaml = r#"
     /// {
@@ -130,7 +130,7 @@ impl Pattern {
     ///
     /// ```rust
     /// use regex::Regex;
-    /// use clf::pattern::{Pattern, PatternType};
+    /// use clf::pattern::Pattern;
     ///
     /// let mut yaml = r#"
     /// {
@@ -155,19 +155,17 @@ impl Pattern {
             .map_or(false, |x| x.0.is_match(text))
     }
 
-    /// Try to find a match in the string *s* corresponding to the *regex* list struct field,
-    /// provided any regex in the exception list is not matched. If `use_set` is `true`, then
-    /// the match is tried against the `RegexSet` field.
+    /// Try to find a match in the string `s` corresponding to the `regexes` list struct field,
+    /// provided any regex in the exception list is not matched.
     ///
     /// # Example
     ///
     /// ```rust
     /// use regex::Regex;
-    /// use clf::pattern::{Pattern, PatternType};
+    /// use clf::pattern::Pattern;
     ///
     /// let mut yaml = r#"
     /// {
-    ///     type: critical,
     ///     regexes: [
     ///         '^\+?([0-9]{1,3})-([0-9]{3})-[0-9]{3}-[0-9]{4}$',
     ///         '^([0-9]{3})-[0-9]{3}-[0-9]{4}$',
@@ -207,12 +205,20 @@ impl Pattern {
     }
 }
 
-pub trait Matcher {
-    fn captures<'t>(&self, text: &'t str) -> Option<Captures<'t>>;
+/// A structure combining patterns into 3 categories: *critical*, *warning* and *ok*.
+#[derive(Debug, Deserialize)]
+pub struct PatternSet {
+    pub critical: Option<Pattern>,
+    pub warning: Option<Pattern>,
+    pub ok: Option<Pattern>,
 }
 
-impl Matcher for Match {
-    fn captures<'t>(&self, text: &'t str) -> Option<Captures<'t>> {
+// pub trait Matcher {
+//     fn captures<'t>(&self, text: &'t str) -> Option<Captures<'t>>;
+// }
+
+impl PatternSet {
+    pub fn captures<'t>(&self, text: &'t str) -> Option<Captures<'t>> {
         // try to match critical pattern first
         if let Some(critical) = &self.critical {
             return critical.captures(text);
@@ -225,41 +231,4 @@ impl Matcher for Match {
 
         None
     }
-}
-
-#[cfg(test)]
-mod tests {
-    use crate::pattern::{Pattern, PatternType};
-
-    //#[test]
-    // fn test_from_str() {
-    //     // regexes are OK
-    //     let mut re = Pattern::new(
-    //         PatternType::critical,
-    //         &vec![
-    //             r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,4}\b",
-    //             r"https?://(www\.)?[A-Za-z0-9]+\.(com|org|edu|gov|us)/?.*",
-    //             r"^[0-9]{3}-[0-9]{2}-[0-9]{4}$",
-    //         ],
-    //         None,
-    //     );
-    //     assert!(re.is_ok());
-
-    //     // error in regexes
-    //     re = Pattern::new(
-    //         PatternType::critical,
-    //         &vec![
-    //             r"\b[A-a-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,4}\b",
-    //             r"https?://(www\.?[A-Za-z0-9]+\.(com|org|edu|gov|us)/?.*",
-    //             r"^[0-9]{3}-[0-9]2}-[0-9]{4}$",
-    //         ],
-    //         None,
-    //     );
-    //     assert!(re.is_err());
-
-    //     // match re.unwrap_err() {
-    //     //     AppError::Regex(err) => assert_eq!(format!("{}", err), "foo"),
-    //     //     _ => ()
-    //     // };
-    // }
 }

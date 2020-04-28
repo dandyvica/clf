@@ -1,39 +1,41 @@
-use std::default::Default;
+//! A structure representing a logfile, with all related attributes.
 use std::ffi::OsString;
-//use std::fs::File;
 use std::fs::Metadata;
 use std::io::{Error, ErrorKind};
 use std::path::{Path, PathBuf};
+use std::time::{Instant, SystemTime};
 
 #[cfg(target_os = "linux")]
 use std::os::unix::fs::MetadataExt;
 
-//use flate2::read::GzDecoder;
 use serde::{Deserialize, Serialize};
 
-use crate::error::*;
+use crate::error::{AppCustomErrorKind, AppError};
 use crate::util::Usable;
 
-//const BUFFER_SIZE: usize = 1024;
-
-// this is a comprehensive list of extensions meaning the file is compressed
-pub const COMPRESSED_EXT: &'static [&'static str] = &["gz", "zip", "xz"];
-
-#[derive(Debug)]
+/// A wrapper to get logfile information and and related attributes.
+#[derive(Debug, Serialize, Deserialize)]
 pub struct LogFile {
-    // file & path as a PathBuf
+    /// file & path as a PathBuf
     pub path: PathBuf,
 
-    // extension as an OsString (owned) or None is no extension
-    pub extension: Option<OsString>,
+    /// extension as an OsString (owned) or None if no extension
+    pub extension: Option<String>,
 
-    // platform specific metadata
-    pub metadata: Metadata,
+    /// platform specific metadata
+    // #[serde(skip_serializing)]
+    pub compressed: bool,
 
-    // position of the last run
+    /// position of the last run. Used to seek the file pointer to this point.
     pub last_pos: u64,
 
-    // Linux inode or Windows equivalent
+    /// last line number during the last search
+    pub last_line: u64,
+
+    /// last time logfile is processed
+    pub last_run: u64,
+
+    /// Linux inode or Windows equivalent
     pub inode: u64,
 
     // Linux device ID or equivalent for Windows
@@ -41,7 +43,8 @@ pub struct LogFile {
 }
 
 impl LogFile {
-    /// A simple initializer. Only sets path & extension from the provided file name.
+    /// Creates a `LogFile` by providing the full logfile path. It also sets platform specific features
+    /// like file *inode* or *dev*. The file path is checked for accessibility and is canonicalized.
     ///
     /// Examples:
     ///
@@ -55,14 +58,22 @@ impl LogFile {
     pub fn new<P: AsRef<Path>>(file_name: P) -> Result<LogFile, AppError> {
         // check if we can really use the file
         let path = PathBuf::from(file_name.as_ref());
-        let extension = path.extension().map(|x| x.to_os_string());
+        let extension = path
+            .extension()
+            .and_then(|x| Some(x.to_string_lossy().to_string()));
 
         if !path.is_usable() {
             return Err(AppError::App {
-                err: AppCustomError::FileNotUsable,
+                err: AppCustomErrorKind::FileNotUsable,
                 msg: format!("file {:?} is not usable", path),
             });
         }
+
+        const COMPRESSED_EXT: &'static [&'static str] = &["gz", "zip", "xz"];
+        let compressed = match &extension {
+            None => false,
+            Some(s) => COMPRESSED_EXT.contains(&s.as_str()),
+        };
 
         // canonicalize path: absolute form of the path with all intermediate
         // components normalized and symbolic links resolved.
@@ -70,6 +81,9 @@ impl LogFile {
 
         // get metadata if possible
         let metadata = path.metadata()?;
+
+        // calculate number of seconds since EPOCH
+        let time =  SystemTime::now().duration_since(SystemTime::UNIX_EPOCH)?;
 
         // get inode & dev ID
         let mut inode = 0u64;
@@ -84,30 +98,13 @@ impl LogFile {
         Ok(LogFile {
             path: canon,
             extension: extension,
-            metadata: metadata,
+            compressed: compressed,
             last_pos: 0u64,
+            last_line: 0u64,
+            last_run: time.as_secs(),
             inode: inode,
             dev: dev,
         })
-    }
-
-    /// Test whether is a file is supposed to be compressed. Do not check against magic number,
-    /// just according to its extension.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// #[cfg(target_os = "linux")]
-    /// use clf::logfile::LogFile;
-    ///
-    /// let file = LogFile::new("/usr/share/man/man1/man.1.gz").unwrap();
-    /// assert!(file.is_compressed());
-    /// ```
-    pub fn is_compressed(&self) -> bool {
-        match &self.extension {
-            None => false,
-            Some(x) => COMPRESSED_EXT.contains(&x.to_str().unwrap()),
-        }
     }
 }
 

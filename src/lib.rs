@@ -5,6 +5,7 @@ pub mod config;
 pub mod logfile;
 pub mod lookup;
 pub mod pattern;
+pub mod snapshot;
 pub mod util;
 
 mod setup {
