@@ -9,7 +9,7 @@ searches:
           args: ['arg1', 'arg2', 'arg3']
       patterns:
           critical:
-            regexes: ["^ERROR", "FATAL", "PANIC"]
+            regexes: ["^ERROR", "GnuPG", "PANIC"]
             exceptions: ["^SLIGHT_ERROR", "WARNING", "NOT IMPORTANT$"]
 
           warning:

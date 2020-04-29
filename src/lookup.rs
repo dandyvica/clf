@@ -1,60 +1,96 @@
+use std::fs::File;
 use std::io::{BufRead, BufReader, Read, Seek, SeekFrom};
+use std::path::Path;
 use std::time::SystemTime;
+
+use flate2::read::GzDecoder;
 
 use crate::bufreader::{ClfBufRead, ClfBufReader};
 use crate::config::Search;
-use crate::error::*;
+use crate::error::{AppCustomErrorKind, AppError};
 use crate::logfile::LogFile;
 use crate::pattern::PatternSet;
 
-pub trait Lookup {
-    fn lookup(&mut self, search: &Search) -> Result<(), AppError>;
+pub trait Seeker {
+    fn set_offset(&mut self, offset: u64) -> Result<u64, AppError>;
 }
 
-// impl Search for LogFile {
-//     fn search<F, P, U>(&self, func: F, pattern: &P) -> Result<Option<U>, AppError>
-//     where
-//         F: Fn(&P, &str) -> Option<U>,
-//     {
-//         // open target file
-//         let file = File::open(&self.path)?;
+impl Seeker for BufReader<File> {
+    fn set_offset(&mut self, offset: u64) -> Result<u64, AppError> {
+        self.seek(SeekFrom::Start(offset))
+            .map_err(|e| AppError::Io(e))
+    }
+}
 
-//         // if file is compressed, we need to call a specific reader
-//         let output = if self.is_compressed() {
-//             let decoder = GzDecoder::new(file);
-//             let reader = BufReader::new(decoder);
-//             self.reader_search(reader, func, pattern)
-//         } else {
-//             let reader = BufReader::new(file);
-//             self.reader_search(reader, func, pattern)
-//         };
+impl Seeker for BufReader<GzDecoder<File>> {
+    fn set_offset(&mut self, offset: u64) -> Result<u64, AppError> {
+        let pos = match self.by_ref().bytes().nth((offset - 1) as usize) {
+            None => {
+                return Err(AppError::App {
+                    err: AppCustomErrorKind::SeekPosBeyondEof,
+                    msg: format!("tried to set offset at: {}", offset),
+                })
+            }
+            Some(x) => x,
+        };
+        Ok(pos.unwrap() as u64)
+    }
+}
 
-//         output
-//     }
-// }
+pub trait Lookup {
+    fn lookup(&mut self, search: &Search) -> Result<(), AppError>;
+    fn lookup_from_reader<R: BufRead + Seeker>(
+        &mut self,
+        reader: R,
+        search: &Search,
+    ) -> Result<(), AppError>;
+}
 
 impl Lookup for LogFile {
     fn lookup(&mut self, search: &Search) -> Result<(), AppError> {
+        // open target file
+        let file = File::open(&self.path)?;
+
+        // if file is compressed, we need to call a specific reader
+        if self.compressed {
+            let decoder = GzDecoder::new(file);
+            let reader = BufReader::new(decoder);
+            self.lookup_from_reader(reader, search)?;
+        } else {
+            let reader = BufReader::new(file);
+            self.lookup_from_reader(reader, search)?;
+        };
+
+        //output
+        Ok(())
+    }
+
+    fn lookup_from_reader<R: BufRead + Seeker>(
+        &mut self,
+        mut reader: R,
+        search: &Search,
+    ) -> Result<(), AppError> {
         // uses the same buffer
         let mut line = String::with_capacity(1024);
 
         // initialize counters
-        let mut bytes_count = self.last_pos;
+        let mut bytes_count = self.last_offset;
         let mut line_number = self.last_line;
 
         // create a bufreader
-        let file = std::fs::File::open(&self.path)?;
-        let mut reader = BufReader::new(file);
+        //let file = std::fs::File::open(&self.path)?;
+        //let mut reader = BufReader::new(stream);
 
         // move to position if already recorded, and not rewind
-        if !search.options.rewind {
+        if !search.options.rewind && self.last_offset != 0 {
             // if file is compressed, the Seek trait is not implemented. So directly move
             // to the offset
-            if self.compressed {
-                //reader.by_ref().bytes().nth((self.last_pos - 1) as usize)?;
-            } else {
-                reader.seek(SeekFrom::Start(self.last_pos))?;
-            }
+            // if self.compressed {
+            //     //reader.by_ref().bytes().nth((self.last_offset - 1) as usize)?;
+            // } else {
+            //     reader.seek(SeekFrom::Start(self.last_offset))?;
+            // }
+            reader.set_offset(self.last_offset)?;
         }
 
         loop {
@@ -66,13 +102,14 @@ impl Lookup for LogFile {
                 Ok(bytes_read) => {
                     // EOF: save last file address to restart from this address for next run
                     if bytes_read == 0 {
-                        //self.last_pos = reader.seek(SeekFrom::Current(0)).unwrap();
+                        //self.last_offset = reader.seek(SeekFrom::Current(0)).unwrap();
                         break;
                     }
 
                     // we've been reading a new line successfully
                     line_number += 1;
                     bytes_count += bytes_read as u64;
+                    //println!("====> line#={}, file={:?}-{}", line_number, self.path, line);
 
                     // check. if somethin found
                     if let Some(caps) = search.patterns.captures(&line) {
@@ -93,15 +130,11 @@ impl Lookup for LogFile {
         }
 
         // save current offset and line number
-        if self.compressed {
-            self.last_pos = bytes_count;
-        } else {
-            self.last_pos = reader.seek(SeekFrom::Current(0))?;
-        }
+        self.last_offset = bytes_count;
         self.last_line = line_number;
 
         // and last run
-        let time =  SystemTime::now().duration_since(SystemTime::UNIX_EPOCH)?;
+        let time = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH)?;
         self.last_run = time.as_secs();
 
         Ok(())

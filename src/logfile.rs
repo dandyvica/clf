@@ -27,7 +27,7 @@ pub struct LogFile {
     pub compressed: bool,
 
     /// position of the last run. Used to seek the file pointer to this point.
-    pub last_pos: u64,
+    pub last_offset: u64,
 
     /// last line number during the last search
     pub last_line: u64,
@@ -83,7 +83,7 @@ impl LogFile {
         let metadata = path.metadata()?;
 
         // calculate number of seconds since EPOCH
-        let time =  SystemTime::now().duration_since(SystemTime::UNIX_EPOCH)?;
+        let time = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH)?;
 
         // get inode & dev ID
         let mut inode = 0u64;
@@ -99,7 +99,7 @@ impl LogFile {
             path: canon,
             extension: extension,
             compressed: compressed,
-            last_pos: 0u64,
+            last_offset: 0u64,
             last_line: 0u64,
             last_run: time.as_secs(),
             inode: inode,

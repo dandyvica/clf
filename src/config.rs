@@ -3,6 +3,7 @@ use std::convert::TryFrom;
 use std::fs::File;
 use std::io::{BufReader, Error, ErrorKind, Read};
 use std::path::{Path, PathBuf};
+use std::process::Command;
 
 use regex::RegexSet;
 use serde::{Deserialize, Serialize};
@@ -118,11 +119,31 @@ pub struct SearchOptions {
     pub rewind: bool,
 }
 
+/// A `enum` matching either a logfile name if only a single logfile is defined, or a list
+/// of logfile names is case of command is given. This command is expected to return to the
+/// the standard output the list of files to check. One of the enum variant is loaded from
+/// the YAML configuration file.
 #[derive(Debug, Deserialize)]
-#[allow(non_camel_case_types)]
 pub enum LogSource {
-    logfile(String),
-    loglist(String),
+    #[serde(rename = "logfile")]
+    LogFile(String),
+
+    #[serde(rename = "loglist")]
+    LogList(String),
+}
+
+impl LogSource {
+    pub fn get_files(&self) -> Result<Vec<String>, AppError> {
+        match self {
+            LogSource::LogFile(s) => Ok(vec![s.clone()]),
+            LogSource::LogList(cmd) => {
+                let filelist = Command::new(cmd).output()?;
+                let output = String::from_utf8_lossy(&filelist.stdout);
+                let v: Vec<_> = output.split('\n').map(|x| x.to_string()).collect();
+                Ok(v)
+            }
+        }
+    }
 }
 
 #[derive(Debug, Deserialize)]
