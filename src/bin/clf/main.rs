@@ -1,4 +1,5 @@
 use std::io::ErrorKind;
+use std::thread;
 
 use clf::{
     config::Config, error::AppError, logfile::LogFile, lookup::Lookup, settings::Settings,
@@ -9,6 +10,10 @@ mod args;
 use args::CliOptions;
 
 fn main() -> Result<(), AppError> {
+    // create a vector of thread handles for keep track of what we've created and
+    // wait for them to finish
+    let mut handle_list: Vec<thread::JoinHandle<()>> = Vec::new();
+
     // manage arguments
     let options = CliOptions::get_options();
 
@@ -51,6 +56,11 @@ fn main() -> Result<(), AppError> {
 
     // write snapshot
     snapshot.save("/tmp/clf.snapshot")?;
+
+    // teardown
+    for handle in handle_list {
+        handle.join();
+    }
 
     Ok(())
 }

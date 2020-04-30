@@ -4,9 +4,11 @@ use std::fs::File;
 use std::io::{BufReader, Error, ErrorKind, Read};
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::thread;
 
 use regex::RegexSet;
 use serde::{Deserialize, Serialize};
+use wait_timeout::ChildExt;
 
 use crate::error::*;
 use crate::pattern::{Pattern, PatternSet};
@@ -38,6 +40,9 @@ pub struct Script {
 
     // list of its optional arguments
     pub args: Option<Vec<String>>,
+
+    // timeout in seconds
+    pub timeout: u64,
 }
 
 impl Script {
@@ -104,6 +109,31 @@ impl Script {
 
     // pub fn exec
     // pub fn replace_args
+    pub fn spawn(&self, duration: u64) -> thread::JoinHandle<()> {
+        // let cmd = self.name.clone();
+        //let args: Vec<&str> = self.args.as_ref().unwrap().iter().map(|s| &**s).collect();
+
+        let mut cmd = Command::new(&self.name);
+        let mut child = cmd
+            .args(&self.args.as_ref().unwrap()[..])
+            .spawn()
+            .expect("failed to execute");
+
+        let handle = thread::spawn(move || {
+            // let mut cmd = Command::new(cmd);
+            // let mut child = cmd.args(args).spawn().expect("failed to execute");
+            let one_sec = std::time::Duration::from_secs(duration);
+            let status_code = match child.wait_timeout(one_sec).unwrap() {
+                Some(status) => status.code(),
+                None => {
+                    // child hasn't exited yet
+                    child.kill().unwrap();
+                    child.wait().unwrap().code()
+                }
+            };
+        });
+        handle
+    }
 }
 
 #[derive(Debug, Deserialize, Default)]

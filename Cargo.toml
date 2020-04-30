@@ -13,6 +13,7 @@ serde_yaml = "0.8.11"
 serde_json = "1.0.51"
 flate2 = "1.0.14"
 clap = "2.33.0"
+wait-timeout = "0.2.0"
 
 [[bin]]
 name = "clf"

@@ -71,7 +71,7 @@ impl Lookup for LogFile {
         &mut self,
         mut reader: R,
         search: &Search,
-        settings: Option<&Settings>
+        settings: Option<&Settings>,
     ) -> Result<(), AppError> {
         // uses the same buffer
         let mut line = String::with_capacity(1024);
