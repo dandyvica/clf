@@ -1,6 +1,9 @@
 use std::io::ErrorKind;
 
-use clf::{config::Config, error::*, logfile::LogFile, lookup::Lookup, snapshot::Snapshot};
+use clf::{
+    config::Config, error::AppError, logfile::LogFile, lookup::Lookup, settings::Settings,
+    snapshot::Snapshot,
+};
 
 mod args;
 use args::CliOptions;
@@ -11,6 +14,12 @@ fn main() -> Result<(), AppError> {
 
     // load configuration file as specified from the command line
     let config = Config::from_file(&options.config_file)?;
+
+    // load the optional settings
+    let settings: Option<Settings> = match options.settings_file {
+        None => None,
+        Some(f) => Some(Settings::from_file(f)?),
+    };
 
     // read snapshot data
     let mut snapshot = match Snapshot::load("/tmp/clf.snapshot") {
@@ -33,7 +42,7 @@ fn main() -> Result<(), AppError> {
         // };
 
         // now we can search for the pattern
-        logfile.lookup(&search);
+        logfile.lookup(&search, settings.as_ref());
 
         // save snapshot data
 

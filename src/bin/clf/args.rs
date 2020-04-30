@@ -1,10 +1,14 @@
+use std::path::PathBuf;
+
 use clap::{App, Arg};
-use std::error::Error;
+
+use clf::error::AppError;
 
 // This structure holds the command line arguments
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct CliOptions {
-    pub config_file: String,
+    pub config_file: PathBuf,
+    pub settings_file: Option<PathBuf>,
     // pub input_file: String,
     // pub output_file: String,
     // pub progress_bar: bool,
@@ -16,19 +20,19 @@ pub struct CliOptions {
 }
 
 impl CliOptions {
-    pub fn new() -> CliOptions {
-        CliOptions {
-            config_file: "".to_string(),
-            // input_file: "".to_string(),
-            // output_file: "".to_string(),
-            // progress_bar: false,
-            // stats: false,
-            // limit: 0usize,
-            // debug: false,
-            // ot_list: Vec::new(),
-            // output_allowed: true,
-        }
-    }
+    // pub fn new() -> CliOptions {
+    //     CliOptions {
+    //         config_file: "".to_string(),
+    //         // input_file: "".to_string(),
+    //         // output_file: "".to_string(),
+    //         // progress_bar: false,
+    //         // stats: false,
+    //         // limit: 0usize,
+    //         // debug: false,
+    //         // ot_list: Vec::new(),
+    //         // output_allowed: true,
+    //     }
+    // }
 
     pub fn get_options() -> CliOptions {
         let matches = App::new("Log files reader")
@@ -43,14 +47,14 @@ impl CliOptions {
                     .help("Name of the YAML configuration file")
                     .takes_value(true),
             )
-            // .arg(
-            //     Arg::with_name("input")
-            //         .short("i")
-            //         .long("input")
-            //         .required(true)
-            //         .help("Name of the clapi file to read")
-            //         .takes_value(true),
-            // )
+            .arg(
+                Arg::with_name("settings")
+                    .short("s")
+                    .long("settings")
+                    .required(false)
+                    .help("Name of the optional settings file")
+                    .takes_value(true),
+            )
             // .arg(
             //     Arg::with_name("pbar")
             //         .short("p")
@@ -110,9 +114,15 @@ impl CliOptions {
             .get_matches();
 
         // save all cli options into a structure
-        let mut options = CliOptions::new();
+        let mut options = CliOptions::default();
 
-        options.config_file = matches.value_of("config").unwrap().to_string();
+        // config file is mandatory
+        options.config_file = PathBuf::from(matches.value_of("config").unwrap());
+
+        // settings file is optional
+        if let Some(settings) = matches.value_of("settings") {
+            options.settings_file = Some(PathBuf::from(settings));
+        }
 
         options
     }

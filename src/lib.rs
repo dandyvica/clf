@@ -1,10 +1,11 @@
 #[macro_use]
 pub mod error;
-pub mod bufreader;
+//pub mod bufreader;
 pub mod config;
 pub mod logfile;
 pub mod lookup;
 pub mod pattern;
+pub mod settings;
 pub mod snapshot;
 pub mod util;
 

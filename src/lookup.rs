@@ -5,11 +5,12 @@ use std::time::SystemTime;
 
 use flate2::read::GzDecoder;
 
-use crate::bufreader::{ClfBufRead, ClfBufReader};
+//use crate::bufreader::{ClfBufRead, ClfBufReader};
 use crate::config::Search;
 use crate::error::{AppCustomErrorKind, AppError};
 use crate::logfile::LogFile;
 use crate::pattern::PatternSet;
+use crate::settings::Settings;
 
 pub trait Seeker {
     fn set_offset(&mut self, offset: u64) -> Result<u64, AppError>;
@@ -38,16 +39,17 @@ impl Seeker for BufReader<GzDecoder<File>> {
 }
 
 pub trait Lookup {
-    fn lookup(&mut self, search: &Search) -> Result<(), AppError>;
+    fn lookup(&mut self, search: &Search, settings: Option<&Settings>) -> Result<(), AppError>;
     fn lookup_from_reader<R: BufRead + Seeker>(
         &mut self,
         reader: R,
         search: &Search,
+        settings: Option<&Settings>,
     ) -> Result<(), AppError>;
 }
 
 impl Lookup for LogFile {
-    fn lookup(&mut self, search: &Search) -> Result<(), AppError> {
+    fn lookup(&mut self, search: &Search, settings: Option<&Settings>) -> Result<(), AppError> {
         // open target file
         let file = File::open(&self.path)?;
 
@@ -55,10 +57,10 @@ impl Lookup for LogFile {
         if self.compressed {
             let decoder = GzDecoder::new(file);
             let reader = BufReader::new(decoder);
-            self.lookup_from_reader(reader, search)?;
+            self.lookup_from_reader(reader, search, settings)?;
         } else {
             let reader = BufReader::new(file);
-            self.lookup_from_reader(reader, search)?;
+            self.lookup_from_reader(reader, search, settings)?;
         };
 
         //output
@@ -69,6 +71,7 @@ impl Lookup for LogFile {
         &mut self,
         mut reader: R,
         search: &Search,
+        settings: Option<&Settings>
     ) -> Result<(), AppError> {
         // uses the same buffer
         let mut line = String::with_capacity(1024);
