@@ -9,6 +9,7 @@ use clf::error::AppError;
 pub struct CliOptions {
     pub config_file: PathBuf,
     pub settings_file: Option<PathBuf>,
+    pub clf_logfile: PathBuf,
     // pub input_file: String,
     // pub output_file: String,
     // pub progress_bar: bool,
@@ -53,6 +54,14 @@ impl CliOptions {
                     .long("settings")
                     .required(false)
                     .help("Name of the optional settings file")
+                    .takes_value(true),
+            )
+            .arg(
+                Arg::with_name("clflog")
+                    .short("l")
+                    .long("clflog")
+                    .required(false)
+                    .help("Name of the log file for logging information")
                     .takes_value(true),
             )
             // .arg(
@@ -123,6 +132,18 @@ impl CliOptions {
         if let Some(settings) = matches.value_of("settings") {
             options.settings_file = Some(PathBuf::from(settings));
         }
+
+        // settings file is optional
+        options.clf_logfile = match matches.value_of("clflog") {
+            Some(log) => {
+                PathBuf::from(log)
+            },
+            None => {
+                let mut dir = std::env::temp_dir();
+                dir.push("clf.log");
+                dir
+            }
+        };
 
         options
     }

@@ -42,6 +42,7 @@ pub struct Script {
     pub args: Option<Vec<String>>,
 
     // timeout in seconds
+    #[serde(default)]
     pub timeout: u64,
 }
 
@@ -296,6 +297,7 @@ searches:
         let script = Script {
             name: PathBuf::from("foo"),
             args: None,
+            timeout: 0,
         };
         let path_list = "/usr:/dev:/usr/lib:/usr/bin:/bin";
         let pathbuf_list: Vec<_> = path_list.split(":").map(|p| PathBuf::from(p)).collect();

@@ -4,6 +4,7 @@ use std::path::Path;
 use std::time::SystemTime;
 
 use flate2::read::GzDecoder;
+use log::{info, debug};
 
 //use crate::bufreader::{ClfBufRead, ClfBufReader};
 use crate::config::Search;
@@ -55,6 +56,7 @@ impl Lookup for LogFile {
 
         // if file is compressed, we need to call a specific reader
         if self.compressed {
+            info!("file {:?} is compressed", &self.path);
             let decoder = GzDecoder::new(file);
             let reader = BufReader::new(decoder);
             self.lookup_from_reader(reader, search, settings)?;
@@ -77,12 +79,9 @@ impl Lookup for LogFile {
         let mut line = String::with_capacity(1024);
 
         // initialize counters
+        info!("starting read from last offset={}, last line={}", self.last_offset, self.last_line);
         let mut bytes_count = self.last_offset;
         let mut line_number = self.last_line;
-
-        // create a bufreader
-        //let file = std::fs::File::open(&self.path)?;
-        //let mut reader = BufReader::new(stream);
 
         // move to position if already recorded, and not rewind
         if !search.options.rewind && self.last_offset != 0 {
@@ -116,7 +115,8 @@ impl Lookup for LogFile {
 
                     // check. if somethin found
                     if let Some(caps) = search.patterns.captures(&line) {
-                        println!("file {:?}, line match: {:?}", self.path, caps);
+                        debug!("file {:?}, line match: {:?}", self.path, caps);
+                        break;
 
                         // if option.script, replace capture groups and call script
                         // time out if any,
@@ -142,6 +142,7 @@ impl Lookup for LogFile {
 
         Ok(())
     }
+
 }
 
 #[cfg(test)]
