@@ -206,7 +206,7 @@ impl Pattern {
     }
 }
 
-#[derive(Debug, Deserialize, PartialEq)]
+#[derive(Debug, Deserialize, PartialEq, Hash, Eq)]
 #[allow(non_camel_case_types)]
 //#[serde(try_from = "&str")]
 pub enum PatternType {
@@ -231,17 +231,19 @@ impl TryFrom<&str> for PatternType {
     }
 }
 
-pub struct Test {
+/// A structure combining patterns into 3 categories: *critical*, *warning* and *ok*.
+#[derive(Debug, Deserialize)]
+pub struct PatternSet {
     pats: std::collections::HashMap<PatternType, Option<Pattern>>,
 }
 
 /// A structure combining patterns into 3 categories: *critical*, *warning* and *ok*.
-#[derive(Debug, Deserialize)]
-pub struct PatternSet {
-    pub critical: Option<Pattern>,
-    pub warning: Option<Pattern>,
-    pub ok: Option<Pattern>,
-}
+// #[derive(Debug, Deserialize)]
+// pub struct PatternSet {
+//     pub critical: Option<Pattern>,
+//     pub warning: Option<Pattern>,
+//     pub ok: Option<Pattern>,
+// }
 
 // pub trait Matcher {
 //     fn captures<'t>(&self, text: &'t str) -> Option<Captures<'t>>;
