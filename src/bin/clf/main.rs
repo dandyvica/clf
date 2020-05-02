@@ -1,4 +1,4 @@
-use std::fs::{OpenOptions,File};
+use std::fs::{File, OpenOptions};
 use std::io::ErrorKind;
 use std::thread;
 
@@ -27,7 +27,11 @@ fn main() -> Result<(), AppError> {
     match WriteLogger::init(
         LevelFilter::Debug,
         simplelog::Config::default(),
-        OpenOptions::new().append(true).create(true).open(options.clf_logfile).unwrap(),
+        OpenOptions::new()
+            .append(true)
+            .create(true)
+            .open(options.clf_logfile)
+            .unwrap(),
     ) {
         Ok(_) => (),
         Err(e) => panic!("unable to create log file"),

@@ -16,7 +16,7 @@ use crate::error::AppError;
 #[serde(default)]
 pub struct Settings {
     /// controls the `BufReader` size, with is by default set to 8k
-    pub bufreader_size: u16,
+    pub bufreader_size: usize,
 }
 
 impl Settings {

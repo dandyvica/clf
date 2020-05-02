@@ -19,11 +19,13 @@ pub struct LogFile {
     /// file & path as a PathBuf
     pub path: PathBuf,
 
+    /// file directory part
+    pub directory: Option<PathBuf>,
+
     /// extension as an OsString (owned) or None if no extension
     pub extension: Option<String>,
 
-    /// platform specific metadata
-    // #[serde(skip_serializing)]
+    /// `true` if logfile is compressed
     pub compressed: bool,
 
     /// position of the last run. Used to seek the file pointer to this point.
@@ -58,6 +60,7 @@ impl LogFile {
     pub fn new<P: AsRef<Path>>(file_name: P) -> Result<LogFile, AppError> {
         // check if we can really use the file
         let path = PathBuf::from(file_name.as_ref());
+        let directory = path.parent().and_then(|p| Some(p.to_path_buf()));
         let extension = path
             .extension()
             .and_then(|x| Some(x.to_string_lossy().to_string()));
@@ -97,6 +100,7 @@ impl LogFile {
 
         Ok(LogFile {
             path: canon,
+            directory: directory,
             extension: extension,
             compressed: compressed,
             last_offset: 0u64,

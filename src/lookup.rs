@@ -4,7 +4,7 @@ use std::path::Path;
 use std::time::SystemTime;
 
 use flate2::read::GzDecoder;
-use log::{info, debug};
+use log::{debug, info};
 
 //use crate::bufreader::{ClfBufRead, ClfBufReader};
 use crate::config::Search;
@@ -76,10 +76,17 @@ impl Lookup for LogFile {
         settings: Option<&Settings>,
     ) -> Result<(), AppError> {
         // uses the same buffer
-        let mut line = String::with_capacity(1024);
-
+        let mut line = if settings.is_some() && settings.unwrap().bufreader_size != 0 {
+            String::with_capacity(settings.unwrap().bufreader_size)
+        } else {
+            String::with_capacity(1024)
+        };
+        
         // initialize counters
-        info!("starting read from last offset={}, last line={}", self.last_offset, self.last_line);
+        info!(
+            "starting read from last offset={}, last line={}",
+            self.last_offset, self.last_line
+        );
         let mut bytes_count = self.last_offset;
         let mut line_number = self.last_line;
 
@@ -114,13 +121,14 @@ impl Lookup for LogFile {
                     //println!("====> line#={}, file={:?}-{}", line_number, self.path, line);
 
                     // check. if somethin found
-                    if let Some(caps) = search.patterns.captures(&line) {
-                        debug!("file {:?}, line match: {:?}", self.path, caps);
-                        break;
+                    // if let Some(caps) = search.patterns.captures(&line) {
+                    //     debug!("file {:?}, line match: {:?}", self.path, caps);
+                    //     break;
 
-                        // if option.script, replace capture groups and call script
-                        // time out if any,
-                    }
+                    //     // if option.script, replace capture groups and call script
+                    //     // time out if any,
+                    // }
+                    search.try_match(&line);
 
                     // reset buffer to not accumulate data
                     line.clear();
@@ -142,7 +150,6 @@ impl Lookup for LogFile {
 
         Ok(())
     }
-
 }
 
 #[cfg(test)]

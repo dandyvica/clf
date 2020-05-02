@@ -135,9 +135,7 @@ impl CliOptions {
 
         // settings file is optional
         options.clf_logfile = match matches.value_of("clflog") {
-            Some(log) => {
-                PathBuf::from(log)
-            },
+            Some(log) => PathBuf::from(log),
             None => {
                 let mut dir = std::env::temp_dir();
                 dir.push("clf.log");

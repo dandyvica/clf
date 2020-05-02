@@ -9,6 +9,7 @@ use std::thread;
 use regex::RegexSet;
 use serde::{Deserialize, Serialize};
 use wait_timeout::ChildExt;
+use log::{debug, info};
 
 use crate::error::*;
 use crate::pattern::{Pattern, PatternSet};
@@ -19,10 +20,14 @@ const SEPARATOR: char = ':';
 #[cfg(target_os = "windows")]
 const SEPARATOR: char = ';';
 
+/// A list of paths, where the script which is potentially called, are scanned the locate
+/// this script.
 #[derive(Debug, Deserialize)]
 #[serde(from = "String")]
 pub struct PathList(Vec<PathBuf>);
 
+/// Just converts a list of paths separated by either ':' or ';' depending on the platform
+/// to a vector of `PathBuf`.
 impl From<String> for PathList {
     fn from(list: String) -> Self {
         PathList(list.split(SEPARATOR).map(|p| PathBuf::from(p)).collect())
@@ -177,13 +182,14 @@ impl LogSource {
     }
 }
 
+/// This is the core structure which handles data used to search into the logfile.
 #[derive(Debug, Deserialize)]
 pub struct Search {
-    /// a unique identifier for this search
-    pub tag: String,
-
     /// the logfile name to check
     pub logfile: PathBuf,
+
+    /// a unique identifier for this search
+    pub tag: String,
 
     /// a list of options specific to this search. As such options are optional, add a default serde
     /// directive
@@ -197,21 +203,36 @@ pub struct Search {
     pub patterns: PatternSet,
 }
 
+impl Search {
+    pub fn try_match(&self, line: &str) {
+        // match a critical regex ?
+        match self.patterns.captures(line) {
+            None => return,
+            Some(caps) => {
+                info!("caps={:?}", caps);
+            }
+        };
+    }
+}
+
 #[derive(Debug, Deserialize)]
 pub struct Global {
-    // A list of paths, separated by either ':' for unix, or ';' for windows. This is
-    // where the script, if any, will be searched for.
+    /// A list of paths, separated by either ':' for unix, or ';' for windows. This is
+    /// where the script, if any, will be searched for.
     pathlist: Option<PathList>,
 
-    // A directory where matches lines will be stored.
+    /// A directory where matches lines will be stored.
     #[serde(default = "std::env::temp_dir")]
     outputdir: PathBuf,
 
-    // A directory where the snapshot file is kept.
+    /// A directory where the snapshot file is kept.
     #[serde(default = "std::env::temp_dir")]
     snapshotdir: PathBuf,
 }
 
+/// The main search configuration used to search patterns in a logfile. This is loaded from
+/// the YAML file found in the command line argument. This configuration can include a list
+/// of logfiles to lookup and for each logfile, a list of regexes to match.
 #[derive(Debug, Deserialize)]
 pub struct Config {
     pub global: Global,
@@ -219,14 +240,14 @@ pub struct Config {
 }
 
 impl Config {
-    /// Loads a configuration file as a Config struct.
+    /// Loads a YAML configuration string as a `Config` struct.
     pub fn from_str(s: &str) -> Result<Config, AppError> {
         // load YAML data
         let yaml = serde_yaml::from_str(s)?;
         Ok(yaml)
     }
 
-    /// Loads a configuration file as a Config struct.
+    /// Loads a YAML configuration file as a `Config` struct.
     pub fn from_file<P: AsRef<Path>>(file_name: P) -> Result<Config, AppError> {
         // open YAML file
         let file = File::open(file_name)?;
