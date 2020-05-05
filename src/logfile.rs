@@ -1,4 +1,5 @@
 //! A structure representing a logfile, with all related attributes.
+use std::collections::{hash_map::Keys, HashMap};
 use std::ffi::OsString;
 use std::fs::Metadata;
 use std::io::{Error, ErrorKind};
@@ -12,6 +13,22 @@ use serde::{Deserialize, Serialize};
 
 use crate::error::{AppCustomErrorKind, AppError};
 use crate::util::Usable;
+
+/// A wrapper to store logfile processing data.
+#[derive(Debug, Serialize, Deserialize, Default)]
+pub struct RunData {
+    /// tag name
+    pub tag: String,
+
+    /// position of the last run. Used to seek the file pointer to this point.
+    pub last_offset: u64,
+
+    /// last line number during the last search
+    pub last_line: u64,
+
+    /// last time logfile is processed
+    pub last_run: u64,
+}
 
 /// A wrapper to get logfile information and and related attributes.
 #[derive(Debug, Serialize, Deserialize)]
@@ -28,20 +45,14 @@ pub struct LogFile {
     /// `true` if logfile is compressed
     pub compressed: bool,
 
-    /// position of the last run. Used to seek the file pointer to this point.
-    pub last_offset: u64,
-
-    /// last line number during the last search
-    pub last_line: u64,
-
-    /// last time logfile is processed
-    pub last_run: u64,
-
     /// Linux inode or Windows equivalent
     pub inode: u64,
 
-    // Linux device ID or equivalent for Windows
+    /// Linux device ID or equivalent for Windows
     pub dev: u64,
+
+    /// Run time data are stored each time a logfile is searched
+    pub rundata: Vec<RunData>,
 }
 
 impl LogFile {
@@ -103,12 +114,19 @@ impl LogFile {
             directory: directory,
             extension: extension,
             compressed: compressed,
-            last_offset: 0u64,
-            last_line: 0u64,
-            last_run: time.as_secs(),
             inode: inode,
             dev: dev,
+            rundata: Vec::new(),
         })
+    }
+
+    pub fn get_tags(&self) -> Vec<&str> {
+        let v: Vec<_> = self.rundata.iter().map(|x| x.tag.as_str()).collect();
+        v
+    }
+
+    pub fn get_mut_rundata(&mut self, name: &str) -> Option<&mut RunData> {
+        self.rundata.iter_mut().find(|x| x.tag == name)
     }
 }
 

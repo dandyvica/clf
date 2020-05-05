@@ -1,6 +1,5 @@
 #[macro_use]
 pub mod error;
-//pub mod bufreader;
 pub mod config;
 pub mod logfile;
 pub mod lookup;

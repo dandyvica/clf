@@ -59,8 +59,8 @@ impl Snapshot {
         Ok(self.rundata.get_mut(path).unwrap())
     }
 
-    pub fn insert(&mut self, logfile_name: &Path, logfile_data: LogFile) -> Option<LogFile> {
-        self.rundata
-            .insert(logfile_name.clone().to_path_buf(), logfile_data)
-    }
+    // pub fn insert(&mut self, logfile_name: &Path, logfile_data: LogFile) -> Option<LogFile> {
+    //     self.rundata
+    //         .insert(logfile_name.clone().to_path_buf(), logfile_data)
+    // }
 }

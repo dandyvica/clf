@@ -6,7 +6,7 @@ use std::convert::TryFrom;
 use regex::{Captures, Regex, RegexSet};
 use serde::Deserialize;
 
-use crate::error::{AppError, AppCustomErrorKind};
+use crate::error::{AppCustomErrorKind, AppError};
 
 //#[doc(hidden)]
 
@@ -232,22 +232,18 @@ impl TryFrom<&str> for PatternType {
 }
 
 /// A structure combining patterns into 3 categories: *critical*, *warning* and *ok*.
-#[derive(Debug, Deserialize)]
-pub struct PatternSet {
-    pats: std::collections::HashMap<PatternType, Option<Pattern>>,
-}
-
-/// A structure combining patterns into 3 categories: *critical*, *warning* and *ok*.
 // #[derive(Debug, Deserialize)]
 // pub struct PatternSet {
-//     pub critical: Option<Pattern>,
-//     pub warning: Option<Pattern>,
-//     pub ok: Option<Pattern>,
+//     pats: std::collections::HashMap<PatternType, Option<Pattern>>,
 // }
 
-// pub trait Matcher {
-//     fn captures<'t>(&self, text: &'t str) -> Option<Captures<'t>>;
-// }
+/// A structure combining patterns into 3 categories: *critical*, *warning* and *ok*.
+#[derive(Debug, Deserialize)]
+pub struct PatternSet {
+    pub critical: Option<Pattern>,
+    pub warning: Option<Pattern>,
+    pub ok: Option<Pattern>,
+}
 
 impl PatternSet {
     pub fn captures<'t>(&self, text: &'t str) -> Option<Captures<'t>> {

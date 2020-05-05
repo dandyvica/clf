@@ -71,17 +71,11 @@ fn main() -> Result<(), AppError> {
         // create a LogFile struct or get it from snapshot
         let mut logfile = snapshot.get_mut_or_insert(&search.logfile)?;
 
-        //let mut logfile = snapshot.get_mut(&search.logfile).unwrap();
-
-        // let mut logfile = match LogFile::new(&search.logfile) {
-        //     Ok(lf) => lf,
-        //     Err(e) => panic!("error {:?}", e),
-        // };
-
-        // now we can search for the pattern
-        logfile.lookup(&search, settings.as_ref());
-
-        // save snapshot data
+        // for each tag, search inside logfile
+        for tag in &search.tags {
+            // now we can search for the pattern
+            logfile.lookup(&tag.name, settings.as_ref());
+        }
 
         println!("{:?}", logfile);
     }

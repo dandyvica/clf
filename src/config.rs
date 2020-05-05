@@ -6,10 +6,10 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::thread;
 
+use log::{debug, info};
 use regex::RegexSet;
 use serde::{Deserialize, Serialize};
 use wait_timeout::ChildExt;
-use log::{debug, info};
 
 use crate::error::*;
 use crate::pattern::{Pattern, PatternSet};
@@ -38,7 +38,7 @@ impl From<String> for PathList {
 #[derive(Debug, Deserialize)]
 pub struct Script {
     // name of the script to spawn without path
-    pub name: PathBuf,
+    pub path: PathBuf,
 
     // list of its optional paths
     //pub pathlist: Option<String>,
@@ -74,7 +74,7 @@ impl Script {
     /// ```
     pub fn canonicalize(&self, pathlist: &[PathBuf]) -> Result<PathBuf, Error> {
         // if script is relative, find the path where is it located
-        if self.name.is_relative() {
+        if self.path.is_relative() {
             // at least, if script is relative, we need to find it in at least one
             // path from pathlist. So, in this case, pathlist must exist
             // if pathlist.is_none() {
@@ -97,7 +97,7 @@ impl Script {
             for path in pathlist {
                 let mut full_path = PathBuf::new();
                 full_path.push(path);
-                full_path.push(&self.name);
+                full_path.push(&self.path);
 
                 if full_path.is_file() {
                     return full_path.canonicalize();
@@ -106,8 +106,8 @@ impl Script {
         }
 
         // just check if script exists
-        if self.name.is_file() {
-            self.name.canonicalize()
+        if self.path.is_file() {
+            self.path.canonicalize()
         } else {
             Err(Error::new(ErrorKind::NotFound, "script not found"))
         }
@@ -119,7 +119,7 @@ impl Script {
         // let cmd = self.name.clone();
         //let args: Vec<&str> = self.args.as_ref().unwrap().iter().map(|s| &**s).collect();
 
-        let mut cmd = Command::new(&self.name);
+        let mut cmd = Command::new(&self.path);
         let mut child = cmd
             .args(&self.args.as_ref().unwrap()[..])
             .spawn()
@@ -184,12 +184,9 @@ impl LogSource {
 
 /// This is the core structure which handles data used to search into the logfile.
 #[derive(Debug, Deserialize)]
-pub struct Search {
-    /// the logfile name to check
-    pub logfile: PathBuf,
-
-    /// a unique identifier for this search
-    pub tag: String,
+pub struct Tag {
+    /// a name to identify the name
+    pub name: String,
 
     /// a list of options specific to this search. As such options are optional, add a default serde
     /// directive
@@ -203,7 +200,7 @@ pub struct Search {
     pub patterns: PatternSet,
 }
 
-impl Search {
+impl Tag {
     pub fn try_match(&self, line: &str) {
         // match a critical regex ?
         match self.patterns.captures(line) {
@@ -213,6 +210,16 @@ impl Search {
             }
         };
     }
+}
+
+/// This is the core structure which handles data used to search into the logfile.
+#[derive(Debug, Deserialize)]
+pub struct Search {
+    /// the logfile name to check
+    pub logfile: PathBuf,
+
+    /// a unique identifier for this search
+    pub tags: Vec<Tag>,
 }
 
 #[derive(Debug, Deserialize)]

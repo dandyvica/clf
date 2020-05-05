@@ -3,13 +3,13 @@ use std::io::{BufRead, BufReader, Read, Seek, SeekFrom};
 use std::path::Path;
 use std::time::SystemTime;
 
-use flate2::read::GzDecoder;
+use flate2::read::{GzDecoder, ZlibDecoder};
 use log::{debug, info};
 
 //use crate::bufreader::{ClfBufRead, ClfBufReader};
-use crate::config::Search;
+use crate::config::Tag;
 use crate::error::{AppCustomErrorKind, AppError};
-use crate::logfile::LogFile;
+use crate::logfile::{LogFile, RunData};
 use crate::pattern::PatternSet;
 use crate::settings::Settings;
 
@@ -30,7 +30,7 @@ impl Seeker for BufReader<GzDecoder<File>> {
             None => {
                 return Err(AppError::App {
                     err: AppCustomErrorKind::SeekPosBeyondEof,
-                    msg: format!("tried to set offset at: {}", offset),
+                    msg: format!("tried to set offset beyond EOF, at: {}", offset),
                 })
             }
             Some(x) => x,
@@ -39,31 +39,63 @@ impl Seeker for BufReader<GzDecoder<File>> {
     }
 }
 
+// impl Seeker for BufReader<ZlibDecoder<File>> {
+//     fn set_offset(&mut self, offset: u64) -> Result<u64, AppError> {
+//         let pos = match self.by_ref().bytes().nth((offset - 1) as usize) {
+//             None => {
+//                 return Err(AppError::App {
+//                     err: AppCustomErrorKind::SeekPosBeyondEof,
+//                     msg: format!("tried to set offset beyond EOF, at: {}", offset),
+//                 })
+//             }
+//             Some(x) => x,
+//         };
+//         Ok(pos.unwrap() as u64)
+//     }
+// }
+
 pub trait Lookup {
-    fn lookup(&mut self, search: &Search, settings: Option<&Settings>) -> Result<(), AppError>;
+    fn lookup(&mut self, tag_name: &str, settings: Option<&Settings>) -> Result<(), AppError>;
     fn lookup_from_reader<R: BufRead + Seeker>(
         &mut self,
         reader: R,
-        search: &Search,
+        tag_name: &str,
         settings: Option<&Settings>,
     ) -> Result<(), AppError>;
 }
 
 impl Lookup for LogFile {
-    fn lookup(&mut self, search: &Search, settings: Option<&Settings>) -> Result<(), AppError> {
+    fn lookup(&mut self, tag_name: &str, settings: Option<&Settings>) -> Result<(), AppError> {
         // open target file
         let file = File::open(&self.path)?;
 
         // if file is compressed, we need to call a specific reader
-        if self.compressed {
-            info!("file {:?} is compressed", &self.path);
-            let decoder = GzDecoder::new(file);
-            let reader = BufReader::new(decoder);
-            self.lookup_from_reader(reader, search, settings)?;
-        } else {
-            let reader = BufReader::new(file);
-            self.lookup_from_reader(reader, search, settings)?;
+        let reader = match self.extension.as_deref() {
+            Some("gz") => {
+                let decoder = GzDecoder::new(file);
+                let reader = BufReader::new(decoder);
+                self.lookup_from_reader(reader, tag_name, settings)?;
+            }
+            // Some("zip") => {
+            //     let decoder = ZlibDecoder::new(file);
+            //     let reader = BufReader::new(decoder);
+            //     self.lookup_from_reader(reader, tag, settings)?;
+            // },
+            Some(&_) | None => {
+                let reader = BufReader::new(file);
+                self.lookup_from_reader(reader, tag_name, settings)?;
+            }
         };
+
+        // if self.compressed {
+        //     info!("file {:?} is compressed", &self.path);
+        //     let decoder = GzDecoder::new(file);
+        //     let reader = BufReader::new(decoder);
+        //     self.lookup_from_reader(reader, tag, settings)?;
+        // } else {
+        //     let reader = BufReader::new(file);
+        //     self.lookup_from_reader(reader, tag, settings)?;
+        // };
 
         //output
         Ok(())
@@ -72,7 +104,7 @@ impl Lookup for LogFile {
     fn lookup_from_reader<R: BufRead + Seeker>(
         &mut self,
         mut reader: R,
-        search: &Search,
+        tag_name: &str,
         settings: Option<&Settings>,
     ) -> Result<(), AppError> {
         // uses the same buffer
@@ -81,25 +113,23 @@ impl Lookup for LogFile {
         } else {
             String::with_capacity(1024)
         };
-        
+
+        // get rundata corresponding to tag name
+        //let mut rundata = self.get_mut_rundata(tag_name)?;
+        let mut rundata = self.get_mut_rundata(tag_name).unwrap();
+
         // initialize counters
         info!(
             "starting read from last offset={}, last line={}",
-            self.last_offset, self.last_line
+            rundata.last_offset, rundata.last_line
         );
-        let mut bytes_count = self.last_offset;
-        let mut line_number = self.last_line;
+        let mut bytes_count = rundata.last_offset;
+        let mut line_number = rundata.last_line;
 
         // move to position if already recorded, and not rewind
-        if !search.options.rewind && self.last_offset != 0 {
-            // if file is compressed, the Seek trait is not implemented. So directly move
-            // to the offset
-            // if self.compressed {
-            //     //reader.by_ref().bytes().nth((self.last_offset - 1) as usize)?;
-            // } else {
-            //     reader.seek(SeekFrom::Start(self.last_offset))?;
-            // }
-            reader.set_offset(self.last_offset)?;
+        //if !tag.options.rewind && rundata.last_offset != 0 {
+        if rundata.last_offset != 0 {
+            reader.set_offset(rundata.last_offset)?;
         }
 
         loop {
@@ -121,14 +151,14 @@ impl Lookup for LogFile {
                     //println!("====> line#={}, file={:?}-{}", line_number, self.path, line);
 
                     // check. if somethin found
-                    // if let Some(caps) = search.patterns.captures(&line) {
+                    // if let Some(caps) = tag.patterns.captures(&line) {
                     //     debug!("file {:?}, line match: {:?}", self.path, caps);
                     //     break;
 
                     //     // if option.script, replace capture groups and call script
                     //     // time out if any,
                     // }
-                    search.try_match(&line);
+                    //tag.try_match(&line);
 
                     // reset buffer to not accumulate data
                     line.clear();
@@ -141,12 +171,12 @@ impl Lookup for LogFile {
         }
 
         // save current offset and line number
-        self.last_offset = bytes_count;
-        self.last_line = line_number;
+        rundata.last_offset = bytes_count;
+        rundata.last_line = line_number;
 
         // and last run
         let time = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH)?;
-        self.last_run = time.as_secs();
+        rundata.last_run = time.as_secs();
 
         Ok(())
     }
@@ -185,7 +215,7 @@ mod tests {
             Some(re.is_match(s))
         }
 
-        //let output = logfile.search(file, seeker);
+        //let output = logfile.tag(file, seeker);
 
         //assert_eq!(output.unwrap(), Some(true));
     }
