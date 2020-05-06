@@ -2,26 +2,6 @@
 //! error types, used crates error types and a specific one to the application.
 use std::{fmt, io, num};
 
-// a macro helper to return custom app errors
-// #[macro_export]
-// macro_rules! app_err {
-//     ($err:expr, $x:expr) => {
-//         Err(AppError::App {
-//             err: $err.0,
-//             msg: $err.1.replace("{}", $x),
-//         })
-//     };
-// }
-
-// list here all error messages
-// pub type ErrorBundle = (AppCustomError, &'static str);
-// pub const MSG001: ErrorBundle = (AppCustomError::FileHasNoRoot, "file <{}> has no root");
-// pub const MSG002: ErrorBundle = (
-//     AppCustomError::FileNotAccessible,
-//     "file <{}> is not accessible",
-// );
-// pub const MSG003: ErrorBundle = (AppCustomError::NotAFile, "file <{}> is not a file");
-
 /// Error kind specific to an application error, different from standard errors.
 #[derive(Debug, PartialEq)]
 pub enum AppCustomErrorKind {
@@ -31,7 +11,7 @@ pub enum AppCustomErrorKind {
     FileNotUsable,
 }
 
-/// A specific error type combining all error types.
+/// A specific error type combining all possible error types in the app.
 #[derive(Debug)]
 pub enum AppError {
     Io(io::Error),
@@ -45,17 +25,6 @@ pub enum AppError {
         msg: String,
     },
 }
-
-// impl Error for AppError {
-//     fn description(&self) -> &str {
-//         match *self {
-//             AppError::Io(ref err) => err.description(),
-//             AppError::Regex(ref err) => err.description(),
-//             AppError::Parse(ref err) => err.description(),
-//             AppError::JSON(ref err) => err.description(),
-//         }
-//     }
-// }
 
 impl fmt::Display for AppError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {

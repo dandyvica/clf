@@ -55,17 +55,16 @@ impl Seeker for BufReader<GzDecoder<File>> {
 // }
 
 pub trait Lookup {
-    fn lookup(&mut self, tag_name: &str, settings: Option<&Settings>) -> Result<(), AppError>;
+    fn lookup(&mut self, tag_name: &str) -> Result<(), AppError>;
     fn lookup_from_reader<R: BufRead + Seeker>(
         &mut self,
         reader: R,
         tag_name: &str,
-        settings: Option<&Settings>,
     ) -> Result<(), AppError>;
 }
 
 impl Lookup for LogFile {
-    fn lookup(&mut self, tag_name: &str, settings: Option<&Settings>) -> Result<(), AppError> {
+    fn lookup(&mut self, tag_name: &str) -> Result<(), AppError> {
         // open target file
         let file = File::open(&self.path)?;
 
@@ -74,7 +73,7 @@ impl Lookup for LogFile {
             Some("gz") => {
                 let decoder = GzDecoder::new(file);
                 let reader = BufReader::new(decoder);
-                self.lookup_from_reader(reader, tag_name, settings)?;
+                self.lookup_from_reader(reader, tag_name)?;
             }
             // Some("zip") => {
             //     let decoder = ZlibDecoder::new(file);
@@ -83,7 +82,7 @@ impl Lookup for LogFile {
             // },
             Some(&_) | None => {
                 let reader = BufReader::new(file);
-                self.lookup_from_reader(reader, tag_name, settings)?;
+                self.lookup_from_reader(reader, tag_name)?;
             }
         };
 
@@ -105,14 +104,14 @@ impl Lookup for LogFile {
         &mut self,
         mut reader: R,
         tag_name: &str,
-        settings: Option<&Settings>,
     ) -> Result<(), AppError> {
         // uses the same buffer
-        let mut line = if settings.is_some() && settings.unwrap().bufreader_size != 0 {
-            String::with_capacity(settings.unwrap().bufreader_size)
-        } else {
-            String::with_capacity(1024)
-        };
+        // let mut line = if settings.is_some() && settings.unwrap().bufreader_size != 0 {
+        //     String::with_capacity(settings.unwrap().bufreader_size)
+        // } else {
+        //     String::with_capacity(1024)
+        // };
+        let mut line = String::with_capacity(1024);
 
         // get rundata corresponding to tag name
         //let mut rundata = self.get_mut_rundata(tag_name)?;
@@ -148,7 +147,7 @@ impl Lookup for LogFile {
                     // we've been reading a new line successfully
                     line_number += 1;
                     bytes_count += bytes_read as u64;
-                    //println!("====> line#={}, file={:?}-{}", line_number, self.path, line);
+                    println!("====> line#={}, file={}", line_number, line);
 
                     // check. if somethin found
                     // if let Some(caps) = tag.patterns.captures(&line) {

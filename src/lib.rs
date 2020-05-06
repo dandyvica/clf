@@ -1,8 +1,8 @@
 #[macro_use]
 pub mod error;
-pub mod config;
+//pub mod config;
 pub mod logfile;
-pub mod lookup;
+//pub mod lookup;
 pub mod pattern;
 pub mod settings;
 pub mod snapshot;

@@ -50,10 +50,10 @@ fn main() -> Result<(), AppError> {
     };
 
     // load the optional settings
-    let settings: Option<Settings> = match options.settings_file {
-        None => None,
-        Some(f) => Some(Settings::from_file(f)?),
-    };
+    // let settings: Option<Settings> = match options.settings_file {
+    //     None => None,
+    //     Some(f) => Some(Settings::from_file(f)?),
+    // };
 
     // read snapshot data
     let mut snapshot = match Snapshot::load("/tmp/clf.snapshot") {
@@ -74,7 +74,7 @@ fn main() -> Result<(), AppError> {
         // for each tag, search inside logfile
         for tag in &search.tags {
             // now we can search for the pattern
-            logfile.lookup(&tag.name, settings.as_ref());
+            logfile.lookup(&tag.name);
         }
 
         println!("{:?}", logfile);

@@ -1,10 +1,7 @@
-//! A structure representing a logfile, with all related attributes.
-use std::collections::{hash_map::Keys, HashMap};
-use std::ffi::OsString;
-use std::fs::Metadata;
-use std::io::{Error, ErrorKind};
+//! A structure representing a logfile, with all its related attributes. Those attributes are
+//! coming from the processing of the log file, every time it's read to look for patterns.
 use std::path::{Path, PathBuf};
-use std::time::{Instant, SystemTime};
+//use std::time::{Instant, SystemTime};
 
 #[cfg(target_os = "linux")]
 use std::os::unix::fs::MetadataExt;
@@ -14,7 +11,7 @@ use serde::{Deserialize, Serialize};
 use crate::error::{AppCustomErrorKind, AppError};
 use crate::util::Usable;
 
-/// A wrapper to store logfile processing data.
+/// A wrapper to store log file processing data.
 #[derive(Debug, Serialize, Deserialize, Default)]
 pub struct RunData {
     /// tag name
@@ -30,16 +27,16 @@ pub struct RunData {
     pub last_run: u64,
 }
 
-/// A wrapper to get logfile information and and related attributes.
+/// A wrapper to get logfile information and its related attributes.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct LogFile {
-    /// file & path as a PathBuf
+    /// file & path as a `PathBuf`
     pub path: PathBuf,
 
-    /// file directory part
+    /// directory part or `None` if not existing
     pub directory: Option<PathBuf>,
 
-    /// extension as an OsString (owned) or None if no extension
+    /// extension or `None` if no extension
     pub extension: Option<String>,
 
     /// `true` if logfile is compressed
@@ -57,17 +54,9 @@ pub struct LogFile {
 
 impl LogFile {
     /// Creates a `LogFile` by providing the full logfile path. It also sets platform specific features
-    /// like file *inode* or *dev*. The file path is checked for accessibility and is canonicalized.
-    ///
-    /// Examples:
-    ///
-    /// ```rust
-    /// use clf::logfile::LogFile;
-    ///
-    /// let lf_ok = LogFile::new("/etc/hosts.allow").unwrap();
-    /// assert_eq!(lf_ok.path.to_str(), Some("/etc/hosts.allow"));
-    /// assert_eq!(lf_ok.extension.unwrap(), "allow");
-    /// ```
+    /// like file *inode* or *dev*. The file path is checked for accessibility and is canonicalized. It also
+    /// contains run time data, which correspond to the data created each time a logfile instance is searched
+    /// for patterns.
     pub fn new<P: AsRef<Path>>(file_name: P) -> Result<LogFile, AppError> {
         // check if we can really use the file
         let path = PathBuf::from(file_name.as_ref());
@@ -97,7 +86,7 @@ impl LogFile {
         let metadata = path.metadata()?;
 
         // calculate number of seconds since EPOCH
-        let time = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH)?;
+        //let time = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH)?;
 
         // get inode & dev ID
         let mut inode = 0u64;
@@ -120,13 +109,29 @@ impl LogFile {
         })
     }
 
-    pub fn get_tags(&self) -> Vec<&str> {
+    /// Returns the list of tags of this `LogFile`.
+    pub fn tags(&self) -> Vec<&str> {
         let v: Vec<_> = self.rundata.iter().map(|x| x.tag.as_str()).collect();
         v
     }
 
-    pub fn get_mut_rundata(&mut self, name: &str) -> Option<&mut RunData> {
-        self.rundata.iter_mut().find(|x| x.tag == name)
+    /// Returns `true` if `tag_name` is found in this `LogFile`.
+    pub fn contains(&self, tag_name: &str) -> bool {
+        match self.rundata.iter().find(|x| x.tag == tag_name) {
+            Some(_) => true,
+            None => false,
+        }
+    }
+
+    /// Pushes a new `RunData` structure into the logfile.
+    pub fn push(&mut self, data: RunData) {
+        self.rundata.push(data);
+    }
+
+    /// Returns an Option on a reference of a `RunData`, mapping the first
+    /// tag name passed in argument.
+    pub fn get_mut(&mut self, tag_name: &str) -> Option<&mut RunData> {
+        self.rundata.iter_mut().find(|x| x.tag == tag_name)
     }
 }
 
@@ -140,83 +145,135 @@ impl PartialEq for LogFile {
 #[cfg(test)]
 mod tests {
     use crate::error::*;
-    use crate::logfile::LogFile;
+    use crate::logfile::{LogFile, RunData};
 
-    use serde::{Deserialize, Serialize};
+    //use serde::{Deserialize, Serialize};
 
-    //#[test]
-    // #[cfg(target_os = "linux")]
-    // fn test_new() {
-    //     let mut lf_ok = LogFile::new("/usr/bin/zip").build().unwrap();
-    //     assert_eq!(lf_ok.path.to_str(), Some("/usr/bin/zip"));
-    //     assert!(lf_ok.extension.is_none());
+    // useful set of data for our unit tests
+    const JSON: &'static str = r#"
+       [
+            {
+                "path": "/usr/bin/zip",
+                "compressed": false, 
+                "inode": 1,
+                "dev": 1,
+                "rundata": [
+                    {
+                        "tag": "tag1",
+                        "last_offset": 1000,
+                        "last_line": 10,
+                        "last_run": 1000000
+                    },
+                    {
+                        "tag": "tag2",
+                        "last_offset": 1000,
+                        "last_line": 10,
+                        "last_run": 1000000
+                    }
+                ]
+            },
+            {
+                "path": "/etc/hosts.allow",
+                "compressed": false, 
+                "inode": 1,
+                "dev": 1,
+                "rundata": [
+                    {
+                        "tag": "tag3",
+                        "last_offset": 1000,
+                        "last_line": 10,
+                        "last_run": 1000000
+                    },
+                    {
+                        "tag": "tag3",
+                        "last_offset": 1500,
+                        "last_line": 10,
+                        "last_run": 1000000
+                    }
+                ]
+            }
+        ]
+    "#;
 
-    //     lf_ok = LogFile::new("/etc/hosts.allow").build().unwrap();
-    //     assert_eq!(lf_ok.path.to_str(), Some("/etc/hosts.allow"));
-    //     assert_eq!(lf_ok.extension.unwrap(), "allow");
+    fn load_json() -> Vec<LogFile> {
+        serde_json::from_str(JSON).unwrap()
+    }
 
-    //     // file not found
-    //     let mut lf_err = LogFile::new("/usr/bin/foo").build();
-    //     assert!(lf_err.is_err());
-    //     match lf_err.unwrap_err() {
-    //         AppError::App { err: e, msg: _ } => assert_eq!(e, AppCustomError::FileNotAccessible),
-    //         _ => panic!("error not expected here!"),
-    //     };
+    #[test]
+    #[cfg(target_os = "linux")]
+    fn test_new() {
+        let mut lf_ok = LogFile::new("/usr/bin/zip").unwrap();
+        assert_eq!(lf_ok.path.to_str(), Some("/usr/bin/zip"));
+        assert!(lf_ok.extension.is_none());
 
-    //     // not a file
-    //     lf_err = LogFile::new("/usr/bin").build();
-    //     match lf_err.unwrap_err() {
-    //         AppError::App { err: e, msg: _ } => assert_eq!(e, AppCustomError::NotAFile),
-    //         _ => panic!("error not expected here!"),
-    //     };
+        lf_ok = LogFile::new("/etc/hosts.allow").unwrap();
+        assert_eq!(lf_ok.path.to_str(), Some("/etc/hosts.allow"));
+        assert_eq!(lf_ok.extension.unwrap(), "allow");
 
-    //     // file has no root
-    //     lf_err = LogFile::new("usr/bin/foo").build();
-    //     assert!(lf_err.is_err());
-    //     match lf_err.unwrap_err() {
-    //         AppError::App { err: e, msg: _ } => assert_eq!(e, AppCustomError::FileHasNoRoot),
-    //         _ => panic!("error not expected here!"),
-    //     };
-    // }
+        // file not found
+        let mut lf_err = LogFile::new("/usr/bin/foo");
+        assert!(lf_err.is_err());
+        match lf_err.unwrap_err() {
+            AppError::App { err: e, msg: _ } => assert_eq!(e, AppCustomErrorKind::FileNotUsable),
+            _ => panic!("error not expected here!"),
+        };
 
-    // #[test]
-    // fn test_deserialize() {
-    //     #[derive(Serialize, Deserialize)]
-    //     struct Data {
-    //         list: Vec<LogFile>,
-    //     }
+        // not a file
+        lf_err = LogFile::new("/usr/bin");
+        match lf_err.unwrap_err() {
+            AppError::App { err: e, msg: _ } => assert_eq!(e, AppCustomErrorKind::FileNotUsable),
+            _ => panic!("error not expected here!"),
+        };
 
-    //     let data = r#"
-    //     {
-    //        "list": [
-    //             {
-    //                 "path": "/usr/bin/zip",
-    //                 "last_pos": 0,
-    //                 "inode": 0,
-    //                 "dev": 0
-    //             },
-    //             {
-    //                 "path": "/etc/hosts.allow",
-    //                 "last_pos": 1,
-    //                 "inode": 1,
-    //                 "dev": 1
-    //             }
-    //         ]
-    //     }
-    //     "#;
+        // file has no root
+        lf_err = LogFile::new("usr/bin/foo");
+        assert!(lf_err.is_err());
+        match lf_err.unwrap_err() {
+            AppError::App { err: e, msg: _ } => assert_eq!(e, AppCustomErrorKind::FileNotUsable),
+            _ => panic!("error not expected here!"),
+        };
+    }
 
-    //     let json: Data = serde_json::from_str(data).unwrap();
+    #[test]
+    fn test_deserialize() {
+        let json = crate::logfile::tests::load_json();
 
-    //     assert_eq!(json.list[0].path.to_str(), Some("/usr/bin/zip"));
-    //     assert_eq!(json.list[0].last_pos, 0u64);
-    //     assert_eq!(json.list[0].inode, 0u64);
-    //     assert_eq!(json.list[0].dev, 0u64);
+        assert_eq!(json[0].path.to_str(), Some("/usr/bin/zip"));
+        assert_eq!(json[1].path.to_str(), Some("/etc/hosts.allow"));
+    }
 
-    //     assert_eq!(json.list[1].path.to_str(), Some("/etc/hosts.allow"));
-    //     assert_eq!(json.list[1].last_pos, 1u64);
-    //     assert_eq!(json.list[1].inode, 1u64);
-    //     assert_eq!(json.list[1].dev, 1u64);
-    // }
+    #[test]
+    fn test_push() {
+        let mut json = crate::logfile::tests::load_json();
+
+        let rundata = RunData {
+            tag: "another_tag".to_string(),
+            ..Default::default()
+        };
+        json[0].push(rundata);
+
+        assert_eq!(json[0].rundata.len(), 3);
+        assert_eq!(json[0].tags(), vec!["tag1", "tag2", "another_tag"]);
+        assert!(json[0].contains("tag1"));
+        assert!(!json[0].contains("tag3"));
+    }
+
+    #[test]
+    fn test_getmut() {
+        let mut json = crate::logfile::tests::load_json();
+        assert_eq!(json[1].rundata.len(), 2);
+
+        // tag4 is not part of LogFile
+        let mut rundata = json[1].get_mut("tag4");
+        assert!(rundata.is_none());
+
+        // but tag3 is and even is duplicated
+        rundata = json[1].get_mut("tag3");
+        assert!(rundata.is_some());
+        rundata.unwrap().last_line = 999;
+
+        assert_eq!(json[1].rundata[0].last_line, 999);
+    }
 
     // #[test]
     // #[cfg(target_os = "windows")]
@@ -248,29 +305,5 @@ mod tests {
     //         AppError::App { err: e, msg: _ } => assert_eq!(e, AppCustomError::FileHasNoRoot),
     //         _ => panic!("error not expected here!"),
     //     };
-    // }
-
-    // #[test]
-    // fn test_search() {
-    //     let mut logfile = LogFile::new("./tests/files/access.log", false).unwrap();
-
-    //     let mut re = Regex::new("^83").unwrap();
-    //     let matched: bool = logfile.search(&re).unwrap().unwrap();
-    //     assert!(matched);
-
-    //     re = Regex::new(r"^83.(\d+).(\d+).(\d+)").unwrap();
-    //     let matched: Vec<String> = logfile.search(&re).unwrap().unwrap();
-    //     assert_eq!(matched, vec!["83.167.113.100", "167", "113", "100"]);
-    // }
-
-    // #[test]
-    // fn test_basic_search() {
-    //     let mut logfile = LogFile::new("./tests/files/simple.txt", false).unwrap();
-
-    //     let re = Regex::new("^B").unwrap();
-    //     let matched: Option<bool> = logfile.search(&re).unwrap();
-    //     assert!(matched.is_none());
-
-    //     assert_eq!(logfile.last_pos, 110);
     // }
 }

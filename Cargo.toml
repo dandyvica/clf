@@ -17,6 +17,6 @@ wait-timeout = "0.2.0"
 log = "0.4.8"
 simplelog = "^0.7.6"
 
-[[bin]]
-name = "clf"
-path = "src/bin/clf/main.rs"
+#[[bin]]
+#name = "clf"
+#path = "src/bin/clf/imain.rs"
