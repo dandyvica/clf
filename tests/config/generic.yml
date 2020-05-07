@@ -1,0 +1,62 @@
+---
+global:
+  pathlist: "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+
+searches:
+  - logfile: /var/log/syslog
+    tags:
+      - name: tag1
+        script:
+          path: /tmp/my_script.sh,
+          args: ['arg1', 'arg2', 'arg3']
+        patterns:
+          critical:
+            regexes: ["^ERROR", "GnuPG", "PANIC"]
+            exceptions: ["^SLIGHT_ERROR", "WARNING", "NOT IMPORTANT$"]
+          warning:
+            regexes: ["^ERROR", "FATAL", "PANIC"]
+            exceptions: ["^SLIGHT_ERROR", "WARNING", "NOT IMPORTANT$"]
+          ok:
+            regexes: ["^ERROR", "FATAL", "PANIC"]
+      - name: tag3
+        script:
+          path: /tmp/my_script.sh,
+          args: ['arg1', 'arg2', 'arg3']
+        patterns:
+          critical:
+            regexes: ["(error)", "FATAL", "PANIC"]
+            exceptions: ["^SLIGHT_ERROR", "WARNING", "NOT IMPORTANT$"]
+          warning:
+            regexes: ["^error", "FATAL", "PANIC"]
+            exceptions: ["^SLIGHT_ERROR", "WARNING", "NOT IMPORTANT$"]
+          ok:
+            regexes: ["^ERROR", "FATAL", "PANIC"]
+  - logfile: /var/log/kern.log
+    tags:
+      - name: tag1
+        script:
+          path: /tmp/my_script.sh,
+          args: ['arg1', 'arg2', 'arg3']
+        patterns:
+          critical:
+            regexes: ["^ERROR", "GnuPG", "PANIC"]
+            exceptions: ["^SLIGHT_ERROR", "WARNING", "NOT IMPORTANT$"]
+          warning:
+            regexes: ["^ERROR", "FATAL", "PANIC"]
+            exceptions: ["^SLIGHT_ERROR", "WARNING", "NOT IMPORTANT$"]
+          ok:
+            regexes: ["^ERROR", "FATAL", "PANIC"]
+      - name: tag3
+        script:
+          path: /tmp/my_script.sh,
+          args: ['arg1', 'arg2', 'arg3']
+        patterns:
+          critical:
+            regexes: ["(error)", "FATAL", "PANIC"]
+            exceptions: ["^SLIGHT_ERROR", "WARNING", "NOT IMPORTANT$"]
+          warning:
+            regexes: ["^error", "FATAL", "PANIC"]
+            exceptions: ["^SLIGHT_ERROR", "WARNING", "NOT IMPORTANT$"]
+          ok:
+            regexes: ["^ERROR", "FATAL", "PANIC"]
+...

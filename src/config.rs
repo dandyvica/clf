@@ -1,3 +1,4 @@
+//! Holds the main configuration data, loaded from a YAML file.
 use std::convert::From;
 use std::convert::TryFrom;
 use std::fs::File;
@@ -7,7 +8,7 @@ use std::process::Command;
 use std::thread;
 
 use log::{debug, info};
-use regex::RegexSet;
+use regex::Captures;
 use serde::{Deserialize, Serialize};
 use wait_timeout::ChildExt;
 
@@ -62,8 +63,9 @@ impl Script {
     /// use clf::config::Script;
     ///
     /// let script = Script {
-    ///     name: PathBuf::from("gzip"),
-    ///     args: None
+    ///     path: PathBuf::from("gzip"),
+    ///     args: None,
+    ///     timeout: 0
     /// };
     /// let path_list = "/usr:/dev:/usr/lib:/usr/bin:/bin";
     /// let pathbuf_list: Vec<_> = path_list
@@ -113,8 +115,52 @@ impl Script {
         }
     }
 
-    // pub fn exec
-    // pub fn replace_args
+    /// Replace, for each argument, the capture groups values.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use std::path::PathBuf;
+    /// use regex::{Captures, Regex};
+    /// use clf::config::Script;
+    ///
+    /// let script = Script {
+    ///     path: PathBuf::from("gzip"),
+    ///     args: Some(vec!["address=$hw".to_string(), "id=$id".to_string(), "ok".to_string()]),
+    ///     timeout: 0
+    /// };
+    /// let line = ">>> wlan0: authenticate with FF:FA:FB:FC:FD:FE";
+    /// let re = Regex::new(r"(?P<id>\w+): authenticate with (?P<hw>[A-Z:]+)").unwrap();
+    /// let caps = re.captures(line).unwrap();
+    /// let replaced = script.replace_args(caps);
+    /// assert!(replaced.is_some());
+    /// assert_eq!(replaced.unwrap(), &["address=FF:FA:FB:FC:FD:FE", "id=wlan0", "ok"]);
+    /// ```
+    pub fn replace_args<'t>(&self, caps: Captures<'t>) -> Option<Vec<String>> {
+        // if we got captures, for each argument, replace by capture groups
+        if caps.len() > 1 && self.args.is_some() {
+            // this vector will receive new arguments
+            let mut new_args = Vec::new();
+            let mut buffer = String::with_capacity(256);
+
+            // replace capture groups for each arg
+            for arg in self.args.as_ref().unwrap() {
+                // replace strings like $name by capture groups values
+                caps.expand(arg, &mut buffer);
+
+                // add replaced string
+                new_args.push(buffer.clone());
+
+                // reset buffer
+                buffer.clear();
+            }
+            return Some(new_args);
+        }
+        None
+    }
+
+    /// Spawns the script, and wait at most `timeout` seconds for the job to finish. Spawns
+    /// a new thread, and if timeout, the thread will end gracefully.
     pub fn spawn(&self, duration: u64) -> thread::JoinHandle<()> {
         // let cmd = self.name.clone();
         //let args: Vec<&str> = self.args.as_ref().unwrap().iter().map(|s| &**s).collect();
@@ -144,6 +190,7 @@ impl Script {
 
 #[derive(Debug, Deserialize, Default)]
 #[serde(default)]
+/// A list of options which are specific to a search.
 pub struct SearchOptions {
     /// if `true`, the defined script will be run a first match
     pub runscript: bool,
@@ -182,7 +229,8 @@ impl LogSource {
     }
 }
 
-/// This is the core structure which handles data used to search into the logfile.
+/// This is the core structure which handles data used to search into the logfile. These are
+/// gathered and refered to a tag name.
 #[derive(Debug, Deserialize)]
 pub struct Tag {
     /// a name to identify the name
@@ -201,18 +249,22 @@ pub struct Tag {
 }
 
 impl Tag {
-    pub fn try_match(&self, line: &str) {
-        // match a critical regex ?
-        match self.patterns.captures(line) {
-            None => return,
-            Some(caps) => {
-                info!("caps={:?}", caps);
-            }
-        };
+    /// Returns the capture groups corresponding to the leftmost-first match in text.
+    pub fn captures<'t>(&self, line: &'t str) -> Option<Captures<'t>> {
+        // if we find a match, replace
+        // if let Some(caps) = self.patterns.captures(&line) {
+        //     debug!("line match: {:?}", caps);
+        //     break;
+        // }
+
+        // None
+        self.patterns.captures(&line)
     }
+
+    //pub fn try_match(&self, line: &str) {}
 }
 
-/// This is the core structure which handles data used to search into the logfile.
+/// This is the structure mapping exactly data coming from the configuration YAML file.
 #[derive(Debug, Deserialize)]
 pub struct Search {
     /// the logfile name to check
@@ -223,6 +275,7 @@ pub struct Search {
 }
 
 #[derive(Debug, Deserialize)]
+/// A list of global options, which apply globally for all searches.
 pub struct Global {
     /// A list of paths, separated by either ':' for unix, or ';' for windows. This is
     /// where the script, if any, will be searched for.
@@ -270,45 +323,15 @@ mod tests {
     use crate::config::{Config, Script};
     //use std::path::PathBuf;
 
+    fn get_toml() -> String {
+        include_str!("config.yml").to_string()
+    }
+
     #[test]
     #[cfg(target_os = "linux")]
     fn test_load() {
-        let toml = r#"
-global:
-    pathlist: "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
-
-searches:
-    - tag: "tag1"
-      logfile: "/var/log/syslog"
-      options:
-            runscript: true
-      script:
-            name: /tmp/my_script.sh,
-            args: ['arg1', 'arg2', 'arg3']
-      patterns:
-            critical:
-                regexes: ["^ERROR", "FATAL", "PANIC"]
-                exceptions: ["^SLIGHT_ERROR", "WARNING", "NOT IMPORTANT$"]
-
-            warning:
-                regexes: ["^ERROR", "FATAL", "PANIC"]
-                exceptions: ["^SLIGHT_ERROR", "WARNING", "NOT IMPORTANT$"]
-        
-            ok:
-                regexes: ["^ERROR", "FATAL", "PANIC"]
-
-    - tag: "tag2"
-      logfile: "/var/log/syslog"
-      script:
-            name: /tmp/my_script.sh,
-            args: ['arg1', 'arg2', 'arg3']
-      patterns:
-            critical:
-                regexes: ["^ERROR", "FATAL", "PANIC"]
-                exceptions: ["^SLIGHT_ERROR", "WARNING", "NOT IMPORTANT$"]
-"#;
-
-        let config = Config::from_str(toml).unwrap();
+        let toml = get_toml();
+        let config = Config::from_str(&toml).unwrap();
 
         // test global struct
         assert_eq!(config.global.pathlist.unwrap().0.len(), 6);
@@ -323,7 +346,7 @@ searches:
         use std::path::PathBuf;
 
         let script = Script {
-            name: PathBuf::from("foo"),
+            path: PathBuf::from("foo"),
             args: None,
             timeout: 0,
         };

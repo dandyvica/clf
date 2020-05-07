@@ -1,0 +1,14 @@
+---
+global:
+  pathlist: "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+
+searches:
+  - logfile: /var/log/kern.log
+    tags:
+      - name: tag1
+        script:
+          path: /tmp/my_script.sh,
+          args: ['arg1', 'arg2', 'arg3']
+        patterns:
+          critical:
+            regexes: ["associated"]

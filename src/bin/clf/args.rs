@@ -10,6 +10,7 @@ pub struct CliOptions {
     pub config_file: PathBuf,
     pub settings_file: Option<PathBuf>,
     pub clf_logfile: PathBuf,
+    pub delete_snapfile: bool,
     // pub input_file: String,
     // pub output_file: String,
     // pub progress_bar: bool,
@@ -63,6 +64,14 @@ impl CliOptions {
                     .required(false)
                     .help("Name of the log file for logging information")
                     .takes_value(true),
+            )
+            .arg(
+                Arg::with_name("delsnap")
+                    .short("d")
+                    .long("delsnap")
+                    .required(false)
+                    .help("Delete snapshot file before searching")
+                    .takes_value(false),
             )
             // .arg(
             //     Arg::with_name("pbar")

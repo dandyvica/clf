@@ -1,3 +1,4 @@
+//! 
 use std::fs::File;
 use std::io::{BufRead, BufReader, Read, Seek, SeekFrom};
 use std::path::Path;
@@ -55,16 +56,16 @@ impl Seeker for BufReader<GzDecoder<File>> {
 // }
 
 pub trait Lookup {
-    fn lookup(&mut self, tag_name: &str) -> Result<(), AppError>;
+    fn lookup(&mut self, tag: &Tag) -> Result<(), AppError>;
     fn lookup_from_reader<R: BufRead + Seeker>(
         &mut self,
         reader: R,
-        tag_name: &str,
+        tag: &Tag,
     ) -> Result<(), AppError>;
 }
 
 impl Lookup for LogFile {
-    fn lookup(&mut self, tag_name: &str) -> Result<(), AppError> {
+    fn lookup(&mut self, tag: &Tag) -> Result<(), AppError> {
         // open target file
         let file = File::open(&self.path)?;
 
@@ -73,7 +74,7 @@ impl Lookup for LogFile {
             Some("gz") => {
                 let decoder = GzDecoder::new(file);
                 let reader = BufReader::new(decoder);
-                self.lookup_from_reader(reader, tag_name)?;
+                self.lookup_from_reader(reader, tag)?;
             }
             // Some("zip") => {
             //     let decoder = ZlibDecoder::new(file);
@@ -82,7 +83,7 @@ impl Lookup for LogFile {
             // },
             Some(&_) | None => {
                 let reader = BufReader::new(file);
-                self.lookup_from_reader(reader, tag_name)?;
+                self.lookup_from_reader(reader, tag)?;
             }
         };
 
@@ -103,19 +104,13 @@ impl Lookup for LogFile {
     fn lookup_from_reader<R: BufRead + Seeker>(
         &mut self,
         mut reader: R,
-        tag_name: &str,
+        tag: &Tag,
     ) -> Result<(), AppError> {
         // uses the same buffer
-        // let mut line = if settings.is_some() && settings.unwrap().bufreader_size != 0 {
-        //     String::with_capacity(settings.unwrap().bufreader_size)
-        // } else {
-        //     String::with_capacity(1024)
-        // };
         let mut line = String::with_capacity(1024);
 
         // get rundata corresponding to tag name
-        //let mut rundata = self.get_mut_rundata(tag_name)?;
-        let mut rundata = self.get_mut_rundata(tag_name).unwrap();
+        let mut rundata = self.or_insert(&tag.name);
 
         // initialize counters
         info!(
@@ -147,7 +142,7 @@ impl Lookup for LogFile {
                     // we've been reading a new line successfully
                     line_number += 1;
                     bytes_count += bytes_read as u64;
-                    println!("====> line#={}, file={}", line_number, line);
+                    //println!("====> line#={}, file={}", line_number, line);
 
                     // check. if somethin found
                     // if let Some(caps) = tag.patterns.captures(&line) {
@@ -157,7 +152,10 @@ impl Lookup for LogFile {
                     //     // if option.script, replace capture groups and call script
                     //     // time out if any,
                     // }
-                    //tag.try_match(&line);
+                    if let Some(caps) = tag.captures(&line) {
+                        debug!("line match: {:?}", caps);
+                        break;
+                    }
 
                     // reset buffer to not accumulate data
                     line.clear();
@@ -198,7 +196,7 @@ mod tests {
         warning: Vec<Regex>,
     }
 
-    #[test]
+    //#[test]
     #[cfg(target_os = "linux")]
     fn test_search_file() {
         // create tmp file

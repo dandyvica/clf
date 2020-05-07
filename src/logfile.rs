@@ -1,5 +1,6 @@
 //! A structure representing a logfile, with all its related attributes. Those attributes are
 //! coming from the processing of the log file, every time it's read to look for patterns.
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 //use std::time::{Instant, SystemTime};
 
@@ -15,7 +16,7 @@ use crate::util::Usable;
 #[derive(Debug, Serialize, Deserialize, Default)]
 pub struct RunData {
     /// tag name
-    pub tag: String,
+    pub name: String,
 
     /// position of the last run. Used to seek the file pointer to this point.
     pub last_offset: u64,
@@ -49,7 +50,7 @@ pub struct LogFile {
     pub dev: u64,
 
     /// Run time data are stored each time a logfile is searched
-    pub rundata: Vec<RunData>,
+    pub rundata: HashMap<String, RunData>,
 }
 
 impl LogFile {
@@ -105,33 +106,35 @@ impl LogFile {
             compressed: compressed,
             inode: inode,
             dev: dev,
-            rundata: Vec::new(),
+            rundata: HashMap::new(),
         })
     }
 
     /// Returns the list of tags of this `LogFile`.
     pub fn tags(&self) -> Vec<&str> {
-        let v: Vec<_> = self.rundata.iter().map(|x| x.tag.as_str()).collect();
-        v
+        self.rundata
+            .keys()
+            .map(|x| x.as_str())
+            .collect::<Vec<&str>>()
     }
 
-    /// Returns `true` if `tag_name` is found in this `LogFile`.
-    pub fn contains(&self, tag_name: &str) -> bool {
-        match self.rundata.iter().find(|x| x.tag == tag_name) {
-            Some(_) => true,
-            None => false,
-        }
+    /// Returns `true` if `name` is found in this `LogFile`.
+    pub fn contains_key(&self, name: &str) -> bool {
+        self.rundata.contains_key(name)
     }
 
     /// Pushes a new `RunData` structure into the logfile.
-    pub fn push(&mut self, data: RunData) {
-        self.rundata.push(data);
-    }
+    // pub fn push(&mut self, data: RunData) {
+    //     self.rundata.push(data);
+    // }
 
     /// Returns an Option on a reference of a `RunData`, mapping the first
     /// tag name passed in argument.
-    pub fn get_mut(&mut self, tag_name: &str) -> Option<&mut RunData> {
-        self.rundata.iter_mut().find(|x| x.tag == tag_name)
+    pub fn or_insert(&mut self, name: &str) -> &mut RunData {
+        self.rundata.entry(name.to_string()).or_insert(RunData {
+            name: name.to_string(),
+            ..Default::default()
+        })
     }
 }
 
@@ -144,6 +147,9 @@ impl PartialEq for LogFile {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
+    use std::path::PathBuf;
+
     use crate::error::*;
     use crate::logfile::{LogFile, RunData};
 
@@ -151,51 +157,51 @@ mod tests {
 
     // useful set of data for our unit tests
     const JSON: &'static str = r#"
-       [
-            {
+       {
+           "/usr/bin/zip": {
                 "path": "/usr/bin/zip",
                 "compressed": false, 
                 "inode": 1,
                 "dev": 1,
-                "rundata": [
-                    {
-                        "tag": "tag1",
+                "rundata": {
+                    "tag1": {
+                        "name": "tag1",
                         "last_offset": 1000,
                         "last_line": 10,
                         "last_run": 1000000
                     },
-                    {
-                        "tag": "tag2",
+                    "tag2": {
+                        "name": "tag2",
                         "last_offset": 1000,
                         "last_line": 10,
                         "last_run": 1000000
                     }
-                ]
+                }
             },
-            {
+            "/etc/hosts.allow": {
                 "path": "/etc/hosts.allow",
                 "compressed": false, 
                 "inode": 1,
                 "dev": 1,
-                "rundata": [
-                    {
-                        "tag": "tag3",
+                "rundata": {
+                    "tag3": {
+                        "name": "tag3",
                         "last_offset": 1000,
                         "last_line": 10,
                         "last_run": 1000000
                     },
-                    {
-                        "tag": "tag3",
-                        "last_offset": 1500,
+                    "tag4": {
+                        "name": "tag4",
+                        "last_offset": 1000,
                         "last_line": 10,
                         "last_run": 1000000
                     }
-                ]
+                }
             }
-        ]
+        }
     "#;
 
-    fn load_json() -> Vec<LogFile> {
+    fn load_json() -> HashMap<PathBuf, LogFile> {
         serde_json::from_str(JSON).unwrap()
     }
 
@@ -236,43 +242,52 @@ mod tests {
 
     #[test]
     fn test_deserialize() {
-        let json = crate::logfile::tests::load_json();
+        let mut json = crate::logfile::tests::load_json();
 
-        assert_eq!(json[0].path.to_str(), Some("/usr/bin/zip"));
-        assert_eq!(json[1].path.to_str(), Some("/etc/hosts.allow"));
+        assert!(json.contains_key(&PathBuf::from("/usr/bin/zip")));
+        assert!(json.contains_key(&PathBuf::from("/etc/hosts.allow")));
+
+        {
+            let logfile1 = json.get_mut(&PathBuf::from("/usr/bin/zip")).unwrap();
+            assert_eq!(logfile1.rundata.len(), 2);
+            assert!(logfile1.contains_key("tag1"));
+            assert!(logfile1.contains_key("tag2"));
+        }
+
+        {
+            let logfile2 = json.get_mut(&PathBuf::from("/etc/hosts.allow")).unwrap();
+            assert_eq!(logfile2.rundata.len(), 2);
+            assert!(logfile2.contains_key("tag3"));
+            assert!(logfile2.contains_key("tag4"));
+        }
     }
 
     #[test]
-    fn test_push() {
+    fn test_or_insert() {
         let mut json = crate::logfile::tests::load_json();
 
-        let rundata = RunData {
-            tag: "another_tag".to_string(),
-            ..Default::default()
-        };
-        json[0].push(rundata);
+        let logfile1 = json.get_mut(&PathBuf::from("/usr/bin/zip")).unwrap();
+        let rundata1 = json
+            .get_mut(&PathBuf::from("/usr/bin/zip"))
+            .unwrap()
+            .or_insert("another_tag");
 
-        assert_eq!(json[0].rundata.len(), 3);
-        assert_eq!(json[0].tags(), vec!["tag1", "tag2", "another_tag"]);
-        assert!(json[0].contains("tag1"));
-        assert!(!json[0].contains("tag3"));
-    }
+        assert_eq!(rundata1.name, "another_tag");
 
-    #[test]
-    fn test_getmut() {
-        let mut json = crate::logfile::tests::load_json();
-        assert_eq!(json[1].rundata.len(), 2);
+        // let mut tags = json[0].tags();
+        // tags.sort();
+        // assert_eq!(tags, vec!["another_tag", "tag1", "tag2"]);
+        // assert!(json[0].contains("tag1"));
+        // assert!(!json[0].contains("tag3"));
 
-        // tag4 is not part of LogFile
-        let mut rundata = json[1].get_mut("tag4");
-        assert!(rundata.is_none());
+        // // tag4 is not part of LogFile
+        // let mut rundata = json[1].or_insert("tag4");
 
-        // but tag3 is and even is duplicated
-        rundata = json[1].get_mut("tag3");
-        assert!(rundata.is_some());
-        rundata.unwrap().last_line = 999;
+        // // but tag3 is and even is duplicated
+        // rundata = json[1].or_insert("tag3");
+        // rundata.last_line = 999;
 
-        assert_eq!(json[1].rundata[0].last_line, 999);
+        // assert_eq!(json[1].rundata.get("tag3").unwrap().last_line, 999);
     }
 
     // #[test]

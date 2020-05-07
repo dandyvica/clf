@@ -8,7 +8,11 @@ extern crate simplelog;
 use simplelog::*;
 
 use clf::{
-    config::Config, error::AppError, logfile::LogFile, lookup::Lookup, settings::Settings,
+    config::{Config, Tag},
+    error::AppError,
+    logfile::LogFile,
+    lookup::Lookup,
+    settings::Settings,
     snapshot::Snapshot,
 };
 
@@ -48,6 +52,15 @@ fn main() -> Result<(), AppError> {
             std::process::exit(1);
         }
     };
+    info!("using configuration file {:?}", &options.config_file);
+
+    // get snapshot file file
+    let snapfile = Snapshot::default_name();
+
+    // delete snapshot file if asked
+    if options.delete_snapfile {
+        std::fs::remove_file(&snapfile)?;
+    }
 
     // load the optional settings
     // let settings: Option<Settings> = match options.settings_file {
@@ -56,7 +69,7 @@ fn main() -> Result<(), AppError> {
     // };
 
     // read snapshot data
-    let mut snapshot = match Snapshot::load("/tmp/clf.snapshot") {
+    let mut snapshot = match Snapshot::load(&snapfile) {
         Ok(s) => s,
         Err(e) => panic!("error {:?}", e),
     };
@@ -69,19 +82,20 @@ fn main() -> Result<(), AppError> {
         info!("searching for log={:?}", &search.logfile);
 
         // create a LogFile struct or get it from snapshot
-        let mut logfile = snapshot.get_mut_or_insert(&search.logfile)?;
+        let mut logfile = snapshot.or_insert(&search.logfile)?;
 
         // for each tag, search inside logfile
         for tag in &search.tags {
-            // now we can search for the pattern
-            logfile.lookup(&tag.name);
-        }
+            // insert new rundata if not present or get ref on it
+            //let rundata = logfile.or_insert(tag.name);
 
-        println!("{:?}", logfile);
+            // now we can search for the pattern
+            logfile.lookup(&tag)?;
+        }
     }
 
     // write snapshot
-    snapshot.save("/tmp/clf.snapshot")?;
+    snapshot.save(&snapfile)?;
 
     // teardown
     info!("waiting for all threads to finish");
