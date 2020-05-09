@@ -31,7 +31,7 @@ pub struct RegexBundle(pub RegexSet);
 ///
 /// ```rust
 /// use std::convert::TryFrom;
-/// use clf::pattern::RegexVec;
+/// use rclf::pattern::RegexVec;
 ///
 /// let mut regs = RegexVec::try_from(vec!["^#".to_string(), ";$".to_string()]).unwrap();
 /// assert_eq!(regs.0.len(), 2);
@@ -63,7 +63,7 @@ impl TryFrom<Vec<String>> for RegexVec {
 ///
 /// ```rust
 /// use std::convert::TryFrom;
-/// use clf::pattern::RegexBundle;
+/// use rclf::pattern::RegexBundle;
 ///
 /// let mut regs = RegexBundle::try_from(vec!["^#".to_string(), ";$".to_string()]).unwrap();
 /// assert_eq!(regs.0.len(), 2);
@@ -106,7 +106,7 @@ impl Pattern {
     ///
     /// ```rust
     /// use regex::Regex;
-    /// use clf::pattern::Pattern;
+    /// use rclf::pattern::Pattern;
     ///
     /// let mut yaml = r#"
     /// {
@@ -137,7 +137,7 @@ impl Pattern {
     ///
     /// ```rust
     /// use regex::Regex;
-    /// use clf::pattern::Pattern;
+    /// use rclf::pattern::Pattern;
     ///
     /// let mut yaml = r#"
     /// {
@@ -169,7 +169,7 @@ impl Pattern {
     ///
     /// ```rust
     /// use regex::Regex;
-    /// use clf::pattern::Pattern;
+    /// use rclf::pattern::Pattern;
     ///
     /// let mut yaml = r#"
     /// {
@@ -227,7 +227,7 @@ pub enum PatternType {
 ///
 /// ```rust
 /// use std::convert::TryFrom;
-/// use clf::pattern::PatternType;
+/// use rclf::pattern::PatternType;
 ///
 /// let pt = PatternType::try_from("critical").unwrap();
 /// assert_eq!(pt, PatternType::critical);

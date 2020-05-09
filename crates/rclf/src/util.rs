@@ -13,7 +13,7 @@ impl Usable for PathBuf {
     ///
     /// ```rust
     /// use std::path::PathBuf;
-    /// use clf::util::Usable;
+    /// use rclf::util::Usable;
     ///
     /// assert!(!PathBuf::from("foo.txt").is_usable());
     /// assert!(!PathBuf::from("/var/log/foo.txt").is_usable());

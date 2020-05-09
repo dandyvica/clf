@@ -33,7 +33,7 @@ pub struct PathList(pub Vec<PathBuf>);
 ///
 /// ```rust
 /// use std::path::PathBuf;
-/// use clf::config::PathList;
+/// use rclf::config::PathList;
 ///
 /// let pl = PathList::from("/bin:/usr/bin:/usr/loca/bin".to_string());
 /// assert_eq!(pl.0.len(), 3);
@@ -69,7 +69,7 @@ impl Script {
     ///
     /// ```rust
     /// use std::path::PathBuf;
-    /// use clf::config::Script;
+    /// use rclf::config::Script;
     ///
     /// let script = Script {
     ///     path: PathBuf::from("gzip"),
@@ -131,7 +131,7 @@ impl Script {
     /// ```rust
     /// use std::path::PathBuf;
     /// use regex::{Captures, Regex};
-    /// use clf::config::Script;
+    /// use rclf::config::Script;
     ///
     /// let script = Script {
     ///     path: PathBuf::from("gzip"),

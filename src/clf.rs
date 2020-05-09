@@ -7,7 +7,8 @@ extern crate log;
 extern crate simplelog;
 use simplelog::*;
 
-use clf::{
+//extern crate rclf;
+use rclf::{
     config::{Config, Tag},
     error::AppError,
     logfile::LogFile,

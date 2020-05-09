@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use clap::{App, Arg};
 
-use clf::error::AppError;
+use rclf::error::AppError;
 
 // This structure holds the command line arguments
 #[derive(Debug, Default)]
