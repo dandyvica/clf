@@ -10,7 +10,7 @@ use crate::error::{AppCustomErrorKind, AppError};
 
 //#[doc(hidden)]
 
-/// A helper structure for deserializing into a `Vec<Regex>` automatically from a `Vec<String>`.
+/// A helper structure for deserializing into a `RegexVec` automatically from a `Vec<String>`.
 #[derive(Debug, Deserialize)]
 #[serde(try_from = "Vec<String>")]
 pub struct RegexVec(pub Vec<Regex>);
@@ -33,8 +33,11 @@ pub struct RegexBundle(pub RegexSet);
 /// use std::convert::TryFrom;
 /// use clf::pattern::RegexVec;
 ///
-/// let regs = RegexVec::try_from(vec!["^#".to_string(), ";$".to_string()]).unwrap();
+/// let mut regs = RegexVec::try_from(vec!["^#".to_string(), ";$".to_string()]).unwrap();
 /// assert_eq!(regs.0.len(), 2);
+///
+/// let regs_err = RegexVec::try_from(vec!["(error".to_string()]);
+/// assert!(regs_err.is_err());
 /// ```
 impl TryFrom<Vec<String>> for RegexVec {
     type Error = AppError;
@@ -62,8 +65,11 @@ impl TryFrom<Vec<String>> for RegexVec {
 /// use std::convert::TryFrom;
 /// use clf::pattern::RegexBundle;
 ///
-/// let regs = RegexBundle::try_from(vec!["^#".to_string(), ";$".to_string()]).unwrap();
+/// let mut regs = RegexBundle::try_from(vec!["^#".to_string(), ";$".to_string()]).unwrap();
 /// assert_eq!(regs.0.len(), 2);
+///
+/// let regs_err = RegexBundle::try_from(vec!["(error".to_string()]);
+/// assert!(regs_err.is_err());
 /// ```
 impl TryFrom<Vec<String>> for RegexBundle {
     type Error = AppError;
@@ -83,11 +89,11 @@ impl TryFrom<Vec<String>> for RegexBundle {
 /// is returned.
 #[derive(Debug, Deserialize)]
 pub struct Pattern {
-    /// a vector of compiled `Regex` structs which are hence all valid
+    /// A vector of compiled `Regex` structs which are hence all valid.
     pub regexes: RegexVec,
 
-    /// a `RegexSet` struct, as it's not necessary to get neither which regex triggers the match, nor
-    /// capture groups
+    /// A `RegexSet` struct, as it's not necessary to get neither which regex triggers the match, nor
+    /// capture groups.
     pub exceptions: Option<RegexBundle>,
 }
 
@@ -107,12 +113,12 @@ impl Pattern {
     ///     regexes: [
     ///         "^ERROR",
     ///         "FATAL",
-    ///     "PANIC"
+    ///         "PANIC"
     ///     ],
     ///     exceptions: [
     ///         "^SLIGHT_ERROR",
     ///         "WARNING",
-    ///     "NOT IMPORTANT$"
+    ///         "NOT IMPORTANT$"
     ///     ]
     /// }"#;
     ///
@@ -208,13 +214,27 @@ impl Pattern {
 
 #[derive(Debug, Deserialize, PartialEq, Hash, Eq)]
 #[allow(non_camel_case_types)]
-//#[serde(try_from = "&str")]
+/// Qualification of `Pattern`.
 pub enum PatternType {
     critical,
     warning,
     ok,
 }
 
+/// Simple implementation of `TryFrom`.
+///
+/// # Example
+///
+/// ```rust
+/// use std::convert::TryFrom;
+/// use clf::pattern::PatternType;
+///
+/// let pt = PatternType::try_from("critical").unwrap();
+/// assert_eq!(pt, PatternType::critical);
+///
+/// let pt_err = PatternType::try_from("foo");
+/// assert!(pt_err.is_err());
+/// ```
 impl TryFrom<&str> for PatternType {
     type Error = AppError;
 
@@ -230,12 +250,6 @@ impl TryFrom<&str> for PatternType {
         }
     }
 }
-
-/// A structure combining patterns into 3 categories: *critical*, *warning* and *ok*.
-// #[derive(Debug, Deserialize)]
-// pub struct PatternSet {
-//     pats: std::collections::HashMap<PatternType, Option<Pattern>>,
-// }
 
 /// A structure combining patterns into 3 categories: *critical*, *warning* and *ok*.
 #[derive(Debug, Deserialize)]

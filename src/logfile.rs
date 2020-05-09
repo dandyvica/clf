@@ -31,25 +31,25 @@ pub struct RunData {
 /// A wrapper to get logfile information and its related attributes.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct LogFile {
-    /// file & path as a `PathBuf`
+    /// File & path as a `PathBuf`.
     pub path: PathBuf,
 
-    /// directory part or `None` if not existing
+    /// Directory part or `None` if not existing.
     pub directory: Option<PathBuf>,
 
-    /// extension or `None` if no extension
+    /// Extension or `None` if no extension.
     pub extension: Option<String>,
 
-    /// `true` if logfile is compressed
+    /// `true` if logfile is compressed.
     pub compressed: bool,
 
-    /// Linux inode or Windows equivalent
+    /// Linux inode or Windows equivalent.
     pub inode: u64,
 
-    /// Linux device ID or equivalent for Windows
+    /// Linux device ID or equivalent for Windows.
     pub dev: u64,
 
-    /// Run time data are stored each time a logfile is searched
+    /// Run time data that are stored each time a logfile is searched for patterns.
     pub rundata: HashMap<String, RunData>,
 }
 
@@ -123,11 +123,6 @@ impl LogFile {
         self.rundata.contains_key(name)
     }
 
-    /// Pushes a new `RunData` structure into the logfile.
-    // pub fn push(&mut self, data: RunData) {
-    //     self.rundata.push(data);
-    // }
-
     /// Returns an Option on a reference of a `RunData`, mapping the first
     /// tag name passed in argument.
     pub fn or_insert(&mut self, name: &str) -> &mut RunData {
@@ -138,7 +133,7 @@ impl LogFile {
     }
 }
 
-/// Two log files are considered equal if they have the same name, inode & dev
+/// Two log files are considered equal if they have the same name, inode & dev.
 impl PartialEq for LogFile {
     fn eq(&self, other: &Self) -> bool {
         self.path == other.path && self.dev == other.dev && self.inode == self.inode
@@ -152,8 +147,6 @@ mod tests {
 
     use crate::error::*;
     use crate::logfile::{LogFile, RunData};
-
-    //use serde::{Deserialize, Serialize};
 
     // useful set of data for our unit tests
     const JSON: &'static str = r#"

@@ -1,4 +1,4 @@
-//! 
+//! Traits dedicated to search patterns in a `LogFile`.
 use std::fs::File;
 use std::io::{BufRead, BufReader, Read, Seek, SeekFrom};
 use std::path::Path;
@@ -14,6 +14,8 @@ use crate::logfile::{LogFile, RunData};
 use crate::pattern::PatternSet;
 use crate::settings::Settings;
 
+/// Trait which provides a seek function, and is implemented for all
+/// `BufReader<T>` types used in `Lookup` trait.
 pub trait Seeker {
     fn set_offset(&mut self, offset: u64) -> Result<u64, AppError>;
 }
@@ -55,6 +57,7 @@ impl Seeker for BufReader<GzDecoder<File>> {
 //     }
 // }
 
+/// Trait, implemented by `LogFile` to search patterns.
 pub trait Lookup {
     fn lookup(&mut self, tag: &Tag) -> Result<(), AppError>;
     fn lookup_from_reader<R: BufRead + Seeker>(
@@ -65,6 +68,7 @@ pub trait Lookup {
 }
 
 impl Lookup for LogFile {
+    ///Just a wrapper function for a file.
     fn lookup(&mut self, tag: &Tag) -> Result<(), AppError> {
         // open target file
         let file = File::open(&self.path)?;

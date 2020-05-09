@@ -1,5 +1,4 @@
 //! Holds the main configuration data, loaded from a YAML file.
-use std::convert::From;
 use std::convert::TryFrom;
 use std::fs::File;
 use std::io::{BufReader, Error, ErrorKind, Read};
@@ -25,10 +24,20 @@ const SEPARATOR: char = ';';
 /// this script.
 #[derive(Debug, Deserialize)]
 #[serde(from = "String")]
-pub struct PathList(Vec<PathBuf>);
+pub struct PathList(pub Vec<PathBuf>);
 
 /// Just converts a list of paths separated by either ':' or ';' depending on the platform
 /// to a vector of `PathBuf`.
+///
+/// # Example
+///
+/// ```rust
+/// use std::path::PathBuf;
+/// use clf::config::PathList;
+///
+/// let pl = PathList::from("/bin:/usr/bin:/usr/loca/bin".to_string());
+/// assert_eq!(pl.0.len(), 3);
+/// ```
 impl From<String> for PathList {
     fn from(list: String) -> Self {
         PathList(list.split(SEPARATOR).map(|p| PathBuf::from(p)).collect())
@@ -38,16 +47,16 @@ impl From<String> for PathList {
 /// A helper structure to represent a script or command to be run on each match.
 #[derive(Debug, Deserialize)]
 pub struct Script {
-    // name of the script to spawn without path
+    /// Name of the script to spawn without its path.
     pub path: PathBuf,
 
-    // list of its optional paths
+    /// list of its optional paths
     //pub pathlist: Option<String>,
 
-    // list of its optional arguments
+    /// List of its optional arguments.
     pub args: Option<Vec<String>>,
 
-    // timeout in seconds
+    /// Timeout in seconds after which the script is killed.
     #[serde(default)]
     pub timeout: u64,
 }
@@ -159,12 +168,8 @@ impl Script {
         None
     }
 
-    /// Spawns the script, and wait at most `timeout` seconds for the job to finish. Spawns
-    /// a new thread, and if timeout, the thread will end gracefully.
+    /// Spawns the script, and wait at most `timeout` seconds for the job to finish.
     pub fn spawn(&self, duration: u64) -> thread::JoinHandle<()> {
-        // let cmd = self.name.clone();
-        //let args: Vec<&str> = self.args.as_ref().unwrap().iter().map(|s| &**s).collect();
-
         let mut cmd = Command::new(&self.path);
         let mut child = cmd
             .args(&self.args.as_ref().unwrap()[..])
@@ -172,8 +177,6 @@ impl Script {
             .expect("failed to execute");
 
         let handle = thread::spawn(move || {
-            // let mut cmd = Command::new(cmd);
-            // let mut child = cmd.args(args).spawn().expect("failed to execute");
             let one_sec = std::time::Duration::from_secs(duration);
             let status_code = match child.wait_timeout(one_sec).unwrap() {
                 Some(status) => status.code(),
@@ -192,13 +195,13 @@ impl Script {
 #[serde(default)]
 /// A list of options which are specific to a search.
 pub struct SearchOptions {
-    /// if `true`, the defined script will be run a first match
+    /// If `true`, the defined script will be run a first match.
     pub runscript: bool,
 
-    /// if `true`, the matching line will be saved in an output file
+    /// If `true`, the matching line will be saved in an output file.
     pub keep_output: bool,
 
-    /// if `true`, the logfile will be search from the beginning, regardless of any saved offset
+    /// If `true`, the logfile will be search from the beginning, regardless of any saved offset.
     pub rewind: bool,
 }
 
@@ -216,6 +219,7 @@ pub enum LogSource {
 }
 
 impl LogSource {
+    /// Depending on the logfile
     pub fn get_files(&self) -> Result<Vec<String>, AppError> {
         match self {
             LogSource::LogFile(s) => Ok(vec![s.clone()]),
