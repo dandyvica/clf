@@ -259,19 +259,22 @@ mod tests {
     fn test_or_insert() {
         let mut json = crate::logfile::tests::load_json();
 
+        {
+            let rundata1 = json
+                .get_mut(&PathBuf::from("/usr/bin/zip"))
+                .unwrap()
+                .or_insert("another_tag");
+
+            assert_eq!(rundata1.name, "another_tag");
+        }
+
         let logfile1 = json.get_mut(&PathBuf::from("/usr/bin/zip")).unwrap();
-        let rundata1 = json
-            .get_mut(&PathBuf::from("/usr/bin/zip"))
-            .unwrap()
-            .or_insert("another_tag");
+        let mut tags = logfile1.tags();
+        tags.sort();
+        assert_eq!(tags, vec!["another_tag", "tag1", "tag2"]);
 
-        assert_eq!(rundata1.name, "another_tag");
-
-        // let mut tags = json[0].tags();
-        // tags.sort();
-        // assert_eq!(tags, vec!["another_tag", "tag1", "tag2"]);
-        // assert!(json[0].contains("tag1"));
-        // assert!(!json[0].contains("tag3"));
+        assert!(logfile1.contains_key("tag1"));
+        assert!(!logfile1.contains_key("tag3"));
 
         // // tag4 is not part of LogFile
         // let mut rundata = json[1].or_insert("tag4");

@@ -8,8 +8,6 @@ use serde::Deserialize;
 
 use crate::error::{AppCustomErrorKind, AppError};
 
-//#[doc(hidden)]
-
 /// A helper structure for deserializing into a `RegexVec` automatically from a `Vec<String>`.
 #[derive(Debug, Deserialize)]
 #[serde(try_from = "Vec<String>")]

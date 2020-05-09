@@ -12,11 +12,11 @@ use crate::config::Tag;
 use crate::error::{AppCustomErrorKind, AppError};
 use crate::logfile::{LogFile, RunData};
 use crate::pattern::PatternSet;
-use crate::settings::Settings;
 
 /// Trait which provides a seek function, and is implemented for all
 /// `BufReader<T>` types used in `Lookup` trait.
 pub trait Seeker {
+    /// Simulates the `seek`method for all used `BufReader<R>`.
     fn set_offset(&mut self, offset: u64) -> Result<u64, AppError>;
 }
 
@@ -29,11 +29,16 @@ impl Seeker for BufReader<File> {
 
 impl Seeker for BufReader<GzDecoder<File>> {
     fn set_offset(&mut self, offset: u64) -> Result<u64, AppError> {
+        // if 0, nothing to do
+        if offset == 0 {
+            return Ok(0);
+        }
+
         let pos = match self.by_ref().bytes().nth((offset - 1) as usize) {
             None => {
                 return Err(AppError::App {
                     err: AppCustomErrorKind::SeekPosBeyondEof,
-                    msg: format!("tried to set offset beyond EOF, at: {}", offset),
+                    msg: format!("tried to set offset beyond EOF, at offset: {}", offset),
                 })
             }
             Some(x) => x,
@@ -186,6 +191,9 @@ impl Lookup for LogFile {
 #[cfg(test)]
 mod tests {
     use std::fs::File;
+    use std::io::{BufReader,Write, Read};
+
+    use flate2::{Compression, GzBuilder, read::GzDecoder};
 
     use crate::error::*;
     use crate::logfile::LogFile;
@@ -193,31 +201,129 @@ mod tests {
 
     use regex::Regex;
 
-    use crate::setup::{create_ascii, create_gzip};
+    use crate::lookup::Seeker;
 
-    struct SearchPattern {
-        critical: Vec<Regex>,
-        warning: Vec<Regex>,
+    //use crate::setup::{create_ascii, create_gzip};
+
+    // create a temporary file to test our modules
+    #[allow(dead_code)]
+    fn create_ascii(name: &str) -> std::path::PathBuf {
+        let az = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".repeat(2);
+
+        let mut ascii_file = std::env::temp_dir();
+        ascii_file.push(name);
+
+        let mut f = File::create(&ascii_file)
+            .expect("unable to create temporary ASCII file for unit tests");
+        for i in 0..26 {
+            f.write(az[i..i + 26].as_bytes()).unwrap();
+            if cfg!(unix) {
+                f.write("\n".as_bytes()).unwrap();
+            } else if cfg!(windows) {
+                f.write("\r\n".as_bytes()).unwrap();
+            } else {
+                unimplemented!("create_ascii(): not yet implemented");
+            }
+        }
+        f.flush().unwrap();
+
+        ascii_file
     }
 
-    //#[test]
-    #[cfg(target_os = "linux")]
-    fn test_search_file() {
-        // create tmp file
-        let ascii_file = create_ascii("az_ascii_search.txt");
-        let file = File::open(&ascii_file).unwrap();
+    // create a temporary gzipped file to test our BufReader
+    #[allow(dead_code)]
+    pub fn create_gzip(name: &str) -> std::path::PathBuf {
+        let az = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".repeat(2);
 
-        // create LogFile struct
-        let logfile = LogFile::new(ascii_file);
+        let mut gzip_file = std::env::temp_dir();
+        gzip_file.push(name);
+        //gzip_file.set_extension("gz");
 
-        // seeker function
-        fn seeker(s: &str) -> Option<bool> {
-            let re = Regex::new("^A").unwrap();
-            Some(re.is_match(s))
+        let mut f =
+            File::create(&gzip_file).expect("unable to create temporary gzip file for unit tests");
+        let mut gz = GzBuilder::new()
+            .write(&f, Compression::default());
+
+        for i in 0..26 {
+            gz.write(az[i..i + 26].as_bytes()).unwrap();
+            if cfg!(unix) {
+                gz.write("\n".as_bytes()).unwrap();
+            } else if cfg!(windows) {
+                gz.write("\r\n".as_bytes()).unwrap();
+            } else {
+                unimplemented!("create_ascii(): not yet implemented");
+            }
         }
+        gz.finish().unwrap();
+        f.flush().unwrap();
 
-        //let output = logfile.tag(file, seeker);
+        gzip_file
+    }
 
-        //assert_eq!(output.unwrap(), Some(true));
+    fn get_compressed_reader(file: &std::path::PathBuf) -> BufReader<GzDecoder<File>> {
+        let file_name = create_gzip("clftest.gz");
+        let file = File::open(file_name).expect("unable to open compressed test file");
+        let decoder = GzDecoder::new(file);
+        let reader = BufReader::new(decoder); 
+        
+        reader
+    }
+
+
+
+    #[test]
+    fn test_seeker_uncompressed_file() {
+        let file_name = create_ascii("clftest.txt");
+        let file = File::open(file_name).expect("unable to open test file");
+        let mut reader = BufReader::new(file); 
+        let mut buffer = [0; 1]; 
+
+        let mut a = reader.set_offset(1);
+        assert!(a.is_ok());
+        reader.read_exact(&mut buffer).unwrap();
+        assert_eq!(buffer[0], 'B' as u8);
+
+        a = reader.set_offset(26);
+        assert!(a.is_ok());
+        reader.read_exact(&mut buffer).unwrap();
+        assert_eq!(buffer[0], '\n' as u8);
+
+        a = reader.set_offset(0);
+        assert!(a.is_ok());
+        reader.read_exact(&mut buffer).unwrap();
+        assert_eq!(buffer[0], 'A' as u8);
+    }
+    #[test]
+    fn test_seeker_compressed_file() {
+        let file_name = create_gzip("clftest.gz");
+        let mut buffer = [0; 1];
+
+        let mut reader = get_compressed_reader(&file_name);
+        let mut offset = reader.set_offset(1);
+        assert!(offset.is_ok());
+        reader.read_exact(&mut buffer).unwrap();
+        assert_eq!(buffer[0], 'B' as u8);
+
+        reader = get_compressed_reader(&file_name);
+        offset = reader.set_offset(0);
+        assert!(offset.is_ok());
+        reader.read_exact(&mut buffer).unwrap();
+        assert_eq!(buffer[0], 'A' as u8);
+
+        reader = get_compressed_reader(&file_name);
+        offset = reader.set_offset(26);
+        assert!(offset.is_ok());
+        reader.read_exact(&mut buffer).unwrap();
+        assert_eq!(buffer[0], '\n' as u8);
+
+        reader = get_compressed_reader(&file_name);
+        offset = reader.set_offset(25);
+        assert!(offset.is_ok());
+        reader.read_exact(&mut buffer).unwrap();
+        assert_eq!(buffer[0], 'Z' as u8);
+
+        reader = get_compressed_reader(&file_name);
+        offset = reader.set_offset(10000);
+        assert!(offset.is_err());
     }
 }

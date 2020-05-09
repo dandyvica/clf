@@ -13,7 +13,6 @@ use rclf::{
     error::AppError,
     logfile::LogFile,
     lookup::Lookup,
-    settings::Settings,
     snapshot::Snapshot,
 };
 
