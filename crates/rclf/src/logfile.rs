@@ -1,56 +1,65 @@
 //! A structure representing a logfile, with all its related attributes. Those attributes are
 //! coming from the processing of the log file, every time it's read to look for patterns.
+use log::{debug, info};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 //use std::time::{Instant, SystemTime};
+use std::fs::File;
+use std::io::{BufRead, BufReader, Read, Seek, SeekFrom};
+use std::time::SystemTime;
 
 #[cfg(target_os = "linux")]
 use std::os::unix::fs::MetadataExt;
 
+use flate2::read::{GzDecoder, ZlibDecoder};
 use serde::{Deserialize, Serialize};
 
+use crate::config::Tag;
 use crate::error::{AppCustomErrorKind, AppError};
+//use crate::logfile::logfile::{LogFile, RunData};
+use crate::pattern::PatternSet;
+
 use crate::util::Usable;
 
 /// A wrapper to store log file processing data.
 #[derive(Debug, Serialize, Deserialize, Default)]
 pub struct RunData {
     /// tag name
-    pub name: String,
+    name: String,
 
     /// position of the last run. Used to seek the file pointer to this point.
-    pub last_offset: u64,
+    last_offset: u64,
 
     /// last line number during the last search
-    pub last_line: u64,
+    last_line: u64,
 
     /// last time logfile is processed
-    pub last_run: u64,
+    last_run: u64,
 }
 
 /// A wrapper to get logfile information and its related attributes.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct LogFile {
     /// File & path as a `PathBuf`.
-    pub path: PathBuf,
+    path: PathBuf,
 
     /// Directory part or `None` if not existing.
-    pub directory: Option<PathBuf>,
+    directory: Option<PathBuf>,
 
     /// Extension or `None` if no extension.
-    pub extension: Option<String>,
+    extension: Option<String>,
 
     /// `true` if logfile is compressed.
-    pub compressed: bool,
+    compressed: bool,
 
     /// Linux inode or Windows equivalent.
-    pub inode: u64,
+    inode: u64,
 
     /// Linux device ID or equivalent for Windows.
-    pub dev: u64,
+    dev: u64,
 
     /// Run time data that are stored each time a logfile is searched for patterns.
-    pub rundata: HashMap<String, RunData>,
+    rundata: HashMap<String, RunData>,
 }
 
 impl LogFile {
@@ -137,6 +146,188 @@ impl LogFile {
 impl PartialEq for LogFile {
     fn eq(&self, other: &Self) -> bool {
         self.path == other.path && self.dev == other.dev && self.inode == self.inode
+    }
+}
+
+/// Trait which provides a seek function, and is implemented for all
+/// `BufReader<T>` types used in `Lookup` trait.
+pub trait Seeker {
+    /// Simulates the `seek`method for all used `BufReader<R>`.
+    fn set_offset(&mut self, offset: u64) -> Result<u64, AppError>;
+}
+
+// impl<T: Seek> Seeker for BufReader<T> {
+//     fn set_offset(&mut self, offset: u64) -> Result<u64, AppError> {
+//         self.seek(SeekFrom::Start(offset))
+//             .map_err(|e| AppError::Io(e))
+//     }
+// }
+
+impl Seeker for BufReader<File> {
+    fn set_offset(&mut self, offset: u64) -> Result<u64, AppError> {
+        self.seek(SeekFrom::Start(offset))
+            .map_err(|e| AppError::Io(e))
+    }
+}
+
+impl Seeker for BufReader<GzDecoder<File>> {
+    fn set_offset(&mut self, offset: u64) -> Result<u64, AppError> {
+        // if 0, nothing to do
+        if offset == 0 {
+            return Ok(0);
+        }
+
+        let pos = match self.by_ref().bytes().nth((offset - 1) as usize) {
+            None => {
+                return Err(AppError::App {
+                    err: AppCustomErrorKind::SeekPosBeyondEof,
+                    msg: format!("tried to set offset beyond EOF, at offset: {}", offset),
+                })
+            }
+            Some(x) => x,
+        };
+        Ok(pos.unwrap() as u64)
+    }
+}
+
+// impl Seeker for BufReader<ZlibDecoder<File>> {
+//     fn set_offset(&mut self, offset: u64) -> Result<u64, AppError> {
+//         let pos = match self.by_ref().bytes().nth((offset - 1) as usize) {
+//             None => {
+//                 return Err(AppError::App {
+//                     err: AppCustomErrorKind::SeekPosBeyondEof,
+//                     msg: format!("tried to set offset beyond EOF, at: {}", offset),
+//                 })
+//             }
+//             Some(x) => x,
+//         };
+//         Ok(pos.unwrap() as u64)
+//     }
+// }
+
+/// Trait, implemented by `LogFile` to search patterns.
+pub trait Lookup {
+    fn lookup(&mut self, tag: &Tag) -> Result<(), AppError>;
+    fn lookup_from_reader<R: BufRead + Seeker>(
+        &mut self,
+        reader: R,
+        tag: &Tag,
+    ) -> Result<(), AppError>;
+}
+
+impl Lookup for LogFile {
+    ///Just a wrapper function for a file.
+    fn lookup(&mut self, tag: &Tag) -> Result<(), AppError> {
+        // open target file
+        let file = File::open(&self.path)?;
+
+        // if file is compressed, we need to call a specific reader
+        let reader = match self.extension.as_deref() {
+            Some("gz") => {
+                let decoder = GzDecoder::new(file);
+                let reader = BufReader::new(decoder);
+                self.lookup_from_reader(reader, tag)?;
+            }
+            // Some("zip") => {
+            //     let decoder = ZlibDecoder::new(file);
+            //     let reader = BufReader::new(decoder);
+            //     self.lookup_from_reader(reader, tag, settings)?;
+            // },
+            Some(&_) | None => {
+                let reader = BufReader::new(file);
+                self.lookup_from_reader(reader, tag)?;
+            }
+        };
+
+        // if self.compressed {
+        //     info!("file {:?} is compressed", &self.path);
+        //     let decoder = GzDecoder::new(file);
+        //     let reader = BufReader::new(decoder);
+        //     self.lookup_from_reader(reader, tag, settings)?;
+        // } else {
+        //     let reader = BufReader::new(file);
+        //     self.lookup_from_reader(reader, tag, settings)?;
+        // };
+
+        //output
+        Ok(())
+    }
+
+    fn lookup_from_reader<R: BufRead + Seeker>(
+        &mut self,
+        mut reader: R,
+        tag: &Tag,
+    ) -> Result<(), AppError> {
+        // uses the same buffer
+        let mut line = String::with_capacity(1024);
+
+        // get rundata corresponding to tag name
+        let mut rundata = self.or_insert(&tag.name);
+
+        // initialize counters
+        info!(
+            "starting read from last offset={}, last line={}",
+            rundata.last_offset, rundata.last_line
+        );
+        let mut bytes_count = rundata.last_offset;
+        let mut line_number = rundata.last_line;
+
+        // move to position if already recorded, and not rewind
+        //if !tag.options.rewind && rundata.last_offset != 0 {
+        if rundata.last_offset != 0 {
+            reader.set_offset(rundata.last_offset)?;
+        }
+
+        loop {
+            // read until \n (which is included in the buffer)
+            let ret = reader.read_line(&mut line);
+
+            // read_line() returns a Result<usize>
+            match ret {
+                Ok(bytes_read) => {
+                    // EOF: save last file address to restart from this address for next run
+                    if bytes_read == 0 {
+                        //self.last_offset = reader.seek(SeekFrom::Current(0)).unwrap();
+                        break;
+                    }
+
+                    // we've been reading a new line successfully
+                    line_number += 1;
+                    bytes_count += bytes_read as u64;
+                    //println!("====> line#={}, file={}", line_number, line);
+
+                    // check. if somethin found
+                    // if let Some(caps) = tag.patterns.captures(&line) {
+                    //     debug!("file {:?}, line match: {:?}", self.path, caps);
+                    //     break;
+
+                    //     // if option.script, replace capture groups and call script
+                    //     // time out if any,
+                    // }
+                    if let Some(caps) = tag.captures(&line) {
+                        debug!("line match: {:?}", caps);
+                        break;
+                    }
+
+                    // reset buffer to not accumulate data
+                    line.clear();
+                }
+                // a rare IO error could occur here
+                Err(err) => {
+                    return Err(AppError::Io(err));
+                }
+            };
+        }
+
+        // save current offset and line number
+        rundata.last_offset = bytes_count;
+        rundata.last_line = line_number;
+
+        // and last run
+        let time = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH)?;
+        rundata.last_run = time.as_secs();
+
+        Ok(())
     }
 }
 

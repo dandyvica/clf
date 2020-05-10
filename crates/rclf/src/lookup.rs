@@ -7,10 +7,9 @@ use std::time::SystemTime;
 use flate2::read::{GzDecoder, ZlibDecoder};
 use log::{debug, info};
 
-//use crate::bufreader::{ClfBufRead, ClfBufReader};
 use crate::config::Tag;
 use crate::error::{AppCustomErrorKind, AppError};
-use crate::logfile::{LogFile, RunData};
+use crate::logfile::logfile::{LogFile, RunData};
 use crate::pattern::PatternSet;
 
 /// Trait which provides a seek function, and is implemented for all
@@ -19,6 +18,13 @@ pub trait Seeker {
     /// Simulates the `seek`method for all used `BufReader<R>`.
     fn set_offset(&mut self, offset: u64) -> Result<u64, AppError>;
 }
+
+// impl<T: Seek> Seeker for BufReader<T> {
+//     fn set_offset(&mut self, offset: u64) -> Result<u64, AppError> {
+//         self.seek(SeekFrom::Start(offset))
+//             .map_err(|e| AppError::Io(e))
+//     }
+// }
 
 impl Seeker for BufReader<File> {
     fn set_offset(&mut self, offset: u64) -> Result<u64, AppError> {
