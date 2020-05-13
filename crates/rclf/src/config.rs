@@ -1,18 +1,19 @@
 //! Holds the main configuration data, loaded from a YAML file.
-use std::convert::TryFrom;
+//use std::convert::TryFrom;
 use std::fs::File;
-use std::io::{BufReader, Error, ErrorKind, Read};
+use std::io::{Error, ErrorKind};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::thread;
 
 use log::{debug, info};
 use regex::Captures;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use wait_timeout::ChildExt;
 
 use crate::error::*;
 use crate::pattern::{Pattern, PatternSet};
+use crate::command::cmd;
 
 #[cfg(target_os = "linux")]
 const SEPARATOR: char = ':';
@@ -86,24 +87,6 @@ impl Script {
     pub fn canonicalize(&self, pathlist: &[PathBuf]) -> Result<PathBuf, Error> {
         // if script is relative, find the path where is it located
         if self.path.is_relative() {
-            // at least, if script is relative, we need to find it in at least one
-            // path from pathlist. So, in this case, pathlist must exist
-            // if pathlist.is_none() {
-            //     return Err(Error::new(ErrorKind::NotFound, "script not found"));
-            // }
-
-            // // path separator is OS dependant
-            // let path_sep = if cfg!(unix) {
-            //     ":"
-            // } else if cfg!(windows) {
-            //     ";"
-            // } else {
-            //     unimplemented!("OS is not supported")
-            // };
-
-            // split the string to get individual paths
-            //let path_vec: Vec<_> = pathlist.as_ref().unwrap().split(path_sep).collect();
-
             // find the first one where script is located and build the whole path + script name
             for path in pathlist {
                 let mut full_path = PathBuf::new();
@@ -178,7 +161,7 @@ impl Script {
 
         let handle = thread::spawn(move || {
             let one_sec = std::time::Duration::from_secs(duration);
-            let status_code = match child.wait_timeout(one_sec).unwrap() {
+            let _status_code = match child.wait_timeout(one_sec).unwrap() {
                 Some(status) => status.code(),
                 None => {
                     // child hasn't exited yet
@@ -283,15 +266,15 @@ pub struct Search {
 pub struct Global {
     /// A list of paths, separated by either ':' for unix, or ';' for windows. This is
     /// where the script, if any, will be searched for.
-    pathlist: Option<PathList>,
+    pub pathlist: Option<PathList>,
 
     /// A directory where matches lines will be stored.
     #[serde(default = "std::env::temp_dir")]
-    outputdir: PathBuf,
+    pub outputdir: PathBuf,
 
     /// A directory where the snapshot file is kept.
     #[serde(default = "std::env::temp_dir")]
-    snapshotdir: PathBuf,
+    pub snapshotdir: PathBuf,
 }
 
 /// The main search configuration used to search patterns in a logfile. This is loaded from
@@ -324,25 +307,8 @@ impl Config {
 
 #[cfg(test)]
 mod tests {
-    use crate::config::{Config, Script};
+    use super::*;
     //use std::path::PathBuf;
-
-    fn get_toml() -> String {
-        include_str!("config.yml").to_string()
-    }
-
-    #[test]
-    #[cfg(target_os = "linux")]
-    fn test_load() {
-        let toml = get_toml();
-        let config = Config::from_str(&toml).unwrap();
-
-        // test global struct
-        assert_eq!(config.global.pathlist.unwrap().0.len(), 6);
-        //assert_eq!(config.global.snapshotdir, PathBuf::from("/tmp"));
-
-        assert_eq!(config.searches.len(), 2);
-    }
 
     #[test]
     fn test_canonicalize() {

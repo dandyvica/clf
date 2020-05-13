@@ -20,6 +20,7 @@ pub enum AppError {
     Yaml(serde_yaml::Error),
     Json(serde_json::Error),
     SystemTime(std::time::SystemTimeError),
+    Utf8Error(std::str::Utf8Error),
     App {
         err: AppCustomErrorKind,
         msg: String,
@@ -34,6 +35,7 @@ impl fmt::Display for AppError {
             AppError::Parse(ref err) => err.fmt(f),
             AppError::Yaml(ref err) => err.fmt(f),
             AppError::Json(ref err) => err.fmt(f),
+            AppError::Utf8Error(ref err) => err.fmt(f),
             AppError::SystemTime(ref err) => err.fmt(f),
             AppError::App { ref err, ref msg } => {
                 write!(f, "A custom error occurred {:?}, custom msg {:?}", err, msg)
@@ -76,5 +78,11 @@ impl From<std::time::SystemTimeError> for AppError {
 impl From<num::ParseIntError> for AppError {
     fn from(err: num::ParseIntError) -> AppError {
         AppError::Parse(err)
+    }
+}
+
+impl From<std::str::Utf8Error> for AppError {
+    fn from(err: std::str::Utf8Error) -> AppError {
+        AppError::Utf8Error(err)
     }
 }

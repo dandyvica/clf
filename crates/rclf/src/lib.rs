@@ -4,7 +4,8 @@
 pub mod error;
 pub mod config;
 pub mod logfile;
-//pub mod lookup;
+pub mod variables;
 pub mod pattern;
 pub mod snapshot;
+pub mod command;
 pub mod util;

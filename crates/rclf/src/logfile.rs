@@ -15,11 +15,12 @@ use flate2::read::{GzDecoder, ZlibDecoder};
 use serde::{Deserialize, Serialize};
 
 use crate::config::Tag;
+use crate::variables::Vars;
 use crate::error::{AppCustomErrorKind, AppError};
 //use crate::logfile::logfile::{LogFile, RunData};
-use crate::pattern::PatternSet;
-
+//use crate::pattern::PatternSet;
 use crate::util::Usable;
+
 
 /// A wrapper to store log file processing data.
 #[derive(Debug, Serialize, Deserialize, Default)]
@@ -207,26 +208,27 @@ impl Seeker for BufReader<GzDecoder<File>> {
 
 /// Trait, implemented by `LogFile` to search patterns.
 pub trait Lookup {
-    fn lookup(&mut self, tag: &Tag) -> Result<(), AppError>;
+    fn lookup(&mut self, tag: &Tag, vars: &mut Vars) -> Result<(), AppError>;
     fn lookup_from_reader<R: BufRead + Seeker>(
         &mut self,
         reader: R,
         tag: &Tag,
+        vars: &mut Vars,
     ) -> Result<(), AppError>;
 }
 
 impl Lookup for LogFile {
     ///Just a wrapper function for a file.
-    fn lookup(&mut self, tag: &Tag) -> Result<(), AppError> {
+    fn lookup(&mut self, tag: &Tag, vars: &mut Vars) -> Result<(), AppError> {
         // open target file
         let file = File::open(&self.path)?;
 
         // if file is compressed, we need to call a specific reader
-        let reader = match self.extension.as_deref() {
+        let _reader = match self.extension.as_deref() {
             Some("gz") => {
                 let decoder = GzDecoder::new(file);
                 let reader = BufReader::new(decoder);
-                self.lookup_from_reader(reader, tag)?;
+                self.lookup_from_reader(reader, tag, vars)?;
             }
             // Some("zip") => {
             //     let decoder = ZlibDecoder::new(file);
@@ -235,7 +237,7 @@ impl Lookup for LogFile {
             // },
             Some(&_) | None => {
                 let reader = BufReader::new(file);
-                self.lookup_from_reader(reader, tag)?;
+                self.lookup_from_reader(reader, tag, vars)?;
             }
         };
 
@@ -257,6 +259,7 @@ impl Lookup for LogFile {
         &mut self,
         mut reader: R,
         tag: &Tag,
+        vars: &mut Vars,
     ) -> Result<(), AppError> {
         // uses the same buffer
         let mut line = String::with_capacity(1024);
@@ -305,6 +308,14 @@ impl Lookup for LogFile {
                     //     // time out if any,
                     // }
                     if let Some(caps) = tag.captures(&line) {
+                        // replace args if any
+                        //let new_args = tag.script.
+                        
+                        // add relevant useful variables
+                        vars.add_var("$LINE_NUMBER", format!("{}", line_number));
+                        vars.add_var("$LINE", line.clone());
+
+
                         debug!("line match: {:?}", caps);
                         break;
                     }
@@ -337,7 +348,7 @@ mod tests {
     use std::path::PathBuf;
 
     use crate::error::*;
-    use crate::logfile::{LogFile, RunData};
+    use super::*;
 
     // useful set of data for our unit tests
     const JSON: &'static str = r#"
