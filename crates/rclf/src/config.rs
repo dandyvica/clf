@@ -11,168 +11,168 @@ use regex::Captures;
 use serde::Deserialize;
 use wait_timeout::ChildExt;
 
+use crate::command::Cmd;
 use crate::error::*;
 use crate::pattern::{Pattern, PatternSet};
-use crate::command::cmd;
 
-#[cfg(target_os = "linux")]
-const SEPARATOR: char = ':';
+// #[cfg(target_os = "linux")]
+// const SEPARATOR: char = ':';
 
-#[cfg(target_os = "windows")]
-const SEPARATOR: char = ';';
+// #[cfg(target_os = "windows")]
+// const SEPARATOR: char = ';';
 
-/// A list of paths, where the script which is potentially called, are scanned the locate
-/// this script.
-#[derive(Debug, Deserialize)]
-#[serde(from = "String")]
-pub struct PathList(pub Vec<PathBuf>);
+// /// A list of paths, where the script which is potentially called, are scanned the locate
+// /// this script.
+// #[derive(Debug, Deserialize)]
+// #[serde(from = "String")]
+// pub struct PathList(pub Vec<PathBuf>);
 
-/// Just converts a list of paths separated by either ':' or ';' depending on the platform
-/// to a vector of `PathBuf`.
-///
-/// # Example
-///
-/// ```rust
-/// use std::path::PathBuf;
-/// use rclf::config::PathList;
-///
-/// let pl = PathList::from("/bin:/usr/bin:/usr/loca/bin".to_string());
-/// assert_eq!(pl.0.len(), 3);
-/// ```
-impl From<String> for PathList {
-    fn from(list: String) -> Self {
-        PathList(list.split(SEPARATOR).map(|p| PathBuf::from(p)).collect())
-    }
-}
+// /// Just converts a list of paths separated by either ':' or ';' depending on the platform
+// /// to a vector of `PathBuf`.
+// ///
+// /// # Example
+// ///
+// /// ```rust
+// /// use std::path::PathBuf;
+// /// use rclf::config::PathList;
+// ///
+// /// let pl = PathList::from("/bin:/usr/bin:/usr/loca/bin".to_string());
+// /// assert_eq!(pl.0.len(), 3);
+// /// ```
+// impl From<String> for PathList {
+//     fn from(list: String) -> Self {
+//         PathList(list.split(SEPARATOR).map(|p| PathBuf::from(p)).collect())
+//     }
+// }
 
-/// A helper structure to represent a script or command to be run on each match.
-#[derive(Debug, Deserialize)]
-pub struct Script {
-    /// Name of the script to spawn without its path.
-    pub path: PathBuf,
+// /// A helper structure to represent a script or command to be run on each match.
+// #[derive(Debug, Deserialize)]
+// pub struct Script {
+//     /// Name of the script to spawn without its path.
+//     pub path: PathBuf,
 
-    /// list of its optional paths
-    //pub pathlist: Option<String>,
+//     /// list of its optional paths
+//     //pub pathlist: Option<String>,
 
-    /// List of its optional arguments.
-    pub args: Option<Vec<String>>,
+//     /// List of its optional arguments.
+//     pub args: Option<Vec<String>>,
 
-    /// Timeout in seconds after which the script is killed.
-    #[serde(default)]
-    pub timeout: u64,
-}
+//     /// Timeout in seconds after which the script is killed.
+//     #[serde(default)]
+//     pub timeout: u64,
+// }
 
-impl Script {
-    /// Returns the canonical, absolute form of the path with all intermediate
-    /// components normalized and symbolic links resolved.
-    ///
-    /// # Example
-    ///
-    /// ```rust
-    /// use std::path::PathBuf;
-    /// use rclf::config::Script;
-    ///
-    /// let script = Script {
-    ///     path: PathBuf::from("gzip"),
-    ///     args: None,
-    ///     timeout: 0
-    /// };
-    /// let path_list = "/usr:/dev:/usr/lib:/usr/bin:/bin";
-    /// let pathbuf_list: Vec<_> = path_list
-    ///     .split(":")
-    ///     .map(|p| PathBuf::from(p))
-    ///     .collect();
-    /// assert_eq!(script.canonicalize(&pathbuf_list).unwrap(), PathBuf::from("/bin/gzip"));
-    /// ```
-    pub fn canonicalize(&self, pathlist: &[PathBuf]) -> Result<PathBuf, Error> {
-        // if script is relative, find the path where is it located
-        if self.path.is_relative() {
-            // find the first one where script is located and build the whole path + script name
-            for path in pathlist {
-                let mut full_path = PathBuf::new();
-                full_path.push(path);
-                full_path.push(&self.path);
+// impl Script {
+//     /// Returns the canonical, absolute form of the path with all intermediate
+//     /// components normalized and symbolic links resolved.
+//     ///
+//     /// # Example
+//     ///
+//     /// ```rust
+//     /// use std::path::PathBuf;
+//     /// use rclf::config::Script;
+//     ///
+//     /// let script = Script {
+//     ///     path: PathBuf::from("gzip"),
+//     ///     args: None,
+//     ///     timeout: 0
+//     /// };
+//     /// let path_list = "/usr:/dev:/usr/lib:/usr/bin:/bin";
+//     /// let pathbuf_list: Vec<_> = path_list
+//     ///     .split(":")
+//     ///     .map(|p| PathBuf::from(p))
+//     ///     .collect();
+//     /// assert_eq!(script.canonicalize(&pathbuf_list).unwrap(), PathBuf::from("/bin/gzip"));
+//     /// ```
+//     pub fn canonicalize(&self, pathlist: &[PathBuf]) -> Result<PathBuf, Error> {
+//         // if script is relative, find the path where is it located
+//         if self.path.is_relative() {
+//             // find the first one where script is located and build the whole path + script name
+//             for path in pathlist {
+//                 let mut full_path = PathBuf::new();
+//                 full_path.push(path);
+//                 full_path.push(&self.path);
 
-                if full_path.is_file() {
-                    return full_path.canonicalize();
-                }
-            }
-        }
+//                 if full_path.is_file() {
+//                     return full_path.canonicalize();
+//                 }
+//             }
+//         }
 
-        // just check if script exists
-        if self.path.is_file() {
-            self.path.canonicalize()
-        } else {
-            Err(Error::new(ErrorKind::NotFound, "script not found"))
-        }
-    }
+//         // just check if script exists
+//         if self.path.is_file() {
+//             self.path.canonicalize()
+//         } else {
+//             Err(Error::new(ErrorKind::NotFound, "script not found"))
+//         }
+//     }
 
-    /// Replace, for each argument, the capture groups values.
-    ///
-    /// # Example
-    ///
-    /// ```rust
-    /// use std::path::PathBuf;
-    /// use regex::{Captures, Regex};
-    /// use rclf::config::Script;
-    ///
-    /// let script = Script {
-    ///     path: PathBuf::from("gzip"),
-    ///     args: Some(vec!["address=$hw".to_string(), "id=$id".to_string(), "ok".to_string()]),
-    ///     timeout: 0
-    /// };
-    /// let line = ">>> wlan0: authenticate with FF:FA:FB:FC:FD:FE";
-    /// let re = Regex::new(r"(?P<id>\w+): authenticate with (?P<hw>[A-Z:]+)").unwrap();
-    /// let caps = re.captures(line).unwrap();
-    /// let replaced = script.replace_args(caps);
-    /// assert!(replaced.is_some());
-    /// assert_eq!(replaced.unwrap(), &["address=FF:FA:FB:FC:FD:FE", "id=wlan0", "ok"]);
-    /// ```
-    pub fn replace_args<'t>(&self, caps: Captures<'t>) -> Option<Vec<String>> {
-        // if we got captures, for each argument, replace by capture groups
-        if caps.len() > 1 && self.args.is_some() {
-            // this vector will receive new arguments
-            let mut new_args = Vec::new();
-            let mut buffer = String::with_capacity(256);
+//     /// Replace, for each argument, the capture groups values.
+//     ///
+//     /// # Example
+//     ///
+//     /// ```rust
+//     /// use std::path::PathBuf;
+//     /// use regex::{Captures, Regex};
+//     /// use rclf::config::Script;
+//     ///
+//     /// let script = Script {
+//     ///     path: PathBuf::from("gzip"),
+//     ///     args: Some(vec!["address=$hw".to_string(), "id=$id".to_string(), "ok".to_string()]),
+//     ///     timeout: 0
+//     /// };
+//     /// let line = ">>> wlan0: authenticate with FF:FA:FB:FC:FD:FE";
+//     /// let re = Regex::new(r"(?P<id>\w+): authenticate with (?P<hw>[A-Z:]+)").unwrap();
+//     /// let caps = re.captures(line).unwrap();
+//     /// let replaced = script.replace_args(caps);
+//     /// assert!(replaced.is_some());
+//     /// assert_eq!(replaced.unwrap(), &["address=FF:FA:FB:FC:FD:FE", "id=wlan0", "ok"]);
+//     /// ```
+//     pub fn replace_args<'t>(&self, caps: Captures<'t>) -> Option<Vec<String>> {
+//         // if we got captures, for each argument, replace by capture groups
+//         if caps.len() > 1 && self.args.is_some() {
+//             // this vector will receive new arguments
+//             let mut new_args = Vec::new();
+//             let mut buffer = String::with_capacity(256);
 
-            // replace capture groups for each arg
-            for arg in self.args.as_ref().unwrap() {
-                // replace strings like $name by capture groups values
-                caps.expand(arg, &mut buffer);
+//             // replace capture groups for each arg
+//             for arg in self.args.as_ref().unwrap() {
+//                 // replace strings like $name by capture groups values
+//                 caps.expand(arg, &mut buffer);
 
-                // add replaced string
-                new_args.push(buffer.clone());
+//                 // add replaced string
+//                 new_args.push(buffer.clone());
 
-                // reset buffer
-                buffer.clear();
-            }
-            return Some(new_args);
-        }
-        None
-    }
+//                 // reset buffer
+//                 buffer.clear();
+//             }
+//             return Some(new_args);
+//         }
+//         None
+//     }
 
-    /// Spawns the script, and wait at most `timeout` seconds for the job to finish.
-    pub fn spawn(&self, duration: u64) -> thread::JoinHandle<()> {
-        let mut cmd = Command::new(&self.path);
-        let mut child = cmd
-            .args(&self.args.as_ref().unwrap()[..])
-            .spawn()
-            .expect("failed to execute");
+//     /// Spawns the script, and wait at most `timeout` seconds for the job to finish.
+//     pub fn spawn(&self, duration: u64) -> thread::JoinHandle<()> {
+//         let mut cmd = Command::new(&self.path);
+//         let mut child = cmd
+//             .args(&self.args.as_ref().unwrap()[..])
+//             .spawn()
+//             .expect("failed to execute");
 
-        let handle = thread::spawn(move || {
-            let one_sec = std::time::Duration::from_secs(duration);
-            let _status_code = match child.wait_timeout(one_sec).unwrap() {
-                Some(status) => status.code(),
-                None => {
-                    // child hasn't exited yet
-                    child.kill().unwrap();
-                    child.wait().unwrap().code()
-                }
-            };
-        });
-        handle
-    }
-}
+//         let handle = thread::spawn(move || {
+//             let one_sec = std::time::Duration::from_secs(duration);
+//             let _status_code = match child.wait_timeout(one_sec).unwrap() {
+//                 Some(status) => status.code(),
+//                 None => {
+//                     // child hasn't exited yet
+//                     child.kill().unwrap();
+//                     child.wait().unwrap().code()
+//                 }
+//             };
+//         });
+//         handle
+//     }
+// }
 
 #[derive(Debug, Deserialize, Default)]
 #[serde(default)]
@@ -229,7 +229,7 @@ pub struct Tag {
     pub options: SearchOptions,
 
     /// a script details like path, name, parameters, delay etc to be possibly run for a match
-    pub script: Option<Script>,
+    pub script: Option<Cmd>,
 
     /// patterns to be checked against
     pub patterns: PatternSet,
@@ -266,7 +266,7 @@ pub struct Search {
 pub struct Global {
     /// A list of paths, separated by either ':' for unix, or ';' for windows. This is
     /// where the script, if any, will be searched for.
-    pub pathlist: Option<PathList>,
+    pub pathlist: Option<String>,
 
     /// A directory where matches lines will be stored.
     #[serde(default = "std::env::temp_dir")]
@@ -303,28 +303,34 @@ impl Config {
         let yaml = serde_yaml::from_reader(file)?;
         Ok(yaml)
     }
+
+    // /// Returns a reference on the global data.
+    // #[inline]
+    // pub fn get_global(&self) -> &Global {
+    //     &self.global
+    // }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    //use std::path::PathBuf;
+// #[cfg(test)]
+// mod tests {
+//     use super::*;
+//     //use std::path::PathBuf;
 
-    #[test]
-    fn test_canonicalize() {
-        use std::io::ErrorKind;
-        use std::path::PathBuf;
+//     #[test]
+//     fn test_canonicalize() {
+//         use std::io::ErrorKind;
+//         use std::path::PathBuf;
 
-        let script = Script {
-            path: PathBuf::from("foo"),
-            args: None,
-            timeout: 0,
-        };
-        let path_list = "/usr:/dev:/usr/lib:/usr/bin:/bin";
-        let pathbuf_list: Vec<_> = path_list.split(":").map(|p| PathBuf::from(p)).collect();
-        assert_eq!(
-            script.canonicalize(&pathbuf_list).unwrap_err().kind(),
-            ErrorKind::NotFound
-        );
-    }
-}
+//         let script = Script {
+//             path: PathBuf::from("foo"),
+//             args: None,
+//             timeout: 0,
+//         };
+//         let path_list = "/usr:/dev:/usr/lib:/usr/bin:/bin";
+//         let pathbuf_list: Vec<_> = path_list.split(":").map(|p| PathBuf::from(p)).collect();
+//         assert_eq!(
+//             script.canonicalize(&pathbuf_list).unwrap_err().kind(),
+//             ErrorKind::NotFound
+//         );
+//     }
+// }

@@ -11,9 +11,9 @@ use simplelog::*;
 use rclf::{
     config::{Config, Tag},
     error::AppError,
-    logfile::LogFile,
-    lookup::Lookup,
+    logfile::{LogFile, Lookup},
     snapshot::Snapshot,
+    variables::Vars,
 };
 
 mod args;
@@ -41,6 +41,9 @@ fn main() -> Result<(), AppError> {
         Err(e) => panic!("unable to create log file"),
     };
 
+    // create initial variables
+    let mut vars = Vars::new();
+
     // load configuration file as specified from the command line
     let config = match Config::from_file(&options.config_file) {
         Ok(conf) => conf,
@@ -62,19 +65,13 @@ fn main() -> Result<(), AppError> {
         std::fs::remove_file(&snapfile)?;
     }
 
-    // load the optional settings
-    // let settings: Option<Settings> = match options.settings_file {
-    //     None => None,
-    //     Some(f) => Some(Settings::from_file(f)?),
-    // };
-
     // read snapshot data
     let mut snapshot = match Snapshot::load(&snapfile) {
         Ok(s) => s,
         Err(e) => panic!("error {:?}", e),
     };
 
-    println!("{:?}", config);
+    debug!("{:#?}", config);
 
     // loop through all searches
     for search in &config.searches {
@@ -90,7 +87,7 @@ fn main() -> Result<(), AppError> {
             //let rundata = logfile.or_insert(tag.name);
 
             // now we can search for the pattern
-            logfile.lookup(&tag)?;
+            logfile.lookup(&tag, &mut vars)?;
         }
     }
 

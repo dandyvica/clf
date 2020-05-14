@@ -15,12 +15,11 @@ use flate2::read::{GzDecoder, ZlibDecoder};
 use serde::{Deserialize, Serialize};
 
 use crate::config::Tag;
-use crate::variables::Vars;
 use crate::error::{AppCustomErrorKind, AppError};
+use crate::variables::Vars;
 //use crate::logfile::logfile::{LogFile, RunData};
 //use crate::pattern::PatternSet;
 use crate::util::Usable;
-
 
 /// A wrapper to store log file processing data.
 #[derive(Debug, Serialize, Deserialize, Default)]
@@ -310,13 +309,12 @@ impl Lookup for LogFile {
                     if let Some(caps) = tag.captures(&line) {
                         // replace args if any
                         //let new_args = tag.script.
-                        
+
                         // add relevant useful variables
                         vars.add_var("$LINE_NUMBER", format!("{}", line_number));
                         vars.add_var("$LINE", line.clone());
 
-
-                        debug!("line match: {:?}", caps);
+                        println!("line match: {:?}", caps);
                         break;
                     }
 
@@ -347,8 +345,8 @@ mod tests {
     use std::collections::HashMap;
     use std::path::PathBuf;
 
-    use crate::error::*;
     use super::*;
+    use crate::error::*;
 
     // useful set of data for our unit tests
     const JSON: &'static str = r#"

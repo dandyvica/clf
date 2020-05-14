@@ -2,10 +2,10 @@
 //! a logfile for patterns.
 #[macro_use]
 pub mod error;
+pub mod command;
 pub mod config;
 pub mod logfile;
-pub mod variables;
 pub mod pattern;
 pub mod snapshot;
-pub mod command;
 pub mod util;
+pub mod variables;

@@ -4,13 +4,15 @@ use std::path::PathBuf;
 use std::process::Command;
 use std::thread;
 
+use log::{debug, info};
 use serde::Deserialize;
 use wait_timeout::ChildExt;
-use log::{debug, info};
 
 /// Returns the number of seconds for a standard timeout when not defined in the YAML file.
 /// Neede by `serde`.
-const fn default_timeout() -> u64 { 2*3600 }
+const fn default_timeout() -> u64 {
+    2 * 3600
+}
 
 use crate::error::AppError;
 //use crate::error::AppError;
@@ -53,7 +55,7 @@ impl Cmd {
                 .spawn()?,
         };
 
-        // spawn a new thread to not be blocked waiting for command to finish
+        // spawns a new thread to not be blocked waiting for command to finish
         let handle = thread::spawn(move || {
             let duration = std::time::Duration::from_secs(timeout);
             let _status_code = match child.wait_timeout(duration).unwrap() {
