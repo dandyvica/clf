@@ -6,20 +6,21 @@ use std::path::{Path, PathBuf};
 //use std::time::{Instant, SystemTime};
 use std::fs::File;
 use std::io::{BufRead, BufReader, Read, Seek, SeekFrom};
+use std::thread;
 use std::time::SystemTime;
 
 #[cfg(target_os = "linux")]
 use std::os::unix::fs::MetadataExt;
 
-use flate2::read::{GzDecoder, ZlibDecoder};
+use flate2::read::GzDecoder;
 use serde::{Deserialize, Serialize};
 
-use crate::config::Tag;
-use crate::error::{AppCustomErrorKind, AppError};
-use crate::variables::Vars;
-//use crate::logfile::logfile::{LogFile, RunData};
-//use crate::pattern::PatternSet;
-use crate::util::Usable;
+use crate::{
+    config::Tag,
+    error::{AppCustomErrorKind, AppError},
+    util::Usable,
+    variables::Vars,
+};
 
 /// A wrapper to store log file processing data.
 #[derive(Debug, Serialize, Deserialize, Default)]
@@ -190,68 +191,46 @@ impl Seeker for BufReader<GzDecoder<File>> {
     }
 }
 
-// impl Seeker for BufReader<ZlibDecoder<File>> {
-//     fn set_offset(&mut self, offset: u64) -> Result<u64, AppError> {
-//         let pos = match self.by_ref().bytes().nth((offset - 1) as usize) {
-//             None => {
-//                 return Err(AppError::App {
-//                     err: AppCustomErrorKind::SeekPosBeyondEof,
-//                     msg: format!("tried to set offset beyond EOF, at: {}", offset),
-//                 })
-//             }
-//             Some(x) => x,
-//         };
-//         Ok(pos.unwrap() as u64)
-//     }
-// }
-
 /// Trait, implemented by `LogFile` to search patterns.
 pub trait Lookup {
-    fn lookup(&mut self, tag: &Tag, vars: &mut Vars) -> Result<(), AppError>;
+    fn lookup(
+        &mut self,
+        tag: &Tag,
+        vars: &mut Vars,
+    ) -> Result<Option<thread::JoinHandle<()>>, AppError>;
     fn lookup_from_reader<R: BufRead + Seeker>(
         &mut self,
         reader: R,
         tag: &Tag,
         vars: &mut Vars,
-    ) -> Result<(), AppError>;
+    ) -> Result<Option<thread::JoinHandle<()>>, AppError>;
 }
 
 impl Lookup for LogFile {
     ///Just a wrapper function for a file.
-    fn lookup(&mut self, tag: &Tag, vars: &mut Vars) -> Result<(), AppError> {
+    fn lookup(
+        &mut self,
+        tag: &Tag,
+        vars: &mut Vars,
+    ) -> Result<Option<thread::JoinHandle<()>>, AppError> {
         // open target file
         let file = File::open(&self.path)?;
 
         // if file is compressed, we need to call a specific reader
-        let _reader = match self.extension.as_deref() {
+        let handle = match self.extension.as_deref() {
             Some("gz") => {
                 let decoder = GzDecoder::new(file);
                 let reader = BufReader::new(decoder);
-                self.lookup_from_reader(reader, tag, vars)?;
+                self.lookup_from_reader(reader, tag, vars)
             }
-            // Some("zip") => {
-            //     let decoder = ZlibDecoder::new(file);
-            //     let reader = BufReader::new(decoder);
-            //     self.lookup_from_reader(reader, tag, settings)?;
-            // },
             Some(&_) | None => {
                 let reader = BufReader::new(file);
-                self.lookup_from_reader(reader, tag, vars)?;
+                self.lookup_from_reader(reader, tag, vars)
             }
         };
 
-        // if self.compressed {
-        //     info!("file {:?} is compressed", &self.path);
-        //     let decoder = GzDecoder::new(file);
-        //     let reader = BufReader::new(decoder);
-        //     self.lookup_from_reader(reader, tag, settings)?;
-        // } else {
-        //     let reader = BufReader::new(file);
-        //     self.lookup_from_reader(reader, tag, settings)?;
-        // };
-
         //output
-        Ok(())
+        handle
     }
 
     fn lookup_from_reader<R: BufRead + Seeker>(
@@ -259,11 +238,14 @@ impl Lookup for LogFile {
         mut reader: R,
         tag: &Tag,
         vars: &mut Vars,
-    ) -> Result<(), AppError> {
+    ) -> Result<Option<thread::JoinHandle<()>>, AppError> {
+        // this thread handle will be returned if any
+        let mut handle: Option<thread::JoinHandle<()>> = None;
+
         // uses the same buffer
         let mut line = String::with_capacity(1024);
 
-        // get rundata corresponding to tag name
+        // get rundata corresponding to tag name, or insert that new one is not yet in snapshot
         let mut rundata = self.or_insert(&tag.name);
 
         // initialize counters
@@ -298,23 +280,23 @@ impl Lookup for LogFile {
                     bytes_count += bytes_read as u64;
                     //println!("====> line#={}, file={}", line_number, line);
 
-                    // check. if somethin found
-                    // if let Some(caps) = tag.patterns.captures(&line) {
-                    //     debug!("file {:?}, line match: {:?}", self.path, caps);
-                    //     break;
+                    // is there a match, regarding also exceptions?
+                    if let Some(re) = tag.is_match(&line) {
+                        debug!(
+                            "found a match tag={}, re=({:?},{})",
+                            tag.name,
+                            re.0,
+                            re.1.as_str()
+                        );
 
-                    //     // if option.script, replace capture groups and call script
-                    //     // time out if any,
-                    // }
-                    if let Some(caps) = tag.captures(&line) {
-                        // replace args if any
-                        //let new_args = tag.script.
-
-                        // add relevant useful variables
+                        // create variables which will be set as environment variables when script is called
                         vars.add_var("$LINE_NUMBER", format!("{}", line_number));
                         vars.add_var("$LINE", line.clone());
+                        vars.add_capture_groups(re.1, &line);
 
-                        println!("line match: {:?}", caps);
+                        // now call script if there's an external script to call
+                        handle = tag.call_script(None, vars)?;
+
                         break;
                     }
 
@@ -336,7 +318,7 @@ impl Lookup for LogFile {
         let time = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH)?;
         rundata.last_run = time.as_secs();
 
-        Ok(())
+        Ok(handle)
     }
 }
 

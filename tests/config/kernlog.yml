@@ -1,6 +1,7 @@
 ---
 global:
-  pathlist: "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+  path: "//foo"
+  snapshotdir: /tmp
 
 searches:
   - logfile: /var/log/kern.log

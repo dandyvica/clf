@@ -2,15 +2,13 @@ use std::path::PathBuf;
 
 use clap::{App, Arg};
 
-use rclf::error::AppError;
-
 // This structure holds the command line arguments
 #[derive(Debug, Default)]
 pub struct CliOptions {
     pub config_file: PathBuf,
-    pub settings_file: Option<PathBuf>,
     pub clf_logfile: PathBuf,
     pub delete_snapfile: bool,
+    pub check_conf: bool,
     // pub input_file: String,
     // pub output_file: String,
     // pub progress_bar: bool,
@@ -50,14 +48,6 @@ impl CliOptions {
                     .takes_value(true),
             )
             .arg(
-                Arg::with_name("settings")
-                    .short("s")
-                    .long("settings")
-                    .required(false)
-                    .help("Name of the optional settings file")
-                    .takes_value(true),
-            )
-            .arg(
                 Arg::with_name("clflog")
                     .short("l")
                     .long("clflog")
@@ -71,6 +61,14 @@ impl CliOptions {
                     .long("delsnap")
                     .required(false)
                     .help("Delete snapshot file before searching")
+                    .takes_value(false),
+            )
+            .arg(
+                Arg::with_name("chkcnf")
+                    .short("n")
+                    .long("checkconf")
+                    .required(false)
+                    .help("Check configuration file correctness, print it out and exit")
                     .takes_value(false),
             )
             // .arg(
@@ -137,12 +135,7 @@ impl CliOptions {
         // config file is mandatory
         options.config_file = PathBuf::from(matches.value_of("config").unwrap());
 
-        // settings file is optional
-        if let Some(settings) = matches.value_of("settings") {
-            options.settings_file = Some(PathBuf::from(settings));
-        }
-
-        // settings file is optional
+        // logfile file is optional
         options.clf_logfile = match matches.value_of("clflog") {
             Some(log) => PathBuf::from(log),
             None => {
@@ -151,6 +144,8 @@ impl CliOptions {
                 dir
             }
         };
+
+        options.check_conf = matches.is_present("chkcnf");
 
         options
     }

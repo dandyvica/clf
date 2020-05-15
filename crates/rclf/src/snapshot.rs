@@ -83,8 +83,7 @@ impl Snapshot {
 mod tests {
     use std::path::PathBuf;
 
-    use crate::logfile::{LogFile, RunData};
-    use crate::snapshot::Snapshot;
+    use super::*;
 
     //use serde::{Deserialize, Serialize};
 

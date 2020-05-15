@@ -1,19 +1,20 @@
 //! Holds the main configuration data, loaded from a YAML file.
 //use std::convert::TryFrom;
 use std::fs::File;
-use std::io::{Error, ErrorKind};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::thread;
 
-use log::{debug, info};
-use regex::Captures;
+use log::debug;
+use regex::Regex;
 use serde::Deserialize;
-use wait_timeout::ChildExt;
 
-use crate::command::Cmd;
-use crate::error::*;
-use crate::pattern::{Pattern, PatternSet};
+use crate::{
+    command::Cmd,
+    error::AppError,
+    pattern::{PatternSet, PatternType},
+    variables::Vars,
+};
 
 // #[cfg(target_os = "linux")]
 // const SEPARATOR: char = ':';
@@ -175,7 +176,7 @@ use crate::pattern::{Pattern, PatternSet};
 // }
 
 #[derive(Debug, Deserialize, Default)]
-#[serde(default)]
+#[serde(from = "String")]
 /// A list of options which are specific to a search.
 pub struct SearchOptions {
     /// If `true`, the defined script will be run a first match.
@@ -186,6 +187,99 @@ pub struct SearchOptions {
 
     /// If `true`, the logfile will be search from the beginning, regardless of any saved offset.
     pub rewind: bool,
+
+    // a number which denotes how many lines have to match a pattern until they are considered a critical error
+    pub criticalthreshold: u16,
+
+    // is used to change this UNKNOWN to a different status. With logfilemissing=critical you can have check_file_existence-functionality
+    pub logfilemissing: Option<String>,
+
+    // controls whether the matching lines are written to a protocol file for later investigation
+    pub protocol: bool,
+
+    // controls whether the hit counter will be saved between the runs.
+    // If yes, hit numbers are added until a threshold is reached (criticalthreshold).
+    // Otherwise the run begins with reset counters
+    pub savethresholdcount: bool,
+
+    // controls whether an error is propagated through successive runs of check_logfiles.
+    // Once an error was found, the exitcode will be non-zero until an okpattern resets it or until
+    // the error expires after <second> seconds. Do not use this option until you know exactly what you do
+    pub sticky: u16,
+
+    // a number which denotes how many lines have to match a pattern until they are considered a warning
+    pub warningthreshold: u16,    
+}
+
+/// Convenient macro to add a boolean option
+macro_rules! add_bool_option {
+    ($v:ident, $opt:ident, $($bool_option:ident),*) => (
+        $(
+          if $v.contains(&stringify!($bool_option)) {
+            $opt.$bool_option = true;
+        }
+        )*
+    );
+}
+
+/// Convenient macro to add an integer or string option.
+macro_rules! add_typed_option {
+    // add non-boolean option if any. It converts to the target type
+    ($x:ident, $tag:ident, $opt:ident, $type:ty) => {
+        // `stringify!` will convert the expression *as it is* into a string.
+        if $x[0] == stringify!($tag) {
+            $opt.$tag = $x[1].parse::<$type>().unwrap();
+        }
+    };
+}
+
+impl From<String> for SearchOptions {
+    fn from(option_list: String) -> Self {
+        // create a default options structure
+        let mut opt = SearchOptions::default();
+
+        // convert the input list to a vector
+        let v: Vec<_> = option_list.split(",").map(|x| x.trim()).collect();
+
+        // use Rust macro to add bool options if any
+        add_bool_option!(
+            v,
+            opt,
+            runscript,
+            rewind,
+            keep_output
+        );
+
+        // other options like key=value if any
+        // first build a vector of such options. We first search for = and then split according to '='
+        let kv_options: Vec<_> = v.iter().filter(|&x| x.contains("=")).collect();
+
+        // need to test whether we found key=value options
+        if !kv_options.is_empty() {
+            // this hash will hold key values options
+            //let kvh_options: HashMap<String, String> = HashMap::new();
+
+            // now we can safely split
+            for kv in &kv_options {
+                let splitted_options: Vec<_> = kv.split("=").map(|x| x.trim()).collect();
+                let key = splitted_options[0];
+                let value = splitted_options[1];
+
+                // add additional non-boolean options if any
+                add_typed_option!(splitted_options, criticalthreshold, opt, u16);
+                add_typed_option!(splitted_options, sticky, opt, u16);
+                add_typed_option!(splitted_options, warningthreshold, opt, u16);
+
+                // special case for this
+                if key == "logfilemissing" {
+                    opt.logfilemissing = Some(value.to_string());
+                }
+            }
+        }
+
+        opt        
+
+    }
 }
 
 /// A `enum` matching either a logfile name if only a single logfile is defined, or a list
@@ -220,35 +314,42 @@ impl LogSource {
 /// gathered and refered to a tag name.
 #[derive(Debug, Deserialize)]
 pub struct Tag {
-    /// a name to identify the name
+    /// A name to identify the tag.
     pub name: String,
 
-    /// a list of options specific to this search. As such options are optional, add a default serde
-    /// directive
+    /// A list of options specific to this search. As such options are optional, add a default `serde`
+    /// directive.
     #[serde(default)]
-    pub options: SearchOptions,
+    options: SearchOptions,
 
-    /// a script details like path, name, parameters, delay etc to be possibly run for a match
-    pub script: Option<Cmd>,
+    /// Script details like path, name, parameters, delay etc to be possibly run for a match.
+    script: Option<Cmd>,
 
-    /// patterns to be checked against
-    pub patterns: PatternSet,
+    /// Patterns to be checked against.
+    patterns: PatternSet,
 }
 
 impl Tag {
-    /// Returns the capture groups corresponding to the leftmost-first match in text.
-    pub fn captures<'t>(&self, line: &'t str) -> Option<Captures<'t>> {
-        // if we find a match, replace
-        // if let Some(caps) = self.patterns.captures(&line) {
-        //     debug!("line match: {:?}", caps);
-        //     break;
-        // }
-
-        // None
-        self.patterns.captures(&line)
+    /// Returns the regex involved in a match, if any.
+    pub fn is_match(&self, text: &str) -> Option<(PatternType, &Regex)> {
+        self.patterns.is_match(text)
     }
 
-    //pub fn try_match(&self, line: &str) {}
+    /// Calls the external script, by providing arguments, environment variables and path which will be searched for command.
+    pub fn call_script(
+        &self,
+        path: Option<&str>,
+        vars: &Vars,
+    ) -> Result<Option<thread::JoinHandle<()>>, AppError> {
+        // spawns external script if existing
+        if let Some(script) = &self.script {
+            match script.spawn(path, vars) {
+                Ok(handle) => return Ok(Some(handle)),
+                Err(e) => return Err(e),
+            }
+        }
+        Ok(None)
+    }
 }
 
 /// This is the structure mapping exactly data coming from the configuration YAML file.
@@ -263,10 +364,11 @@ pub struct Search {
 
 #[derive(Debug, Deserialize)]
 /// A list of global options, which apply globally for all searches.
-pub struct Global {
-    /// A list of paths, separated by either ':' for unix, or ';' for windows. This is
-    /// where the script, if any, will be searched for.
-    pub pathlist: Option<String>,
+pub struct GlobalOptions {
+    /// A list of paths, separated by either ':' for unix, or ';' for Windows. This is
+    /// where the script, if any, will be searched for. Default to PATH or Path depending on the platform.
+    #[serde(default = "self::GlobalOptions::get_path")]
+    pub path: String,
 
     /// A directory where matches lines will be stored.
     #[serde(default = "std::env::temp_dir")]
@@ -277,12 +379,41 @@ pub struct Global {
     pub snapshotdir: PathBuf,
 }
 
+impl GlobalOptions {
+    /// Returns the Unix PATH variable.    
+    #[cfg(target_family = "unix")]
+    pub fn get_path() -> String {
+        std::env::var("PATH").unwrap()
+    }
+
+    /// Returns the Windows Path variable.
+    #[cfg(target_family = "windows")]
+    fn get_path() -> String {
+        std::env::var("Path").unwrap()
+    }
+
+    /// Builds a default Some(GlobalOptions) to handle cases where the `global:` tag is not present.
+    fn default() -> Option<Self> {
+        Some(
+            GlobalOptions {
+                path: Self::get_path(),
+                outputdir: std::env::temp_dir(),
+                snapshotdir: std::env::temp_dir(),
+            }
+        )
+    }
+}
+
 /// The main search configuration used to search patterns in a logfile. This is loaded from
 /// the YAML file found in the command line argument. This configuration can include a list
 /// of logfiles to lookup and for each logfile, a list of regexes to match.
 #[derive(Debug, Deserialize)]
 pub struct Config {
-    pub global: Global,
+    /// List of global options, which apply for all searches.
+    #[serde(default = "self::GlobalOptions::default")]
+    pub global: Option<GlobalOptions>,
+
+    /// list of searches.
     pub searches: Vec<Search>,
 }
 
@@ -300,15 +431,15 @@ impl Config {
         let file = File::open(file_name)?;
 
         // load YAML data
-        let yaml = serde_yaml::from_reader(file)?;
+        let yaml: Config = serde_yaml::from_reader(file)?;
+
+        debug!(
+            "sucessfully loaded YAML configuration file, nb_searches={}",
+            yaml.searches.len()
+        );
         Ok(yaml)
     }
 
-    // /// Returns a reference on the global data.
-    // #[inline]
-    // pub fn get_global(&self) -> &Global {
-    //     &self.global
-    // }
 }
 
 // #[cfg(test)]

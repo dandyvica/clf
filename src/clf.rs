@@ -1,5 +1,5 @@
-use std::fs::{File, OpenOptions};
-use std::io::ErrorKind;
+use std::fs::OpenOptions;
+//use std::io::ErrorKind;
 use std::thread;
 
 #[macro_use]
@@ -8,13 +8,7 @@ extern crate simplelog;
 use simplelog::*;
 
 //extern crate rclf;
-use rclf::{
-    config::{Config, Tag},
-    error::AppError,
-    logfile::{LogFile, Lookup},
-    snapshot::Snapshot,
-    variables::Vars,
-};
+use rclf::{config::Config, error::AppError, logfile::Lookup, snapshot::Snapshot, variables::Vars};
 
 mod args;
 use args::CliOptions;
@@ -27,6 +21,24 @@ fn main() -> Result<(), AppError> {
     // manage arguments from command line
     let options = CliOptions::get_options();
 
+    // load configuration file as specified from the command line
+    let config = match Config::from_file(&options.config_file) {
+        Ok(conf) => conf,
+        Err(e) => {
+            eprintln!(
+                "error loading config file {:?}, error = {}",
+                &options.config_file, e
+            );
+            std::process::exit(1);
+        }
+    };
+
+    // print out config if requested and exit
+    if options.check_conf {
+        println!("{:#?}", config);
+        std::process::exit(101);
+    }
+
     // initialize logger
     match WriteLogger::init(
         LevelFilter::Debug,
@@ -38,24 +50,12 @@ fn main() -> Result<(), AppError> {
             .unwrap(),
     ) {
         Ok(_) => (),
-        Err(e) => panic!("unable to create log file"),
+        Err(e) => eprintln!("unable to create log file, error={}", e),
     };
+    info!("using configuration file {:?}", &options.config_file);
 
     // create initial variables
     let mut vars = Vars::new();
-
-    // load configuration file as specified from the command line
-    let config = match Config::from_file(&options.config_file) {
-        Ok(conf) => conf,
-        Err(e) => {
-            error!(
-                "error loading config file {:?}, error = {}",
-                &options.config_file, e
-            );
-            std::process::exit(1);
-        }
-    };
-    info!("using configuration file {:?}", &options.config_file);
 
     // get snapshot file file
     let snapfile = Snapshot::default_name();
@@ -79,15 +79,16 @@ fn main() -> Result<(), AppError> {
         info!("searching for log={:?}", &search.logfile);
 
         // create a LogFile struct or get it from snapshot
-        let mut logfile = snapshot.or_insert(&search.logfile)?;
+        let logfile = snapshot.or_insert(&search.logfile)?;
 
         // for each tag, search inside logfile
         for tag in &search.tags {
-            // insert new rundata if not present or get ref on it
-            //let rundata = logfile.or_insert(tag.name);
+            debug!("searching for tag={}", &tag.name);
 
-            // now we can search for the pattern
-            logfile.lookup(&tag, &mut vars)?;
+            // now we can search for the pattern and save the thread handle if a script was called
+            if let Some(handle) = logfile.lookup(&tag, &mut vars)? {
+                handle_list.push(handle);
+            }
         }
     }
 
@@ -97,7 +98,7 @@ fn main() -> Result<(), AppError> {
     // teardown
     info!("waiting for all threads to finish");
     for handle in handle_list {
-        handle.join();
+        handle.join().expect("could join thread handle");
     }
 
     info!("end of searches");

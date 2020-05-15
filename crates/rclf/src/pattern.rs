@@ -3,7 +3,7 @@
 //!
 use std::convert::TryFrom;
 
-use regex::{Captures, Regex, RegexSet};
+use regex::{Regex, RegexSet};
 use serde::Deserialize;
 
 use crate::error::{AppCustomErrorKind, AppError};
@@ -11,12 +11,12 @@ use crate::error::{AppCustomErrorKind, AppError};
 /// A helper structure for deserializing into a `RegexVec` automatically from a `Vec<String>`.
 #[derive(Debug, Deserialize)]
 #[serde(try_from = "Vec<String>")]
-pub struct RegexVec(pub Vec<Regex>);
+pub struct RegexVec(Vec<Regex>);
 
 /// A helper structure for deserializing into a `RegexSet` automatically from a `Vec<String>`.
 #[derive(Debug, Deserialize)]
 #[serde(try_from = "Vec<String>")]
-pub struct RegexBundle(pub RegexSet);
+pub struct RegexBundle(RegexSet);
 
 /// An implementation of `TryFrom` for the helper tuple struct `RegexVec`.
 ///
@@ -24,19 +24,6 @@ pub struct RegexBundle(pub RegexSet);
 /// used by the `serde` deserialize process in order to automatically transforms a vector
 /// of strings read from the YAML config file into a `RegexVec` structure, which contains
 /// a vector of compiled `Regex` structs.
-///
-/// # Example
-///
-/// ```rust
-/// use std::convert::TryFrom;
-/// use rclf::pattern::RegexVec;
-///
-/// let mut regs = RegexVec::try_from(vec!["^#".to_string(), ";$".to_string()]).unwrap();
-/// assert_eq!(regs.0.len(), 2);
-///
-/// let regs_err = RegexVec::try_from(vec!["(error".to_string()]);
-/// assert!(regs_err.is_err());
-/// ```
 impl TryFrom<Vec<String>> for RegexVec {
     type Error = AppError;
 
@@ -56,19 +43,6 @@ impl TryFrom<Vec<String>> for RegexVec {
 /// used by the `serde` deserialize process in order to automatically transforms a vector
 /// of strings read from the YAML config file into a `RegexBundle` structure, which contains
 /// a vector of compiled `RegexSet` structure.
-///
-/// # Example
-///
-/// ```rust
-/// use std::convert::TryFrom;
-/// use rclf::pattern::RegexBundle;
-///
-/// let mut regs = RegexBundle::try_from(vec!["^#".to_string(), ";$".to_string()]).unwrap();
-/// assert_eq!(regs.0.len(), 2);
-///
-/// let regs_err = RegexBundle::try_from(vec!["(error".to_string()]);
-/// assert!(regs_err.is_err());
-/// ```
 impl TryFrom<Vec<String>> for RegexBundle {
     type Error = AppError;
 
@@ -88,72 +62,23 @@ impl TryFrom<Vec<String>> for RegexBundle {
 #[derive(Debug, Deserialize)]
 pub struct Pattern {
     /// A vector of compiled `Regex` structs which are hence all valid.
-    pub regexes: RegexVec,
+    regexes: RegexVec,
 
     /// A `RegexSet` struct, as it's not necessary to get neither which regex triggers the match, nor
     /// capture groups.
-    pub exceptions: Option<RegexBundle>,
+    exceptions: Option<RegexBundle>,
 }
 
 impl Pattern {
     /// Builds a `Pattern` set form a YAML string. Useful for unit tests, because this structure
     /// is used by the `Config` structure, directly loading the whole configuration from a YAML
     /// file.
-    ///
-    /// # Example
-    ///
-    /// ```rust
-    /// use regex::Regex;
-    /// use rclf::pattern::Pattern;
-    ///
-    /// let mut yaml = r#"
-    /// {
-    ///     regexes: [
-    ///         "^ERROR",
-    ///         "FATAL",
-    ///         "PANIC"
-    ///     ],
-    ///     exceptions: [
-    ///         "^SLIGHT_ERROR",
-    ///         "WARNING",
-    ///         "NOT IMPORTANT$"
-    ///     ]
-    /// }"#;
-    ///
-    /// let p = Pattern::from_str(yaml).unwrap();
-    /// assert_eq!(p.regexes.0.len(), 3);
-    /// assert_eq!(p.exceptions.unwrap().0.len(), 3);
-    /// ```
     pub fn from_str(yaml: &str) -> Result<Pattern, AppError> {
         let p: Pattern = serde_yaml::from_str(yaml)?;
         Ok(p)
     }
 
     /// Tests if `text` matches any of the regexes in the set.
-    ///
-    /// # Example
-    ///
-    /// ```rust
-    /// use regex::Regex;
-    /// use rclf::pattern::Pattern;
-    ///
-    /// let mut yaml = r#"
-    /// {
-    ///     regexes: [
-    ///         "^ERROR",
-    ///         "FATAL",
-    ///         "PANIC",
-    ///     ],
-    ///     exceptions: [
-    ///         "^SLIGHT_ERROR",
-    ///         "WARNING",
-    ///         "NOT IMPORTANT$",
-    ///     ]
-    /// }"#;
-    ///
-    /// let p = Pattern::from_str(yaml).unwrap();
-    /// assert!(p.is_exception("this is NOT IMPORTANT"));
-    /// ```
     pub fn is_exception(&self, text: &str) -> bool {
         self.exceptions
             .as_ref()
@@ -162,51 +87,18 @@ impl Pattern {
 
     /// Try to find a match in the string `s` corresponding to the `regexes` list struct field,
     /// provided any regex in the exception list is not matched.
-    ///
-    /// # Example
-    ///
-    /// ```rust
-    /// use regex::Regex;
-    /// use rclf::pattern::Pattern;
-    ///
-    /// let mut yaml = r#"
-    /// {
-    ///     regexes: [
-    ///         '^\+?([0-9]{1,3})-([0-9]{3})-[0-9]{3}-[0-9]{4}$',
-    ///         '^([0-9]{3})-[0-9]{3}-[0-9]{4}$',
-    ///     ],
-    /// }"#;
-    ///
-    /// let p = Pattern::from_str(yaml).unwrap();
-    /// let mut caps = p.captures("541-754-3010").unwrap();
-    /// assert_eq!(caps.get(1).unwrap().as_str(), "541");
-    ///
-    /// caps = p.captures("1-541-754-3010").unwrap();
-    /// assert_eq!(caps.get(1).unwrap().as_str(), "1");   
-    /// assert_eq!(caps.get(2).unwrap().as_str(), "541");   
-    ///
-    /// caps = p.captures("+1-541-754-3010").unwrap();
-    /// assert_eq!(caps.get(1).unwrap().as_str(), "1");   
-    /// assert_eq!(caps.get(2).unwrap().as_str(), "541");
-    ///
-    /// assert!(p.captures("foo").is_none());   
-    /// ```
-    pub fn captures<'t>(&self, text: &'t str) -> Option<Captures<'t>> {
-        // use RegexSet first
-        for re in &self.regexes.0 {
-            let caps = re.captures(text);
-
-            // test if this is an exception
-            if self.is_exception(text) {
-                return None;
-            }
-
-            // we ended up here, so return the captures
-            if caps.is_some() {
-                return caps;
-            }
+    pub fn is_match(&self, text: &str) -> Option<&Regex> {
+        // dismiss exceptions at first
+        if self.is_exception(text) {
+            return None;
         }
-        None
+
+        // returns the first Regex involved in a match, None otherwise
+        self.regexes
+            .0
+            .iter()
+            .find(|re| re.is_match(text))
+            .and_then(|re| Some(re))
     }
 }
 
@@ -220,19 +112,6 @@ pub enum PatternType {
 }
 
 /// Simple implementation of `TryFrom`.
-///
-/// # Example
-///
-/// ```rust
-/// use std::convert::TryFrom;
-/// use rclf::pattern::PatternType;
-///
-/// let pt = PatternType::try_from("critical").unwrap();
-/// assert_eq!(pt, PatternType::critical);
-///
-/// let pt_err = PatternType::try_from("foo");
-/// assert!(pt_err.is_err());
-/// ```
 impl TryFrom<&str> for PatternType {
     type Error = AppError;
 
@@ -252,23 +131,159 @@ impl TryFrom<&str> for PatternType {
 /// A structure combining patterns into 3 categories: *critical*, *warning* and *ok*.
 #[derive(Debug, Deserialize)]
 pub struct PatternSet {
-    pub critical: Option<Pattern>,
-    pub warning: Option<Pattern>,
-    pub ok: Option<Pattern>,
+    critical: Option<Pattern>,
+    warning: Option<Pattern>,
+    ok: Option<Pattern>,
 }
 
 impl PatternSet {
-    pub fn captures<'t>(&self, text: &'t str) -> Option<Captures<'t>> {
+    /// Returns whether a critical or warning regex is involved in the match, provided no exception is matched.
+    pub fn is_match(&self, text: &str) -> Option<(PatternType, &Regex)> {
         // try to match critical pattern first
         if let Some(critical) = &self.critical {
-            return critical.captures(text);
+            return critical
+                .is_match(text)
+                .and_then(|re| Some((PatternType::critical, re)));
         }
 
         // and then warning
         if let Some(warning) = &self.warning {
-            return warning.captures(text);
+            return warning
+                .is_match(text)
+                .and_then(|re| Some((PatternType::warning, re)));
         }
 
         None
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::convert::TryFrom;
+
+    use super::*;
+
+    #[test]
+    fn from_str() {
+        let yaml = r#"
+    {
+        regexes: [
+            "^ERROR",
+            "FATAL",
+            "PANIC"
+        ],
+        exceptions: [
+            "^SLIGHT_ERROR",
+            "WARNING",
+            "NOT IMPORTANT$"
+        ]
+    }"#;
+        let p = Pattern::from_str(yaml).unwrap();
+        assert_eq!(p.regexes.0.len(), 3);
+        assert_eq!(p.exceptions.unwrap().0.len(), 3);
+    }
+
+    #[test]
+    fn is_exception() {
+        let yaml = r#"
+        {
+            regexes: [
+                "^ERROR",
+                "FATAL",
+                "PANIC",
+            ],
+            exceptions: [
+                "^SLIGHT_ERROR",
+                "WARNING",
+                "NOT IMPORTANT$",
+            ]
+        }"#;
+
+        let p = Pattern::from_str(yaml).unwrap();
+        assert!(p.is_exception("this is NOT IMPORTANT"));
+    }
+
+    #[test]
+    fn is_match() {
+        let yaml = r#"
+     {
+         regexes: [
+             '^\+?([0-9]{1,3})-([0-9]{3})-[0-9]{3}-[0-9]{4}$',
+             '^([0-9]{3})-[0-9]{3}-[0-9]{4}$',
+         ],
+     }"#;
+
+        let p = Pattern::from_str(yaml).unwrap();
+        let re = p.is_match("541-754-3010");
+        assert!(re.is_some());
+    }
+
+    #[test]
+    fn try_from_patterntype() {
+        let pt = PatternType::try_from("critical").unwrap();
+        assert_eq!(pt, PatternType::critical);
+
+        let pt_err = PatternType::try_from("foo");
+        assert!(pt_err.is_err());
+    }
+
+    #[test]
+    fn try_from_regexvec() {
+        let regs = RegexVec::try_from(vec!["^#".to_string(), ";$".to_string()]).unwrap();
+        assert_eq!(regs.0.len(), 2);
+
+        let regs_err = RegexVec::try_from(vec!["(error".to_string()]);
+        assert!(regs_err.is_err());
+    }
+
+    #[test]
+    fn try_from_regexset() {
+        let regs = RegexBundle::try_from(vec!["^#".to_string(), ";$".to_string()]).unwrap();
+        assert_eq!(regs.0.len(), 2);
+
+        let regs_err = RegexBundle::try_from(vec!["(error".to_string()]);
+        assert!(regs_err.is_err());
+    }
+    #[test]
+    fn pattern_set() {
+        let yaml = r#"
+    critical:
+        regexes: ["^ERROR", "GnuPG", "PANIC", "WARNING"]
+        exceptions: ["^SLIGHT_ERROR", "WARNING", "NOT IMPORTANT$"]
+    warning:
+        regexes: ["^ERROR", "FATAL", "PANIC"]
+        exceptions: ["^SLIGHT_ERROR", "WARNING", "NOT IMPORTANT$"]
+    ok: 
+        regexes: ["^ERROR", "FATAL", "PANIC"]
+    "#;
+
+        let p: PatternSet = serde_yaml::from_str(yaml).unwrap();
+
+        let match_text = p.is_match("ERROR: core dump ").unwrap();
+        assert_eq!(match_text.0, PatternType::critical);
+
+        assert!(p.is_match("WARNING: error dump ").is_none());
+    }
+}
+
+// let mut yaml = r#"
+// {
+//     regexes: [
+//         '^\+?([0-9]{1,3})-([0-9]{3})-[0-9]{3}-[0-9]{4}$',
+//         '^([0-9]{3})-[0-9]{3}-[0-9]{4}$',
+//     ],
+// }"#;
+//
+// let p = Pattern::from_str(yaml).unwrap();
+// let mut caps = p.captures("541-754-3010").unwrap();
+// assert_eq!(caps.get(1).unwrap().as_str(), "541");
+//
+// caps = p.captures("1-541-754-3010").unwrap();
+// assert_eq!(caps.get(1).unwrap().as_str(), "1");
+// assert_eq!(caps.get(2).unwrap().as_str(), "541");
+//
+// caps = p.captures("+1-541-754-3010").unwrap();
+// assert_eq!(caps.get(1).unwrap().as_str(), "1");
+// assert_eq!(caps.get(2).unwrap().as_str(), "541");
+//
+// assert!(p.captures("foo").is_none());

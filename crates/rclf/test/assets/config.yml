@@ -16,7 +16,7 @@ searches:
           warning:
             regexes: ["^ERROR", "FATAL", "PANIC"]
             exceptions: ["^SLIGHT_ERROR", "WARNING", "NOT IMPORTANT$"]
-          ok:
+          ok: 
             regexes: ["^ERROR", "FATAL", "PANIC"]
       - name: tag3
         script:
