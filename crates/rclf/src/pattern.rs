@@ -9,12 +9,12 @@ use serde::Deserialize;
 use crate::error::{AppCustomErrorKind, AppError};
 
 /// A helper structure for deserializing into a `RegexVec` automatically from a `Vec<String>`.
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 #[serde(try_from = "Vec<String>")]
 pub struct RegexVec(Vec<Regex>);
 
 /// A helper structure for deserializing into a `RegexSet` automatically from a `Vec<String>`.
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 #[serde(try_from = "Vec<String>")]
 pub struct RegexBundle(RegexSet);
 
@@ -59,7 +59,7 @@ impl TryFrom<Vec<String>> for RegexBundle {
 /// coming from a log file. If any of this list matches, the list of regex captures
 /// will be returned. But if a match is found also in the `exceptions` list, nothing
 /// is returned.
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 pub struct Pattern {
     /// A vector of compiled `Regex` structs which are hence all valid.
     regexes: RegexVec,
@@ -129,7 +129,7 @@ impl TryFrom<&str> for PatternType {
 }
 
 /// A structure combining patterns into 3 categories: *critical*, *warning* and *ok*.
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 pub struct PatternSet {
     critical: Option<Pattern>,
     warning: Option<Pattern>,

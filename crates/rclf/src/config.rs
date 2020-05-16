@@ -1,8 +1,45 @@
 //! Holds the main configuration data, loaded from a YAML file.
+//!
+//! This YAML file is divided into 2 parts:
+//!
+//! * a `global` YAML structure mapping the `Global` Rust structure which holds options which apply for each search
+//! * an array of searches (the `searches`) tag which describes which files to search for, and the patterns which might
+//! trigger a match.
+//!
+//! The logfile could either be an accessible file path, or a command which will be executed and gets back a list of files.
+//!
+//!
+//!
+//!
+//!
+//!
+//!
+//!
+//!
+//!
+//!
+//!
+//!
+//!
+//!
+//!
+//!
+//!
+//!
+//!
+//!
+//!
+//!
+//!
+//!
+//!
+//!
+//!
+
 //use std::convert::TryFrom;
 use std::fs::File;
+use std::io::Read;
 use std::path::{Path, PathBuf};
-use std::process::Command;
 use std::thread;
 
 use log::debug;
@@ -16,168 +53,10 @@ use crate::{
     variables::Vars,
 };
 
-// #[cfg(target_os = "linux")]
-// const SEPARATOR: char = ':';
-
-// #[cfg(target_os = "windows")]
-// const SEPARATOR: char = ';';
-
-// /// A list of paths, where the script which is potentially called, are scanned the locate
-// /// this script.
-// #[derive(Debug, Deserialize)]
-// #[serde(from = "String")]
-// pub struct PathList(pub Vec<PathBuf>);
-
-// /// Just converts a list of paths separated by either ':' or ';' depending on the platform
-// /// to a vector of `PathBuf`.
-// ///
-// /// # Example
-// ///
-// /// ```rust
-// /// use std::path::PathBuf;
-// /// use rclf::config::PathList;
-// ///
-// /// let pl = PathList::from("/bin:/usr/bin:/usr/loca/bin".to_string());
-// /// assert_eq!(pl.0.len(), 3);
-// /// ```
-// impl From<String> for PathList {
-//     fn from(list: String) -> Self {
-//         PathList(list.split(SEPARATOR).map(|p| PathBuf::from(p)).collect())
-//     }
-// }
-
-// /// A helper structure to represent a script or command to be run on each match.
-// #[derive(Debug, Deserialize)]
-// pub struct Script {
-//     /// Name of the script to spawn without its path.
-//     pub path: PathBuf,
-
-//     /// list of its optional paths
-//     //pub pathlist: Option<String>,
-
-//     /// List of its optional arguments.
-//     pub args: Option<Vec<String>>,
-
-//     /// Timeout in seconds after which the script is killed.
-//     #[serde(default)]
-//     pub timeout: u64,
-// }
-
-// impl Script {
-//     /// Returns the canonical, absolute form of the path with all intermediate
-//     /// components normalized and symbolic links resolved.
-//     ///
-//     /// # Example
-//     ///
-//     /// ```rust
-//     /// use std::path::PathBuf;
-//     /// use rclf::config::Script;
-//     ///
-//     /// let script = Script {
-//     ///     path: PathBuf::from("gzip"),
-//     ///     args: None,
-//     ///     timeout: 0
-//     /// };
-//     /// let path_list = "/usr:/dev:/usr/lib:/usr/bin:/bin";
-//     /// let pathbuf_list: Vec<_> = path_list
-//     ///     .split(":")
-//     ///     .map(|p| PathBuf::from(p))
-//     ///     .collect();
-//     /// assert_eq!(script.canonicalize(&pathbuf_list).unwrap(), PathBuf::from("/bin/gzip"));
-//     /// ```
-//     pub fn canonicalize(&self, pathlist: &[PathBuf]) -> Result<PathBuf, Error> {
-//         // if script is relative, find the path where is it located
-//         if self.path.is_relative() {
-//             // find the first one where script is located and build the whole path + script name
-//             for path in pathlist {
-//                 let mut full_path = PathBuf::new();
-//                 full_path.push(path);
-//                 full_path.push(&self.path);
-
-//                 if full_path.is_file() {
-//                     return full_path.canonicalize();
-//                 }
-//             }
-//         }
-
-//         // just check if script exists
-//         if self.path.is_file() {
-//             self.path.canonicalize()
-//         } else {
-//             Err(Error::new(ErrorKind::NotFound, "script not found"))
-//         }
-//     }
-
-//     /// Replace, for each argument, the capture groups values.
-//     ///
-//     /// # Example
-//     ///
-//     /// ```rust
-//     /// use std::path::PathBuf;
-//     /// use regex::{Captures, Regex};
-//     /// use rclf::config::Script;
-//     ///
-//     /// let script = Script {
-//     ///     path: PathBuf::from("gzip"),
-//     ///     args: Some(vec!["address=$hw".to_string(), "id=$id".to_string(), "ok".to_string()]),
-//     ///     timeout: 0
-//     /// };
-//     /// let line = ">>> wlan0: authenticate with FF:FA:FB:FC:FD:FE";
-//     /// let re = Regex::new(r"(?P<id>\w+): authenticate with (?P<hw>[A-Z:]+)").unwrap();
-//     /// let caps = re.captures(line).unwrap();
-//     /// let replaced = script.replace_args(caps);
-//     /// assert!(replaced.is_some());
-//     /// assert_eq!(replaced.unwrap(), &["address=FF:FA:FB:FC:FD:FE", "id=wlan0", "ok"]);
-//     /// ```
-//     pub fn replace_args<'t>(&self, caps: Captures<'t>) -> Option<Vec<String>> {
-//         // if we got captures, for each argument, replace by capture groups
-//         if caps.len() > 1 && self.args.is_some() {
-//             // this vector will receive new arguments
-//             let mut new_args = Vec::new();
-//             let mut buffer = String::with_capacity(256);
-
-//             // replace capture groups for each arg
-//             for arg in self.args.as_ref().unwrap() {
-//                 // replace strings like $name by capture groups values
-//                 caps.expand(arg, &mut buffer);
-
-//                 // add replaced string
-//                 new_args.push(buffer.clone());
-
-//                 // reset buffer
-//                 buffer.clear();
-//             }
-//             return Some(new_args);
-//         }
-//         None
-//     }
-
-//     /// Spawns the script, and wait at most `timeout` seconds for the job to finish.
-//     pub fn spawn(&self, duration: u64) -> thread::JoinHandle<()> {
-//         let mut cmd = Command::new(&self.path);
-//         let mut child = cmd
-//             .args(&self.args.as_ref().unwrap()[..])
-//             .spawn()
-//             .expect("failed to execute");
-
-//         let handle = thread::spawn(move || {
-//             let one_sec = std::time::Duration::from_secs(duration);
-//             let _status_code = match child.wait_timeout(one_sec).unwrap() {
-//                 Some(status) => status.code(),
-//                 None => {
-//                     // child hasn't exited yet
-//                     child.kill().unwrap();
-//                     child.wait().unwrap().code()
-//                 }
-//             };
-//         });
-//         handle
-//     }
-// }
-
-#[derive(Debug, Deserialize, Default)]
+#[derive(Debug, Deserialize, Default, Clone)]
 #[serde(from = "String")]
-/// A list of options which are specific to a search.
+/// A list of options which are specific to a search. They might or might not be used. If an option is not present, it's deemed false.
+/// By default, all options are either false, or use the default corresponding type.
 pub struct SearchOptions {
     /// If `true`, the defined script will be run a first match.
     pub runscript: bool,
@@ -190,6 +69,9 @@ pub struct SearchOptions {
 
     // a number which denotes how many lines have to match a pattern until they are considered a critical error
     pub criticalthreshold: u16,
+
+    // a number which denotes how many lines have to match a pattern until they are considered a warning
+    pub warningthreshold: u16,
 
     // is used to change this UNKNOWN to a different status. With logfilemissing=critical you can have check_file_existence-functionality
     pub logfilemissing: Option<String>,
@@ -206,9 +88,6 @@ pub struct SearchOptions {
     // Once an error was found, the exitcode will be non-zero until an okpattern resets it or until
     // the error expires after <second> seconds. Do not use this option until you know exactly what you do
     pub sticky: u16,
-
-    // a number which denotes how many lines have to match a pattern until they are considered a warning
-    pub warningthreshold: u16,    
 }
 
 /// Convenient macro to add a boolean option
@@ -233,6 +112,7 @@ macro_rules! add_typed_option {
     };
 }
 
+/// Converts a list of comma-separated options to a `SearchOptions` structure.
 impl From<String> for SearchOptions {
     fn from(option_list: String) -> Self {
         // create a default options structure
@@ -242,19 +122,13 @@ impl From<String> for SearchOptions {
         let v: Vec<_> = option_list.split(",").map(|x| x.trim()).collect();
 
         // use Rust macro to add bool options if any
-        add_bool_option!(
-            v,
-            opt,
-            runscript,
-            rewind,
-            keep_output
-        );
+        add_bool_option!(v, opt, runscript, rewind, keep_output);
 
         // other options like key=value if any
         // first build a vector of such options. We first search for = and then split according to '='
         let kv_options: Vec<_> = v.iter().filter(|&x| x.contains("=")).collect();
 
-        // need to test whether we found key=value options
+        // need to test whether we found 'key=value' options
         if !kv_options.is_empty() {
             // this hash will hold key values options
             //let kvh_options: HashMap<String, String> = HashMap::new();
@@ -277,8 +151,7 @@ impl From<String> for SearchOptions {
             }
         }
 
-        opt        
-
+        opt
     }
 }
 
@@ -286,33 +159,18 @@ impl From<String> for SearchOptions {
 /// of logfile names is case of command is given. This command is expected to return to the
 /// the standard output the list of files to check. One of the enum variant is loaded from
 /// the YAML configuration file.
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 pub enum LogSource {
     #[serde(rename = "logfile")]
     LogFile(String),
 
     #[serde(rename = "loglist")]
-    LogList(String),
-}
-
-impl LogSource {
-    /// Depending on the logfile
-    pub fn get_files(&self) -> Result<Vec<String>, AppError> {
-        match self {
-            LogSource::LogFile(s) => Ok(vec![s.clone()]),
-            LogSource::LogList(cmd) => {
-                let filelist = Command::new(cmd).output()?;
-                let output = String::from_utf8_lossy(&filelist.stdout);
-                let v: Vec<_> = output.split('\n').map(|x| x.to_string()).collect();
-                Ok(v)
-            }
-        }
-    }
+    LogList { cmd: String, args: Vec<String> },
 }
 
 /// This is the core structure which handles data used to search into the logfile. These are
 /// gathered and refered to a tag name.
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 pub struct Tag {
     /// A name to identify the tag.
     pub name: String,
@@ -325,17 +183,17 @@ pub struct Tag {
     /// Script details like path, name, parameters, delay etc to be possibly run for a match.
     script: Option<Cmd>,
 
-    /// Patterns to be checked against.
+    /// Patterns to be checked against. These include critical and warning (along with exceptions), ok list of regexes.
     patterns: PatternSet,
 }
 
 impl Tag {
-    /// Returns the regex involved in a match, if any.
+    /// Returns the regex involved in a match, if any, along with associated the pattern type.
     pub fn is_match(&self, text: &str) -> Option<(PatternType, &Regex)> {
         self.patterns.is_match(text)
     }
 
-    /// Calls the external script, by providing arguments, environment variables and path which will be searched for command.
+    /// Calls the external script, by providing arguments, environment variables and path which will be searched for the command.
     pub fn call_script(
         &self,
         path: Option<&str>,
@@ -352,17 +210,37 @@ impl Tag {
     }
 }
 
-/// This is the structure mapping exactly data coming from the configuration YAML file.
-#[derive(Debug, Deserialize)]
-pub struct Search {
+/// This is the structure mapping exactly search data coming from the configuration YAML file. The 'flatten' serde field
+/// attribute allows to either use a logfile name or a command.
+#[derive(Debug, Deserialize, Clone)]
+pub struct Search<T: Clone> {
     /// the logfile name to check
-    pub logfile: PathBuf,
+    #[serde(flatten)]
+    pub logfile: T,
 
     /// a unique identifier for this search
     pub tags: Vec<Tag>,
 }
 
-#[derive(Debug, Deserialize)]
+/// This conversion utility is meant to convert to a 'regular' configuration file a configuration file
+/// using the `logfile` YAML tag with a command.
+impl From<Search<LogSource>> for Search<PathBuf> {
+    fn from(search_logsource: Search<LogSource>) -> Self {
+        // if LogSource::Logfile, just copy. Otherwise, it's unimplemented
+        let logfile = match search_logsource.logfile {
+            LogSource::LogFile(lf) => PathBuf::from(lf),
+            //LogSource::LogList { cmd: _, args: _ } => PathBuf::from(""),
+            _ => unimplemented!("this could not occur"),
+        };
+
+        Search {
+            logfile: logfile.clone(),
+            tags: search_logsource.tags.clone(),
+        }
+    }
+}
+
+#[derive(Debug, Deserialize, Clone)]
 /// A list of global options, which apply globally for all searches.
 pub struct GlobalOptions {
     /// A list of paths, separated by either ':' for unix, or ';' for Windows. This is
@@ -375,8 +253,8 @@ pub struct GlobalOptions {
     pub outputdir: PathBuf,
 
     /// A directory where the snapshot file is kept.
-    #[serde(default = "std::env::temp_dir")]
-    pub snapshotdir: PathBuf,
+    #[serde(default = "crate::snapshot::Snapshot::default_name")]
+    pub snapshotfile: PathBuf,
 }
 
 impl GlobalOptions {
@@ -392,46 +270,58 @@ impl GlobalOptions {
         std::env::var("Path").unwrap()
     }
 
-    /// Builds a default Some(GlobalOptions) to handle cases where the `global:` tag is not present.
+    /// Builds a default `Some(GlobalOptions)` to handle cases where the `global:` tag is not present.
     fn default() -> Option<Self> {
-        Some(
-            GlobalOptions {
-                path: Self::get_path(),
-                outputdir: std::env::temp_dir(),
-                snapshotdir: std::env::temp_dir(),
-            }
-        )
+        Some(GlobalOptions {
+            path: Self::get_path(),
+            outputdir: std::env::temp_dir(),
+            snapshotfile: crate::snapshot::Snapshot::default_name(),
+        })
     }
 }
 
 /// The main search configuration used to search patterns in a logfile. This is loaded from
-/// the YAML file found in the command line argument. This configuration can include a list
-/// of logfiles to lookup and for each logfile, a list of regexes to match.
-#[derive(Debug, Deserialize)]
-pub struct Config {
+/// the YAML file found in the command line argument (or from stdin). This configuration can include a list
+/// of logfiles (given either by name or by starting an external command) to lookup and for each logfile, a list of regexes to match.
+#[derive(Debug, Deserialize, Default)]
+pub struct Config<T: Clone> {
     /// List of global options, which apply for all searches.
     #[serde(default = "self::GlobalOptions::default")]
     pub global: Option<GlobalOptions>,
 
     /// list of searches.
-    pub searches: Vec<Search>,
+    pub searches: Vec<Search<T>>,
 }
 
-impl Config {
+impl<T: Clone> Config<T> {
+    /// Returns the name of the snapshot file
+    pub fn get_snapshot_name(&self) -> &PathBuf {
+        &self.global.as_ref().unwrap().snapshotfile
+    }    
+}
+
+impl Config<LogSource> {
     /// Loads a YAML configuration string as a `Config` struct.
-    pub fn from_str(s: &str) -> Result<Config, AppError> {
-        // load YAML data
+    pub fn from_str(s: &str) -> Result<Config<LogSource>, AppError> {
+        // load YAML data from a string
         let yaml = serde_yaml::from_str(s)?;
         Ok(yaml)
     }
 
+    /// Loads a YAML configuration from a reader as a `Config` struct.
+    pub fn from_reader<R: Read>(rdr: R) -> Result<Config<LogSource>, AppError> {
+        // load YAML data from a reader
+        let yaml = serde_yaml::from_reader(rdr)?;
+        Ok(yaml)
+    }
+
     /// Loads a YAML configuration file as a `Config` struct.
-    pub fn from_file<P: AsRef<Path>>(file_name: P) -> Result<Config, AppError> {
+    pub fn from_file<P: AsRef<Path>>(file_name: P) -> Result<Config<LogSource>, AppError> {
         // open YAML file
         let file = File::open(file_name)?;
 
         // load YAML data
-        let yaml: Config = serde_yaml::from_reader(file)?;
+        let yaml: Config<LogSource> = serde_yaml::from_reader(file)?;
 
         debug!(
             "sucessfully loaded YAML configuration file, nb_searches={}",
@@ -440,6 +330,55 @@ impl Config {
         Ok(yaml)
     }
 
+    // pub fn get_snapshot_name(&self) -> &PathBuf {
+    //     &self.global.as_ref().unwrap().snapshotfile
+    // }
+}
+
+impl From<Config<LogSource>> for Config<PathBuf> {
+    /// This conversion utility is meant to add, for each search when used with a command, the tag data defined.
+    fn from(config_logsource: Config<LogSource>) -> Self {
+        // initialize a default Config structure
+        let mut config_pathbuf = Config::<PathBuf>::default();
+
+        // copy global options
+        config_pathbuf.global = config_logsource.global.clone();
+
+        // for each Search, clone if LogSource::logfile, or replace by list of files is LogSource::loglist
+        for search in &config_logsource.searches {
+            match &search.logfile {
+                // we found a logfile tag: just copy everything to the new structure
+                LogSource::LogFile(_) => {
+                    let search_pathbuf = Search::<PathBuf>::from(search.clone());
+                    config_pathbuf.searches.push(search_pathbuf);
+                }
+
+                // we found a logslist tag: get the list of files, and for each one, copy everything
+                LogSource::LogList {
+                    cmd: _cmd,
+                    args: _args,
+                } => {
+                    // get list of files from command
+                    let files = Cmd::get_list(_cmd, _args.as_slice()).unwrap();
+                    println!("{:?}", files);
+
+                    // create Search structure with the files we found, and a clone of all tags
+                    for file in &files {
+                        // create a new Search structure based on the file we just found
+                        let search_pathbuf = Search::<PathBuf> {
+                            logfile: file.clone(),
+                            tags: search.tags.clone(),
+                        };
+
+                        // now use this structure and add it to config_pathbuf
+                        config_pathbuf.searches.push(search_pathbuf);
+                    }
+                }
+            }
+        }
+
+        config_pathbuf
+    }
 }
 
 // #[cfg(test)]

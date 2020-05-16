@@ -1,10 +1,10 @@
 ---
 global:
   path: "//foo"
-  snapshotfile: /tmp/foo.json
+  snapshotdir: /tmp
 
 searches:
-  - logfile: /var/log/kern.log
+  - loglist: { cmd: "find", args: ["/tmp", "-type", "f"] }
     tags:
       - name: tag1
         script:
