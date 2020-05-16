@@ -1,8 +1,4 @@
 ---
-global:
-  path: "//foo"
-  snapshotfile: /tmp/foo.json
-
 searches:
   - logfile: /var/log/kern.log
     tags:

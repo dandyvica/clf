@@ -54,9 +54,19 @@ impl Vars {
         }
     }
 
-    /// Get reference on inner hashmap.
+    /// Get a reference on inner hashmap.
     pub fn inner(&self) -> &HashMap<String, String> {
         &self.0
+    }
+
+    /// Get a mutable reference on inner hashmap.
+    pub fn inner_mut(&mut self) -> &HashMap<String, String> {
+        &self.0
+    }
+
+    /// Clears the inner hashmap.
+    pub fn clear(&mut self) {
+        self.0.clear();
     }
 }
 

@@ -242,18 +242,29 @@ impl Lookup for LogFile {
         let mut rundata = self.or_insert(&tag.name);
 
         // initialize counters
-        info!(
-            "starting read from last offset={}, last line={}",
-            rundata.last_offset, rundata.last_line
-        );
-        let mut bytes_count = rundata.last_offset;
-        let mut line_number = rundata.last_line;
+        let mut bytes_count = 0;
+        let mut line_number = 0;
+
+        // if we don't need to read the file from the beginning, adjust counters and set offset
+        if !tag.options.rewind {
+            bytes_count = rundata.last_offset;
+            line_number = rundata.last_line;
+            reader.set_offset(rundata.last_offset)?;
+        }
 
         // move to position if already recorded, and not rewind
         //if !tag.options.rewind && rundata.last_offset != 0 {
-        if rundata.last_offset != 0 {
-            reader.set_offset(rundata.last_offset)?;
-        }
+        // if !tag.options.rewind && rundata.last_offset != 0 {
+        //     reader.set_offset(rundata.last_offset)?;
+        // }
+
+        info!(
+            "starting read from last offset={}, last line={}",
+            bytes_count, line_number
+        );
+
+        // anyway, reset variables
+        vars.clear();
 
         loop {
             // read until \n (which is included in the buffer)
@@ -283,14 +294,22 @@ impl Lookup for LogFile {
                         );
 
                         // create variables which will be set as environment variables when script is called
-                        vars.add_var("$LINE_NUMBER", format!("{}", line_number));
-                        vars.add_var("$LINE", line.clone());
+                        vars.add_var("LINE_NUMBER", format!("{}", line_number));
+                        vars.add_var("LINE", line.clone());
                         vars.add_capture_groups(re.1, &line);
 
-                        // now call script if there's an external script to call
-                        handle = tag.call_script(None, vars)?;
+                        debug!("added variables: {:?}", vars);
 
-                        break;
+                        // now call script if there's an external script to call, if we're told to do so
+                        //debug_assert!(&tag.options.is_some());
+                        if tag.options.runscript {
+                            handle = tag.call_script(None, vars)?
+                        };
+
+                        // read till the end of file if requested
+                        if !tag.options.dontbreak {
+                            break;
+                        }
                     }
 
                     // reset buffer to not accumulate data

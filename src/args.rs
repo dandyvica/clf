@@ -6,17 +6,9 @@ use clap::{App, Arg};
 #[derive(Debug, Default)]
 pub struct CliOptions {
     pub config_file: PathBuf,
-    pub clf_logfile: PathBuf,
+    pub clf_logfile: Option<PathBuf>,
     pub delete_snapfile: bool,
     pub check_conf: bool,
-    // pub input_file: String,
-    // pub output_file: String,
-    // pub progress_bar: bool,
-    // pub stats: bool,
-    // pub limit: usize,
-    // pub debug: bool,
-    // pub ot_list: Vec<String>,
-    // pub output_allowed: bool,
 }
 
 impl CliOptions {
@@ -81,15 +73,12 @@ impl CliOptions {
 
         // logfile file is optional
         options.clf_logfile = match matches.value_of("clflog") {
-            Some(log) => PathBuf::from(log),
-            None => {
-                let mut dir = std::env::temp_dir();
-                dir.push("clf.log");
-                dir
-            }
+            Some(log) => Some(PathBuf::from(log)),
+            None => None,
         };
 
         options.check_conf = matches.is_present("chkcnf");
+        options.delete_snapfile = matches.is_present("delsnap");
 
         options
     }

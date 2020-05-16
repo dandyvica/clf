@@ -1,0 +1,12 @@
+---
+global:
+  path: foo
+
+searches:
+  - logfile: /var/log/syslog
+    tags: 
+      - name: tag1
+        options: "dontbreak,rewind"
+        patterns:
+          critical:
+            regexes: ['error (\w+)', '(\w+):\s+Trying to associate with ([\w:]+)'] 

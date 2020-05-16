@@ -48,7 +48,7 @@ fn main() -> Result<(), AppError> {
         Config::<LogSource>::from_file(&options.config_file)
     };
 
-    // check for errors
+    // check for loading errors
     if let Err(e) = _config {
         eprintln!(
             "error loading config file {:?}, error = {}",
@@ -57,17 +57,7 @@ fn main() -> Result<(), AppError> {
         exit(EXIT_CONFIG_ERROR);
     }
 
-    // let _config = match Config::<LogSource>::from_file(&options.config_file) {
-    //     Ok(conf) => conf,
-    //     Err(e) => {
-    //         eprintln!(
-    //             "error loading config file {:?}, error = {}",
-    //             &options.config_file, e
-    //         );
-    //         exit(EXIT_CONFIG_ERROR);
-    //     }
-    // };
-    // replace, if any, loglist by logfile
+    // replace, if any, "loglist" by "logfile"
     let config = Config::<PathBuf>::from(_config.unwrap());
 
     // print out config if requested and exit
@@ -76,14 +66,22 @@ fn main() -> Result<(), AppError> {
         exit(EXIT_CONFIG_CHECK);
     }
 
+    // which is the default logger ?
+    let logger = &options
+        .clf_logfile
+        .as_deref()
+        .unwrap_or(config.get_logger_name());
+
     // initialize logger
     match WriteLogger::init(
         LevelFilter::Debug,
-        simplelog::Config::default(),
+        simplelog::ConfigBuilder::new()
+            .set_time_format("%H:%M:%S.%f".to_string())
+            .build(),
         OpenOptions::new()
             .append(true)
             .create(true)
-            .open(options.clf_logfile)
+            .open(logger)
             .unwrap(),
     ) {
         Ok(_) => (),
@@ -93,6 +91,7 @@ fn main() -> Result<(), AppError> {
         }
     };
     info!("using configuration file {:?}", &options.config_file);
+    info!("options {:?}", &options);
 
     // create initial variables
     let mut vars = Vars::new();
@@ -120,8 +119,10 @@ fn main() -> Result<(), AppError> {
             exit(EXIT_SNAPSHOT_DELETE_ERROR);
         }
     };
-    info!("deleted snapshot file {:?}", snapfile);
-
+    info!(
+        "loaded snapshot file {:?}, data = {:?}",
+        &snapfile, &snapshot
+    );
     debug!("{:#?}", config);
 
     // loop through all searches

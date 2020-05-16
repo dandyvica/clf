@@ -53,16 +53,18 @@ use crate::{
     variables::Vars,
 };
 
-#[derive(Debug, Deserialize, Default, Clone)]
-#[serde(from = "String")]
+//
+
 /// A list of options which are specific to a search. They might or might not be used. If an option is not present, it's deemed false.
 /// By default, all options are either false, or use the default corresponding type.
+#[derive(Debug, Deserialize, Default, Clone)]
+#[serde(from = "String")]
 pub struct SearchOptions {
     /// If `true`, the defined script will be run a first match.
     pub runscript: bool,
 
     /// If `true`, the matching line will be saved in an output file.
-    pub keep_output: bool,
+    pub keepoutput: bool,
 
     /// If `true`, the logfile will be search from the beginning, regardless of any saved offset.
     pub rewind: bool,
@@ -88,6 +90,9 @@ pub struct SearchOptions {
     // Once an error was found, the exitcode will be non-zero until an okpattern resets it or until
     // the error expires after <second> seconds. Do not use this option until you know exactly what you do
     pub sticky: u16,
+
+    /// Don't break and continue reading file until the end. For test purposes
+    pub dontbreak: bool,
 }
 
 /// Convenient macro to add a boolean option
@@ -122,7 +127,7 @@ impl From<String> for SearchOptions {
         let v: Vec<_> = option_list.split(",").map(|x| x.trim()).collect();
 
         // use Rust macro to add bool options if any
-        add_bool_option!(v, opt, runscript, rewind, keep_output);
+        add_bool_option!(v, opt, runscript, rewind, keepoutput, dontbreak);
 
         // other options like key=value if any
         // first build a vector of such options. We first search for = and then split according to '='
@@ -177,8 +182,8 @@ pub struct Tag {
 
     /// A list of options specific to this search. As such options are optional, add a default `serde`
     /// directive.
-    #[serde(default)]
-    options: SearchOptions,
+    #[serde(default = "SearchOptions::default")]
+    pub options: SearchOptions,
 
     /// Script details like path, name, parameters, delay etc to be possibly run for a match.
     script: Option<Cmd>,
@@ -242,41 +247,45 @@ impl From<Search<LogSource>> for Search<PathBuf> {
 
 #[derive(Debug, Deserialize, Clone)]
 /// A list of global options, which apply globally for all searches.
+#[serde(default)]
 pub struct GlobalOptions {
     /// A list of paths, separated by either ':' for unix, or ';' for Windows. This is
     /// where the script, if any, will be searched for. Default to PATH or Path depending on the platform.
-    #[serde(default = "self::GlobalOptions::get_path")]
     pub path: String,
 
     /// A directory where matches lines will be stored.
-    #[serde(default = "std::env::temp_dir")]
     pub outputdir: PathBuf,
 
-    /// A directory where the snapshot file is kept.
-    #[serde(default = "crate::snapshot::Snapshot::default_name")]
+    /// The snapshot file name.
     pub snapshotfile: PathBuf,
+
+    /// Logger file where `clf` executable logs
+    pub logger: PathBuf,
 }
 
-impl GlobalOptions {
-    /// Returns the Unix PATH variable.    
-    #[cfg(target_family = "unix")]
-    pub fn get_path() -> String {
-        std::env::var("PATH").unwrap()
-    }
+/// Default implementation, rather than serde default field attribute.
+impl Default for GlobalOptions {
+    fn default() -> Self {
+        // default path
+        let path_var = if cfg!(target_family = "unix") {
+            std::env::var("PATH").unwrap_or("/usr/sbin:/usr/bin:/sbin:/bin".to_string())
+        } else if cfg!(target_family = "windows") {
+            std::env::var("Path")
+                .unwrap_or(r"C:\Windows\system32;C:\Windows;C:\Windows\System32\Wbem;".to_string())
+        } else {
+            unimplemented!("unsupported OS, file: {}:{}", file!(), line!());
+        };
 
-    /// Returns the Windows Path variable.
-    #[cfg(target_family = "windows")]
-    fn get_path() -> String {
-        std::env::var("Path").unwrap()
-    }
+        // default logger path
+        let mut logger_path = std::env::current_dir().unwrap_or(std::env::temp_dir());
+        logger_path.push("clf.log");
 
-    /// Builds a default `Some(GlobalOptions)` to handle cases where the `global:` tag is not present.
-    fn default() -> Option<Self> {
-        Some(GlobalOptions {
-            path: Self::get_path(),
+        GlobalOptions {
+            path: path_var,
             outputdir: std::env::temp_dir(),
             snapshotfile: crate::snapshot::Snapshot::default_name(),
-        })
+            logger: logger_path,
+        }
     }
 }
 
@@ -286,8 +295,8 @@ impl GlobalOptions {
 #[derive(Debug, Deserialize, Default)]
 pub struct Config<T: Clone> {
     /// List of global options, which apply for all searches.
-    #[serde(default = "self::GlobalOptions::default")]
-    pub global: Option<GlobalOptions>,
+    #[serde(default = "GlobalOptions::default")]
+    pub global: GlobalOptions,
 
     /// list of searches.
     pub searches: Vec<Search<T>>,
@@ -296,8 +305,13 @@ pub struct Config<T: Clone> {
 impl<T: Clone> Config<T> {
     /// Returns the name of the snapshot file
     pub fn get_snapshot_name(&self) -> &PathBuf {
-        &self.global.as_ref().unwrap().snapshotfile
-    }    
+        &self.global.snapshotfile
+    }
+
+    /// Returns the name of the logger file
+    pub fn get_logger_name(&self) -> &PathBuf {
+        &self.global.logger
+    }
 }
 
 impl Config<LogSource> {
