@@ -6,7 +6,10 @@ searches:
   - logfile: /var/log/syslog
     tags: 
       - name: tag1
-        options: "dontbreak,rewind"
+        options: "script"
+        script:
+          path: /tmp/my_script.sh,
+          args: ['arg1', 'arg2', 'arg3']        
         patterns:
           critical:
             regexes: ['error (\w+)', '(\w+):\s+Trying to associate with ([\w:]+)'] 

@@ -146,7 +146,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(target_os = "linux")]
+    #[cfg(target_family = "unix")]
     fn test_or_insert() {
         let mut data: Snapshot = serde_json::from_str(JSON).unwrap();
         assert!(data.snapshot.contains_key(&PathBuf::from("/usr/bin/zip")));

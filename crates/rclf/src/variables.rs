@@ -77,7 +77,6 @@ mod tests {
     use super::*;
 
     #[test]
-    //#[cfg(target_os = "linux")]
     fn variables() {
         let re = Regex::new(r"^([a-z\s]+) (\w+) (\w+) (?P<LASTNAME>\w+)").unwrap();
         let text = "my name is john fitzgerald kennedy, president of the USA";

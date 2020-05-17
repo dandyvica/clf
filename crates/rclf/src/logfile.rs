@@ -184,6 +184,11 @@ impl Seeker for BufReader<GzDecoder<File>> {
     }
 }
 
+// pub struct Wrapper<'a> {
+//     tag: &'a Tag,
+//     vars: &'a mut Vars,
+// }
+
 /// Trait, implemented by `LogFile` to search patterns.
 pub trait Lookup {
     fn lookup(

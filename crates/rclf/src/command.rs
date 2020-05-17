@@ -30,7 +30,11 @@ pub struct Cmd {
 
 impl Cmd {
     /// This spawns a command and expects a list of file names.
-    pub fn get_list<P: AsRef<OsStr>>(cmd: P, args: &[String]) -> Result<Vec<PathBuf>, AppError> {
+    pub fn get_list<P, I>(cmd: P, args: I) -> Result<Vec<PathBuf>, AppError>
+    where
+        I: IntoIterator<Item = P>,
+        P: AsRef<OsStr>,
+    {
         let output = Command::new(&cmd).args(args).output()?;
         debug!("output={:?}", output);
         let output_as_str = std::str::from_utf8(&output.stdout)?;
@@ -111,14 +115,7 @@ mod tests {
     #[cfg(target_os = "linux")]
     fn list_files_shell() {
         let files =
-            Cmd::get_list("find", &["/var/log", "-ctime", "+1"]).expect("error listing files");
-        assert!(files.len() > 10);
-        assert!(files.iter().all(|f| f.starts_with("/var/log")));
-    }
-    #[test]
-    #[cfg(target_os = "linux")]
-    fn call() {
-        let files = Cmd::call("find", "/var/log -ctime +1").expect("error listing files");
+            Cmd::get_list(&"find", &["/var/log", "-ctime", "+1"]).expect("error listing files");
         assert!(files.len() > 10);
         assert!(files.iter().all(|f| f.starts_with("/var/log")));
     }

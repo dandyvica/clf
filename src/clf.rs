@@ -102,11 +102,14 @@ fn main() -> Result<(), AppError> {
     // delete snapshot file if asked
     if options.delete_snapfile {
         if let Err(e) = std::fs::remove_file(&snapfile) {
-            eprintln!(
-                "unable to delete snapshot file {:?}, error={}",
-                &snapfile, e
-            );
-            exit(EXIT_LOGGER_ERROR);
+            // not found could be a viable error
+            if e.kind() != std::io::ErrorKind::NotFound {
+                eprintln!(
+                    "unable to delete snapshot file {:?}, error={}",
+                    &snapfile, e
+                );
+                exit(EXIT_LOGGER_ERROR);
+            }
         };
         info!("deleting snapshot file {:?}", &snapfile);
     }
