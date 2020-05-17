@@ -206,10 +206,11 @@ impl Tag {
     ) -> Result<Option<thread::JoinHandle<()>>, AppError> {
         // spawns external script if existing
         if let Some(script) = &self.script {
-            match script.spawn(path, vars) {
-                Ok(handle) => return Ok(Some(handle)),
-                Err(e) => return Err(e),
-            }
+            script.spawn(path, vars)?;
+            // match script.spawn(path, vars) {
+            //     Ok(handle) => return Ok(Some(handle)),
+            //     Err(e) => return Err(e),
+            // }
         }
         Ok(None)
     }

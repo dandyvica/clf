@@ -6,9 +6,9 @@ searches:
   - logfile: /var/log/syslog
     tags: 
       - name: tag1
-        options: "script"
+        options: "runscript"
         script:
-          path: /tmp/my_script.sh,
+          path: tests/assets/notify.py
           args: ['arg1', 'arg2', 'arg3']        
         patterns:
           critical:

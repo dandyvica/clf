@@ -68,6 +68,16 @@ impl Cmd {
         env_path: Option<&str>,
         vars: &Vars,
     ) -> Result<thread::JoinHandle<()>, AppError> {
+        debug!(
+            "ready to start {:?} with args={:?}, path={:?}, envs={:?}, current_dir={:?}",
+            self.path,
+            self.args,
+            env_path,
+            vars,
+            std::env::current_dir()
+                .map_err(|e| format!("unable to fetch current directory, error={}", e))
+        );
+
         // build Command struct before execution.
         let timeout = self.timeout;
         let mut cmd = Command::new(&self.path);
@@ -84,11 +94,6 @@ impl Cmd {
                 .spawn()?,
         };
 
-        debug!(
-            "ready to start {:?} with args={:?}, path={:?}, envs={:?}",
-            self.path, self.args, env_path, vars
-        );
-
         info!("starting script {:?}", self.path);
 
         // now, spawns a new thread to not be blocked waiting for command to finish
@@ -97,6 +102,8 @@ impl Cmd {
             let _status_code = match child.wait_timeout(duration).unwrap() {
                 Some(status) => status.code(),
                 None => {
+                    info!("timeout occured, killing thread");
+
                     // child hasn't exited yet
                     child.kill().unwrap();
                     child.wait().unwrap().code()

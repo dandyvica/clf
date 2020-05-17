@@ -16,7 +16,7 @@ use flate2::read::GzDecoder;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    config::Tag,
+    config::{GlobalOptions, Tag},
     error::{AppCustomErrorKind, AppError},
     util::Usable,
     variables::Vars,
@@ -184,23 +184,20 @@ impl Seeker for BufReader<GzDecoder<File>> {
     }
 }
 
-// pub struct Wrapper<'a> {
-//     tag: &'a Tag,
-//     vars: &'a mut Vars,
-// }
+pub struct Wrapper<'a> {
+    pub global: &'a GlobalOptions,
+    pub tag: &'a Tag,
+    pub vars: &'a mut Vars,
+}
 
 /// Trait, implemented by `LogFile` to search patterns.
 pub trait Lookup {
-    fn lookup(
-        &mut self,
-        tag: &Tag,
-        vars: &mut Vars,
-    ) -> Result<Option<thread::JoinHandle<()>>, AppError>;
+    fn lookup(&mut self, wrapper: &mut Wrapper)
+        -> Result<Option<thread::JoinHandle<()>>, AppError>;
     fn lookup_from_reader<R: BufRead + Seeker>(
         &mut self,
         reader: R,
-        tag: &Tag,
-        vars: &mut Vars,
+        wrapper: &mut Wrapper,
     ) -> Result<Option<thread::JoinHandle<()>>, AppError>;
 }
 
@@ -208,8 +205,7 @@ impl Lookup for LogFile {
     ///Just a wrapper function for a file.
     fn lookup(
         &mut self,
-        tag: &Tag,
-        vars: &mut Vars,
+        wrapper: &mut Wrapper,
     ) -> Result<Option<thread::JoinHandle<()>>, AppError> {
         // open target file
         let file = File::open(&self.path)?;
@@ -219,11 +215,11 @@ impl Lookup for LogFile {
             Some("gz") => {
                 let decoder = GzDecoder::new(file);
                 let reader = BufReader::new(decoder);
-                self.lookup_from_reader(reader, tag, vars)
+                self.lookup_from_reader(reader, wrapper)
             }
             Some(&_) | None => {
                 let reader = BufReader::new(file);
-                self.lookup_from_reader(reader, tag, vars)
+                self.lookup_from_reader(reader, wrapper)
             }
         };
 
@@ -234,8 +230,7 @@ impl Lookup for LogFile {
     fn lookup_from_reader<R: BufRead + Seeker>(
         &mut self,
         mut reader: R,
-        tag: &Tag,
-        vars: &mut Vars,
+        wrapper: &mut Wrapper,
     ) -> Result<Option<thread::JoinHandle<()>>, AppError> {
         // this thread handle will be returned if any
         let mut handle: Option<thread::JoinHandle<()>> = None;
@@ -243,15 +238,23 @@ impl Lookup for LogFile {
         // uses the same buffer
         let mut line = String::with_capacity(1024);
 
+        // anyway, reset variables
+        //wrapper.vars.clear();
+        wrapper.vars.clear();
+        wrapper.vars.add_var(
+            "LOGFILE",
+            self.path.to_str().unwrap_or("error converting PathBuf"),
+        );
+
         // get rundata corresponding to tag name, or insert that new one is not yet in snapshot
-        let mut rundata = self.or_insert(&tag.name);
+        let mut rundata = self.or_insert(&wrapper.tag.name);
 
         // initialize counters
         let mut bytes_count = 0;
         let mut line_number = 0;
 
         // if we don't need to read the file from the beginning, adjust counters and set offset
-        if !tag.options.rewind {
+        if !wrapper.tag.options.rewind {
             bytes_count = rundata.last_offset;
             line_number = rundata.last_line;
             reader.set_offset(rundata.last_offset)?;
@@ -267,9 +270,6 @@ impl Lookup for LogFile {
             "starting read from last offset={}, last line={}",
             bytes_count, line_number
         );
-
-        // anyway, reset variables
-        vars.clear();
 
         loop {
             // read until \n (which is included in the buffer)
@@ -290,29 +290,31 @@ impl Lookup for LogFile {
                     //println!("====> line#={}, file={}", line_number, line);
 
                     // is there a match, regarding also exceptions?
-                    if let Some(re) = tag.is_match(&line) {
+                    if let Some(re) = wrapper.tag.is_match(&line) {
                         debug!(
                             "found a match tag={}, re=({:?},{})",
-                            tag.name,
+                            wrapper.tag.name,
                             re.0,
                             re.1.as_str()
                         );
 
                         // create variables which will be set as environment variables when script is called
-                        vars.add_var("LINE_NUMBER", format!("{}", line_number));
-                        vars.add_var("LINE", line.clone());
-                        vars.add_capture_groups(re.1, &line);
+                        wrapper
+                            .vars
+                            .add_var("LINE_NUMBER", format!("{}", line_number));
+                        wrapper.vars.add_var("LINE", line.clone());
+                        wrapper.vars.add_capture_groups(re.1, &line);
 
-                        debug!("added variables: {:?}", vars);
+                        debug!("added variables: {:?}", wrapper.vars);
 
                         // now call script if there's an external script to call, if we're told to do so
                         //debug_assert!(&tag.options.is_some());
-                        if tag.options.runscript {
-                            handle = tag.call_script(None, vars)?
+                        if wrapper.tag.options.runscript {
+                            handle = wrapper.tag.call_script(None, wrapper.vars)?
                         };
 
                         // read till the end of file if requested
-                        if !tag.options.dontbreak {
+                        if !wrapper.tag.options.dontbreak {
                             break;
                         }
                     }

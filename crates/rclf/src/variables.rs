@@ -59,14 +59,37 @@ impl Vars {
         &self.0
     }
 
-    /// Get a mutable reference on inner hashmap.
-    pub fn inner_mut(&mut self) -> &HashMap<String, String> {
-        &self.0
+    /// Replaces variables in the argument list and returns a new list where each arg is replaced, if any, by a variable's value.
+    pub fn substitue(&self, old_args: &[&str]) -> Vec<String> {
+        old_args
+            .iter()
+            .map(|arg| self.replace(arg))
+            .collect::<Vec<String>>()
     }
 
-    /// Clears the inner hashmap.
-    pub fn clear(&mut self) {
-        self.0.clear();
+    /// Replaces any occurence of a variable in the given string.
+    fn replace(&self, s: &str) -> String {
+        let mut new_s = String::from(s);
+
+        for (var, value) in &self.0 {
+            new_s = new_s.as_str().replace(var.as_str(), value.as_str());
+        }
+        new_s.to_string()
+    }
+}
+
+/// `Deref`and `DerefMut` traits implementation.
+impl std::ops::Deref for Vars {
+    type Target = HashMap<String, String>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl std::ops::DerefMut for Vars {
+    fn deref_mut(&mut self) -> &mut HashMap<String, String> {
+        &mut self.0
     }
 }
 
@@ -95,4 +118,18 @@ mod tests {
 
         println!("{:#?}", v.0);
     }
+
+    #[test]    
+    fn replace() {
+        let re = Regex::new(r"^([a-z\s]+) (\w+) (\w+) (?P<LASTNAME>\w+)").unwrap();
+        let text = "my name is john fitzgerald kennedy, president of the USA";
+        let mut v = Vars::new();
+        v.add_capture_groups(&re, text);        
+
+        let args = &["Hi, CLF_CAPTURE1", "(CLF_CAPTURE2 CLF_CAPTURE3) CLF_LASTNAME. I'm the president of the USA."];
+        let new_args = v.substitue(args);
+
+        assert_eq!(new_args, vec!["Hi, my name is".to_string(), "(john fitzgerald) kennedy. I'm the president of the USA.".to_string()]);
+    }
+
 }

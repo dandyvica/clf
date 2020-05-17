@@ -12,7 +12,7 @@ use simplelog::*;
 use rclf::{
     config::{Config, LogSource},
     error::AppError,
-    logfile::Lookup,
+    logfile::{Lookup, Wrapper},
     snapshot::Snapshot,
     variables::Vars,
 };
@@ -141,8 +141,15 @@ fn main() -> Result<(), AppError> {
         for tag in &search.tags {
             debug!("searching for tag={}", &tag.name);
 
+            // wraps all structures into a helper struct
+            let mut wrapper = Wrapper {
+                global: &config.global,
+                tag: &tag,
+                vars: &mut vars,
+            };
+
             // now we can search for the pattern and save the thread handle if a script was called
-            match logfile.lookup(&tag, &mut vars) {
+            match logfile.lookup(&mut wrapper) {
                 Ok(try_handle) => {
                     if let Some(handle) = try_handle {
                         handle_list.push(handle);

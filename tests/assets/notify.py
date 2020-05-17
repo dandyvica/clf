@@ -2,9 +2,9 @@
 import os
 
 # get list of variables for CLF
-clf = [f"{v}={os.environ.get(v)}" for v in os.environ if v.startswith("P")]
+clf = [f"{v}={os.environ.get(v)}" for v in os.environ if v.startswith("CLF")]
 all_vars = "\n".join(clf)
 
 # notify Cinnamon
-os.system(f'notify-send -t 60 "{all_vars}"')
+os.system(f'notify-send -t 60000 "{all_vars}"')
 
