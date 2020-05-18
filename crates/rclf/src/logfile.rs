@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 //use std::time::{Instant, SystemTime};
 use std::fs::File;
 use std::io::{BufRead, BufReader, Read, Seek, SeekFrom};
-use std::thread;
+use std::process::Child;
 use std::time::SystemTime;
 
 #[cfg(target_os = "linux")]
@@ -16,6 +16,7 @@ use flate2::read::GzDecoder;
 use serde::{Deserialize, Serialize};
 
 use crate::{
+    command::ChildReturn,
     config::{GlobalOptions, Tag},
     error::{AppCustomErrorKind, AppError},
     util::Usable,
@@ -184,34 +185,35 @@ impl Seeker for BufReader<GzDecoder<File>> {
     }
 }
 
+/// Utility wrapper to pass all necessrary reference to the lookup methods.
 pub struct Wrapper<'a> {
     pub global: &'a GlobalOptions,
     pub tag: &'a Tag,
     pub vars: &'a mut Vars,
 }
 
+/// Return type for all `Lookup` methods.
+pub type LookupReturn<T> = Result<T, AppError>;
+pub type LookupRet = LookupReturn<ChildReturn>;
+
 /// Trait, implemented by `LogFile` to search patterns.
 pub trait Lookup {
-    fn lookup(&mut self, wrapper: &mut Wrapper)
-        -> Result<Option<thread::JoinHandle<()>>, AppError>;
+    fn lookup(&mut self, wrapper: &mut Wrapper) -> LookupRet;
     fn lookup_from_reader<R: BufRead + Seeker>(
         &mut self,
         reader: R,
         wrapper: &mut Wrapper,
-    ) -> Result<Option<thread::JoinHandle<()>>, AppError>;
+    ) -> LookupRet;
 }
 
 impl Lookup for LogFile {
     ///Just a wrapper function for a file.
-    fn lookup(
-        &mut self,
-        wrapper: &mut Wrapper,
-    ) -> Result<Option<thread::JoinHandle<()>>, AppError> {
+    fn lookup(&mut self, wrapper: &mut Wrapper) -> LookupRet {
         // open target file
         let file = File::open(&self.path)?;
 
         // if file is compressed, we need to call a specific reader
-        let handle = match self.extension.as_deref() {
+        let child_return = match self.extension.as_deref() {
             Some("gz") => {
                 let decoder = GzDecoder::new(file);
                 let reader = BufReader::new(decoder);
@@ -224,19 +226,19 @@ impl Lookup for LogFile {
         };
 
         //output
-        handle
+        child_return
     }
 
     fn lookup_from_reader<R: BufRead + Seeker>(
         &mut self,
         mut reader: R,
         wrapper: &mut Wrapper,
-    ) -> Result<Option<thread::JoinHandle<()>>, AppError> {
-        // this thread handle will be returned if any
-        let mut handle: Option<thread::JoinHandle<()>> = None;
-
+    ) -> LookupRet {
         // uses the same buffer
         let mut line = String::with_capacity(1024);
+
+        // defined a new child handle
+        let mut child_return = ChildReturn::default();
 
         // anyway, reset variables
         //wrapper.vars.clear();
@@ -313,7 +315,7 @@ impl Lookup for LogFile {
                         // now call script if there's an external script to call, if we're told to do so
                         //debug_assert!(&tag.options.is_some());
                         if wrapper.tag.options.runscript {
-                            handle = wrapper.tag.call_script(None, wrapper.vars)?
+                            child_return = wrapper.tag.call_script(None, wrapper.vars)?;
                         };
 
                         // read till the end of file if requested
@@ -340,7 +342,7 @@ impl Lookup for LogFile {
         let time = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH)?;
         rundata.last_run = time.as_secs();
 
-        Ok(handle)
+        Ok(child_return)
     }
 }
 

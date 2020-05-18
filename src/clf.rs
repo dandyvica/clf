@@ -3,6 +3,7 @@ use std::io::{stdin, Read};
 use std::path::PathBuf;
 use std::process::exit;
 use std::thread;
+use std::time::Duration;
 
 #[macro_use]
 extern crate log;
@@ -10,6 +11,7 @@ extern crate simplelog;
 use simplelog::*;
 
 use rclf::{
+    command::ChildReturn,
     config::{Config, LogSource},
     error::AppError,
     logfile::{Lookup, Wrapper},
@@ -26,7 +28,7 @@ use error::*;
 fn main() -> Result<(), AppError> {
     // create a vector of thread handles for keeping track of what we've created and
     // wait for them to finish
-    let mut handle_list: Vec<thread::JoinHandle<()>> = Vec::new();
+    let mut children_list: Vec<ChildReturn> = Vec::new();
 
     // manage arguments from command line
     let options = CliOptions::get_options();
@@ -150,19 +152,14 @@ fn main() -> Result<(), AppError> {
 
             // now we can search for the pattern and save the thread handle if a script was called
             match logfile.lookup(&mut wrapper) {
-                Ok(try_handle) => {
-                    if let Some(handle) = try_handle {
-                        handle_list.push(handle);
-                    }
+                Ok(child_ret) => {
+                    children_list.push(child_ret);
                 }
                 Err(e) => error!(
                     "error {} when searching logfile {:?} for tag {}",
                     e, &search.logfile, &tag.name
                 ),
             }
-            // if let Some(handle) = logfile.lookup(&tag, &mut vars)? {
-            //     handle_list.push(handle);
-            // }
         }
     }
 
@@ -173,11 +170,71 @@ fn main() -> Result<(), AppError> {
     }
 
     // teardown
-    info!("waiting for all threads to finish");
-    for handle in handle_list {
-        handle.join().expect("could join thread handle");
-    }
+    info!("waiting for all processes to finish");
+    // for mut started_child in children_list {
+    //     debug_assert!(started_child.child.is_some());
+
+    //     let mut child = started_child.child.unwrap();
+
+    //     let mutex = std::sync::Mutex::new(child);
+    //     let arc = std::sync::Arc::new(mutex);
+    //     let child_thread = thread::spawn(move || {
+    //         thread::sleep(Duration::from_millis(10));
+    //         let mut guard = arc.lock().unwrap();
+    //         guard.kill();
+    //     });
+    // }
+
+    wait_children(children_list);
 
     info!("end of searches");
     Ok(())
+}
+
+fn wait_children(children_list: Vec<ChildReturn>) {
+    // store thread handles to wait for their job to finish
+    let mut thread_handles = Vec::new();
+
+    info!("waiting for all processes to finish");
+    for started_child in children_list {
+        debug_assert!(started_child.child.is_some());
+
+        // get a mutable reference
+        let mut child = started_child.child.unwrap();
+
+        // save pid & path
+        let pid = child.id();
+        let path = started_child.path;
+
+        // now if timeout has not yet occured, start a new thread to wait and kill process ??
+        let elapsed = started_child.start_time.unwrap().elapsed().as_secs();
+
+        // if timeout occured, try to kill anyway ;-)
+        if elapsed > started_child.timeout {
+            match child.kill() {
+                Ok(_) => info!("process {} already killed", child.id()),
+                Err(e) => info!("error {}", e),
+            }
+        }
+        // else wait a little ;-)
+        else {
+            let mutex = std::sync::Mutex::new(child);
+            let arc = std::sync::Arc::new(mutex);
+
+            debug!("waiting for script={}, pid={} to finish", path.display(), pid);
+
+            let child_thread = thread::spawn(move || {
+                thread::sleep(Duration::from_secs(20));
+                let mut guard = arc.lock().unwrap();
+                guard.kill();
+            });
+
+            thread_handles.push(child_thread);
+        }
+    }
+
+    // wait for thread to finish
+    for handle in thread_handles {
+        handle.join().expect("error waiting for thread");
+    }
 }

@@ -1,12 +1,11 @@
 //! Useful wrapper on the `Command` Rust standard library structure.
 use std::ffi::OsStr;
 use std::path::PathBuf;
-use std::process::Command;
-use std::thread;
+use std::process::{Child, Command};
+use std::time::Instant;
 
 use log::{debug, error, info};
 use serde::Deserialize;
-use wait_timeout::ChildExt;
 
 /// Returns the number of seconds for a standard timeout when not defined in the YAML file.
 /// Neede by `serde`.
@@ -14,7 +13,7 @@ const fn default_timeout() -> u64 {
     2 * 3600
 }
 
-use crate::{error::AppError, variables::Vars};
+use crate::{error::AppError, logfile::LookupRet, variables::Vars};
 #[derive(Debug, Deserialize, Clone)]
 pub struct Cmd {
     /// The name of the script/command to start.
@@ -63,11 +62,7 @@ impl Cmd {
 
     /// Spawns the script, and wait at most `timeout` seconds for the job to finish. Updates the PATH
     /// environment variable before spawning the command. Also add all variables as environment variables.
-    pub fn spawn(
-        &self,
-        env_path: Option<&str>,
-        vars: &Vars,
-    ) -> Result<thread::JoinHandle<()>, AppError> {
+    pub fn spawn(&self, env_path: Option<&str>, vars: &Vars) -> LookupRet {
         debug!(
             "ready to start {:?} with args={:?}, path={:?}, envs={:?}, current_dir={:?}",
             self.path,
@@ -79,7 +74,6 @@ impl Cmd {
         );
 
         // build Command struct before execution.
-        let timeout = self.timeout;
         let mut cmd = Command::new(&self.path);
 
         // variables are always there.
@@ -96,38 +90,25 @@ impl Cmd {
         }
 
         // start command
-        let mut child = cmd.spawn()?;
+        let child = cmd.spawn()?;
         info!("starting script {:?}, pid={}", self.path, child.id());
 
-        // name the thread we're going to spawn
-        let handler = thread::Builder::new().name(format!("{}", self.path.display()));
-
-        // now, spawns a new thread to not be blocked waiting for command to finish
-        let handle = handler.spawn(move || {
-            let duration = std::time::Duration::from_secs(timeout);
-            debug!("inside thread");
-            let status_code = match child.wait_timeout(duration).unwrap() {
-                Some(status) => {
-                    println!("inside some");
-                    status.code()
-                }
-                None => {
-                    info!("timeout occured, killing thread");
-
-                    // child hasn't exited yet
-                    child.kill().unwrap();
-                    child.wait().unwrap().code()
-                }
-            };
-            debug!("script call, exit status={:?}", status_code);
-        })?;
-
-        let ten_millis = std::time::Duration::from_secs(10);
-
-        thread::sleep(ten_millis);
-        debug!("end of spwan");
-        Ok(handle)
+        Ok(ChildReturn {
+            child: Some(child),
+            path: self.path.clone(),
+            timeout: self.timeout,
+            start_time: Some(Instant::now()),
+        })
     }
+}
+
+/// Return structure from a call to a script. Gathers all relevant data, instead of a mere tuple.
+#[derive(Debug, Default)]
+pub struct ChildReturn {
+    pub child: Option<Child>,
+    pub path: PathBuf,
+    pub timeout: u64,
+    pub start_time: Option<Instant>,
 }
 
 #[cfg(test)]

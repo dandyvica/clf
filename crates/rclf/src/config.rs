@@ -40,15 +40,15 @@
 use std::fs::File;
 use std::io::Read;
 use std::path::{Path, PathBuf};
-use std::thread;
 
 use log::debug;
 use regex::Regex;
 use serde::Deserialize;
 
 use crate::{
-    command::Cmd,
+    command::{ChildReturn, Cmd},
     error::AppError,
+    logfile::LookupRet,
     pattern::{PatternSet, PatternType},
     variables::Vars,
 };
@@ -199,20 +199,14 @@ impl Tag {
     }
 
     /// Calls the external script, by providing arguments, environment variables and path which will be searched for the command.
-    pub fn call_script(
-        &self,
-        path: Option<&str>,
-        vars: &Vars,
-    ) -> Result<Option<thread::JoinHandle<()>>, AppError> {
-        // spawns external script if existing
+    pub fn call_script(&self, path: Option<&str>, vars: &Vars) -> LookupRet {
+        // spawns external script if it's existing
         if let Some(script) = &self.script {
-            script.spawn(path, vars)?;
-            // match script.spawn(path, vars) {
-            //     Ok(handle) => return Ok(Some(handle)),
-            //     Err(e) => return Err(e),
-            // }
+            let child = script.spawn(path, vars)?;
+            Ok(child)
+        } else {
+            Ok(ChildReturn::default())
         }
-        Ok(None)
     }
 }
 
