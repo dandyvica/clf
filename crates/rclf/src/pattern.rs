@@ -1,7 +1,7 @@
 //! A list of structures dedicated to match text data from a logfile. It merely defines a list of
 //! regexes structures, which are used to search for a pattern in a text.
 //!
-use std::convert::TryFrom;
+use std::convert::{From, TryFrom};
 
 use regex::{Regex, RegexSet};
 use serde::Deserialize;
@@ -125,6 +125,18 @@ impl TryFrom<&str> for PatternType {
                 msg: format!("{} pattern type is not supported", s),
             }),
         }
+    }
+}
+
+/// Converts a `PatternType` to a `String`.
+impl From<PatternType> for String {
+    fn from(pattern_type: PatternType) -> Self {
+        let s = match pattern_type {
+            PatternType::critical => "critical",
+            PatternType::warning => "warning",
+            PatternType::ok => "ok",
+        };
+        s.to_string()
     }
 }
 

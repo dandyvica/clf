@@ -21,6 +21,7 @@ impl Usable for PathBuf {
     /// assert!(PathBuf::from("/var/log/syslog").is_usable());
     /// ```    
     fn is_usable(&self) -> bool {
-        self.has_root() && self.exists() && self.is_file()
+        //self.has_root() && self.exists() && self.is_file()
+        self.exists() && self.is_file()
     }
 }

@@ -1,0 +1,15 @@
+---
+global:
+  path: foo
+
+searches:
+  - logfile: tests/logfiles/large_access.log
+    tags: 
+      - name: tag1
+        options: "runscript"
+        script:
+          path: tests/scripts/notify.py
+          args: ['arg1']        
+        patterns:
+          critical:
+            regexes: ['^195\.(?P<ip>[\d\.]+)'] 

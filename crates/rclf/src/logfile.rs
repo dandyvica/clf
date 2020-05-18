@@ -303,6 +303,9 @@ impl Lookup for LogFile {
                             .vars
                             .add_var("LINE_NUMBER", format!("{}", line_number));
                         wrapper.vars.add_var("LINE", line.clone());
+                        wrapper.vars.add_var("MATCHED_RE", re.1.as_str());
+                        wrapper.vars.add_var("MATCHED_RE_TYPE", re.0);
+
                         wrapper.vars.add_capture_groups(re.1, &line);
 
                         debug!("added variables: {:?}", wrapper.vars);

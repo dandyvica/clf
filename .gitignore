@@ -1,4 +1,7 @@
 /target
 Cargo.lock
 /crates/rclf/target
+/tests/logfiles/*.log
 /*.log
+clf.log
+*.log

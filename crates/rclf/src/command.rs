@@ -4,7 +4,7 @@ use std::path::PathBuf;
 use std::process::Command;
 use std::thread;
 
-use log::{debug, info};
+use log::{debug, error, info};
 use serde::Deserialize;
 use wait_timeout::ChildExt;
 
@@ -82,25 +82,35 @@ impl Cmd {
         let timeout = self.timeout;
         let mut cmd = Command::new(&self.path);
 
-        // variables are always there. Use `Deref` trait (**)
+        // variables are always there.
         cmd.envs(vars.inner());
 
-        // update `PATH` variable if any.
-        let mut child = match env_path {
-            None => cmd.args(&self.args.as_ref().unwrap()[..]).spawn()?,
-            Some(_env_path) => cmd
-                .args(&self.args.as_ref().unwrap()[..])
-                .env("PATH", _env_path)
-                .spawn()?,
-        };
+        // update PATH variable if any
+        if let Some(path) = env_path {
+            cmd.env("PATH", path);
+        }
 
-        info!("starting script {:?}", self.path);
+        // add arguments if any
+        if let Some(args) = &self.args {
+            cmd.args(&args[..]);
+        }
+
+        // start command
+        let mut child = cmd.spawn()?;
+        info!("starting script {:?}, pid={}", self.path, child.id());
+
+        // name the thread we're going to spawn
+        let handler = thread::Builder::new().name(format!("{}", self.path.display()));
 
         // now, spawns a new thread to not be blocked waiting for command to finish
-        let handle = thread::spawn(move || {
+        let handle = handler.spawn(move || {
             let duration = std::time::Duration::from_secs(timeout);
-            let _status_code = match child.wait_timeout(duration).unwrap() {
-                Some(status) => status.code(),
+            debug!("inside thread");
+            let status_code = match child.wait_timeout(duration).unwrap() {
+                Some(status) => {
+                    println!("inside some");
+                    status.code()
+                }
                 None => {
                     info!("timeout occured, killing thread");
 
@@ -109,7 +119,13 @@ impl Cmd {
                     child.wait().unwrap().code()
                 }
             };
-        });
+            debug!("script call, exit status={:?}", status_code);
+        })?;
+
+        let ten_millis = std::time::Duration::from_secs(10);
+
+        thread::sleep(ten_millis);
+        debug!("end of spwan");
         Ok(handle)
     }
 }

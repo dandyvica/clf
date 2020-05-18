@@ -119,17 +119,25 @@ mod tests {
         println!("{:#?}", v.0);
     }
 
-    #[test]    
+    #[test]
     fn replace() {
         let re = Regex::new(r"^([a-z\s]+) (\w+) (\w+) (?P<LASTNAME>\w+)").unwrap();
         let text = "my name is john fitzgerald kennedy, president of the USA";
         let mut v = Vars::new();
-        v.add_capture_groups(&re, text);        
+        v.add_capture_groups(&re, text);
 
-        let args = &["Hi, CLF_CAPTURE1", "(CLF_CAPTURE2 CLF_CAPTURE3) CLF_LASTNAME. I'm the president of the USA."];
+        let args = &[
+            "Hi, CLF_CAPTURE1",
+            "(CLF_CAPTURE2 CLF_CAPTURE3) CLF_LASTNAME. I'm the president of the USA.",
+        ];
         let new_args = v.substitue(args);
 
-        assert_eq!(new_args, vec!["Hi, my name is".to_string(), "(john fitzgerald) kennedy. I'm the president of the USA.".to_string()]);
+        assert_eq!(
+            new_args,
+            vec![
+                "Hi, my name is".to_string(),
+                "(john fitzgerald) kennedy. I'm the president of the USA.".to_string()
+            ]
+        );
     }
-
 }
