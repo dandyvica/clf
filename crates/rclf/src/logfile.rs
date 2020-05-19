@@ -20,7 +20,7 @@ use crate::{
     config::{GlobalOptions, Tag},
     error::{AppCustomErrorKind, AppError},
     util::Usable,
-    variables::Vars,
+    variables::RuntimeVariables,
 };
 
 /// A wrapper to store log file processing data.
@@ -189,12 +189,12 @@ impl Seeker for BufReader<GzDecoder<File>> {
 pub struct Wrapper<'a> {
     pub global: &'a GlobalOptions,
     pub tag: &'a Tag,
-    pub vars: &'a mut Vars,
+    pub vars: &'a mut RuntimeVariables,
 }
 
 /// Return type for all `Lookup` methods.
 pub type LookupReturn<T> = Result<T, AppError>;
-pub type LookupRet = LookupReturn<ChildReturn>;
+pub type LookupRet = LookupReturn<Option<ChildReturn>>;
 
 /// Trait, implemented by `LogFile` to search patterns.
 pub trait Lookup {
@@ -238,12 +238,12 @@ impl Lookup for LogFile {
         let mut line = String::with_capacity(1024);
 
         // defined a new child handle
-        let mut child_return = ChildReturn::default();
+        let mut child_return: Option<ChildReturn> = None;
 
         // anyway, reset variables
         //wrapper.vars.clear();
         wrapper.vars.clear();
-        wrapper.vars.add_var(
+        wrapper.vars.insert(
             "LOGFILE",
             self.path.to_str().unwrap_or("error converting PathBuf"),
         );
@@ -303,13 +303,13 @@ impl Lookup for LogFile {
                         // create variables which will be set as environment variables when script is called
                         wrapper
                             .vars
-                            .add_var("LINE_NUMBER", format!("{}", line_number));
-                        wrapper.vars.add_var("LINE", line.clone());
-                        wrapper.vars.add_var("MATCHED_RE", re.1.as_str());
-                        wrapper.vars.add_var("MATCHED_RE_TYPE", re.0);
-                        wrapper.vars.add_var("TAG", &wrapper.tag.name);
+                            .insert("LINE_NUMBER", format!("{}", line_number));
+                        wrapper.vars.insert("LINE", line.clone());
+                        wrapper.vars.insert("MATCHED_RE", re.1.as_str());
+                        wrapper.vars.insert("MATCHED_RE_TYPE", re.0);
+                        wrapper.vars.insert("TAG", &wrapper.tag.name);
 
-                        wrapper.vars.add_capture_groups(re.1, &line);
+                        wrapper.vars.insert_captures(re.1, &line);
 
                         debug!("added variables: {:?}", wrapper.vars);
 

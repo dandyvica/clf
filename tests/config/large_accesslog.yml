@@ -6,7 +6,7 @@ searches:
   - logfile: tests/logfiles/large_access.log
     tags: 
       - name: tag1
-        options: "runscript"
+        options: "dontbreak"
         script:
           path: tests/scripts/notify.py
           args: ['arg1']        

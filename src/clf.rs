@@ -3,7 +3,7 @@ use std::io::{stdin, Read};
 use std::path::PathBuf;
 use std::process::exit;
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 #[macro_use]
 extern crate log;
@@ -16,7 +16,7 @@ use rclf::{
     error::AppError,
     logfile::{Lookup, Wrapper},
     snapshot::Snapshot,
-    variables::Vars,
+    variables::RuntimeVariables,
 };
 
 mod args;
@@ -26,6 +26,9 @@ mod error;
 use error::*;
 
 fn main() -> Result<(), AppError> {
+    // tick time
+    let now = Instant::now();
+
     // create a vector of thread handles for keeping track of what we've created and
     // wait for them to finish
     let mut children_list: Vec<ChildReturn> = Vec::new();
@@ -74,9 +77,14 @@ fn main() -> Result<(), AppError> {
         .as_deref()
         .unwrap_or(config.get_logger_name());
 
+    // --------------------------------------------------------------------------------------------------------------
     // initialize logger
+    // --------------------------------------------------------------------------------------------------------------
+
+    // first get level filter from
+
     match WriteLogger::init(
-        LevelFilter::Debug,
+        options.log_level,
         simplelog::ConfigBuilder::new()
             .set_time_format("%H:%M:%S.%f".to_string())
             .build(),
@@ -96,7 +104,7 @@ fn main() -> Result<(), AppError> {
     info!("options {:?}", &options);
 
     // create initial variables
-    let mut vars = Vars::new();
+    let mut vars = RuntimeVariables::new();
 
     // get snapshot file file
     let snapfile = config.get_snapshot_name();
@@ -153,7 +161,10 @@ fn main() -> Result<(), AppError> {
             // now we can search for the pattern and save the thread handle if a script was called
             match logfile.lookup(&mut wrapper) {
                 Ok(child_ret) => {
-                    children_list.push(child_ret);
+                    // add child only is has really been started
+                    if child_ret.is_some() {
+                        children_list.push(child_ret.unwrap());
+                    }
                 }
                 Err(e) => error!(
                     "error {} when searching logfile {:?} for tag {}",
@@ -173,7 +184,7 @@ fn main() -> Result<(), AppError> {
     info!("waiting for all processes to finish");
     wait_children(children_list);
 
-    info!("end of searches");
+    info!("end of searches, elapsed={}", now.elapsed().as_secs_f32());
 
     // print out final results
     Ok(())
@@ -208,7 +219,11 @@ fn wait_children(children_list: Vec<ChildReturn>) {
             let mutex = std::sync::Mutex::new(child);
             let arc = std::sync::Arc::new(mutex);
 
-            debug!("waiting for script={}, pid={} to finish", path.display(), pid);
+            debug!(
+                "waiting for script={}, pid={} to finish",
+                path.display(),
+                pid
+            );
 
             let child_thread = thread::spawn(move || {
                 thread::sleep(Duration::from_secs(20));

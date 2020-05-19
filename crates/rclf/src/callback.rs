@@ -13,7 +13,7 @@ const fn default_timeout() -> u64 {
     2 * 3600
 }
 
-use crate::{error::AppError, logfile::LookupRet, variables::Vars};
+use crate::{error::AppError, logfile::LookupRet, variables::RuntimeVariables};
 
 /// A callback could be either synchronous, or asynchronous.
 #[derive(Debug, Deserialize, PartialEq, Hash, Eq)]
@@ -80,7 +80,11 @@ impl Callback {
 
     /// Spawns the script, and wait at most `timeout` seconds for the job to finish. Updates the PATH
     /// environment variable before spawning the command. Also add all variables as environment variables.
-    pub fn spawn(&self, env_path: Option<&str>, vars: &Vars) -> LookupRet {
+    pub fn spawn(
+        &self,
+        env_path: Option<&str>,
+        vars: &RuntimeVariables,
+    ) -> Result<ChildReturn, AppError> {
         debug!(
             "ready to start {:?} with args={:?}, path={:?}, envs={:?}, current_dir={:?}",
             self.path,
@@ -136,8 +140,8 @@ mod tests {
     #[test]
     #[cfg(target_os = "linux")]
     fn list_files_shell() {
-        let files =
-            Callback::get_list(&"find", &["/var/log", "-ctime", "+1"]).expect("error listing files");
+        let files = Callback::get_list(&"find", &["/var/log", "-ctime", "+1"])
+            .expect("error listing files");
         assert!(files.len() > 10);
         assert!(files.iter().all(|f| f.starts_with("/var/log")));
     }

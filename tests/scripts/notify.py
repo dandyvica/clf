@@ -11,5 +11,5 @@ all_vars = "\n".join(clf)
 #os.system(f'notify-send -t 60000 ' + all_vars)
 output = open('/tmp/notify.output', 'w').write(all_vars)
 
-time.sleep(10)
+//time.sleep(10)
 

@@ -46,11 +46,11 @@ use regex::Regex;
 use serde::Deserialize;
 
 use crate::{
-    callback::{ChildReturn, Callback},
+    callback::{Callback, ChildReturn},
     error::AppError,
     logfile::LookupRet,
     pattern::{PatternSet, PatternType},
-    variables::Vars,
+    variables::RuntimeVariables,
 };
 
 //
@@ -199,13 +199,13 @@ impl Tag {
     }
 
     /// Calls the external script, by providing arguments, environment variables and path which will be searched for the command.
-    pub fn call_script(&self, path: Option<&str>, vars: &Vars) -> LookupRet {
+    pub fn call_script(&self, path: Option<&str>, vars: &RuntimeVariables) -> LookupRet {
         // spawns external script if it's existing
         if let Some(script) = &self.script {
             let child = script.spawn(path, vars)?;
-            Ok(child)
+            Ok(Some(child))
         } else {
-            Ok(ChildReturn::default())
+            Ok(None)
         }
     }
 }

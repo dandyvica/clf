@@ -2,7 +2,7 @@ use std::thread;
 
 use serde::Deserialize;
 
-use rclf::{callback::Callback, variables::Vars};
+use rclf::{callback::Callback, variables::RuntimeVariables};
 
 
 #[test]
@@ -17,7 +17,7 @@ fn spawn() {
     let cmd: Callback = serde_yaml::from_reader(file).expect("unable to load YAML");
 
     let handle = cmd
-        .spawn(None, &Vars::new())
+        .spawn(None, &RuntimeVariables::new())
         .expect("unable to call script");
     let _ = handle.join();
 }
