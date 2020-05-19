@@ -11,7 +11,7 @@ extern crate simplelog;
 use simplelog::*;
 
 use rclf::{
-    command::ChildReturn,
+    callback::ChildReturn,
     config::{Config, LogSource},
     error::AppError,
     logfile::{Lookup, Wrapper},
@@ -171,23 +171,11 @@ fn main() -> Result<(), AppError> {
 
     // teardown
     info!("waiting for all processes to finish");
-    // for mut started_child in children_list {
-    //     debug_assert!(started_child.child.is_some());
-
-    //     let mut child = started_child.child.unwrap();
-
-    //     let mutex = std::sync::Mutex::new(child);
-    //     let arc = std::sync::Arc::new(mutex);
-    //     let child_thread = thread::spawn(move || {
-    //         thread::sleep(Duration::from_millis(10));
-    //         let mut guard = arc.lock().unwrap();
-    //         guard.kill();
-    //     });
-    // }
-
     wait_children(children_list);
 
     info!("end of searches");
+
+    // print out final results
     Ok(())
 }
 
@@ -195,7 +183,6 @@ fn wait_children(children_list: Vec<ChildReturn>) {
     // store thread handles to wait for their job to finish
     let mut thread_handles = Vec::new();
 
-    info!("waiting for all processes to finish");
     for started_child in children_list {
         debug_assert!(started_child.child.is_some());
 

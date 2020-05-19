@@ -16,7 +16,7 @@ use flate2::read::GzDecoder;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    command::ChildReturn,
+    callback::ChildReturn,
     config::{GlobalOptions, Tag},
     error::{AppCustomErrorKind, AppError},
     util::Usable,
@@ -307,6 +307,7 @@ impl Lookup for LogFile {
                         wrapper.vars.add_var("LINE", line.clone());
                         wrapper.vars.add_var("MATCHED_RE", re.1.as_str());
                         wrapper.vars.add_var("MATCHED_RE_TYPE", re.0);
+                        wrapper.vars.add_var("TAG", &wrapper.tag.name);
 
                         wrapper.vars.add_capture_groups(re.1, &line);
 

@@ -76,6 +76,11 @@ impl Vars {
         }
         new_s.to_string()
     }
+
+    /// Add user defined variables into the variables namespace.
+    pub fn add_uservars(&mut self, user_vars: &UserVars) {
+        
+    }
 }
 
 /// `Deref`and `DerefMut` traits implementation.
@@ -92,6 +97,9 @@ impl std::ops::DerefMut for Vars {
         &mut self.0
     }
 }
+
+/// User variables can be defined as part of the global namespace.
+pub struct UserVars(HashMap<String, String>);
 
 #[cfg(test)]
 mod tests {

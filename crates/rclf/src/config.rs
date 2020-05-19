@@ -46,7 +46,7 @@ use regex::Regex;
 use serde::Deserialize;
 
 use crate::{
-    command::{ChildReturn, Cmd},
+    callback::{ChildReturn, Callback},
     error::AppError,
     logfile::LookupRet,
     pattern::{PatternSet, PatternType},
@@ -186,7 +186,7 @@ pub struct Tag {
     pub options: SearchOptions,
 
     /// Script details like path, name, parameters, delay etc to be possibly run for a match.
-    script: Option<Cmd>,
+    script: Option<Callback>,
 
     /// Patterns to be checked against. These include critical and warning (along with exceptions), ok list of regexes.
     patterns: PatternSet,
@@ -368,7 +368,7 @@ impl From<Config<LogSource>> for Config<PathBuf> {
                     args: _args,
                 } => {
                     // get list of files from command
-                    let files = Cmd::get_list(_cmd, _args.as_slice()).unwrap();
+                    let files = Callback::get_list(_cmd, _args.as_slice()).unwrap();
                     println!("{:?}", files);
 
                     // create Search structure with the files we found, and a clone of all tags

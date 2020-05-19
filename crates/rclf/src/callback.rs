@@ -14,8 +14,26 @@ const fn default_timeout() -> u64 {
 }
 
 use crate::{error::AppError, logfile::LookupRet, variables::Vars};
+
+/// A callback could be either synchronous, or asynchronous.
+#[derive(Debug, Deserialize, PartialEq, Hash, Eq)]
+#[allow(non_camel_case_types)]
+pub enum CallbackType {
+    synchronous,
+    asynchronous,
+}
+
+/// Represents the class of callback: script to be called, ABI to be run, ip:port address to send, ...
+#[derive(Debug, Deserialize, PartialEq, Hash, Eq)]
+#[allow(non_camel_case_types)]
+pub enum CallbackClass {
+    script,
+    tcp,
+}
+
+/// A structure representing a command to start
 #[derive(Debug, Deserialize, Clone)]
-pub struct Cmd {
+pub struct Callback {
     /// The name of the script/command to start.
     path: PathBuf,
 
@@ -27,7 +45,7 @@ pub struct Cmd {
     timeout: u64,
 }
 
-impl Cmd {
+impl Callback {
     /// This spawns a command and expects a list of file names.
     pub fn get_list<P, I>(cmd: P, args: I) -> Result<Vec<PathBuf>, AppError>
     where
@@ -119,14 +137,14 @@ mod tests {
     #[cfg(target_os = "linux")]
     fn list_files_shell() {
         let files =
-            Cmd::get_list(&"find", &["/var/log", "-ctime", "+1"]).expect("error listing files");
+            Callback::get_list(&"find", &["/var/log", "-ctime", "+1"]).expect("error listing files");
         assert!(files.len() > 10);
         assert!(files.iter().all(|f| f.starts_with("/var/log")));
     }
     #[test]
     #[cfg(target_os = "windows")]
     fn list_files_shell() {
-        // let files = Cmd::get_list("find", &["/var/log", "-ctime", "+1"]).expect("error listing files");
+        // let files = Callback::get_list("find", &["/var/log", "-ctime", "+1"]).expect("error listing files");
         // assert!(files.len() > 10);
         // assert!(files.iter().all(|f| f.starts_with("/var/log")));
     }
