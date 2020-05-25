@@ -2,7 +2,7 @@
 mod seeker;
 
 // test configuration load
-mod config;
+//mod config;
 
 // test commands
-mod command;
+mod callback;

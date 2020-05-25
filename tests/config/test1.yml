@@ -1,15 +1,41 @@
 ---
+# a list of global options, valid for all searches.
 global:
-  path: foo
+  # a list of ':'-separated list of paths (UNIX) or ';'-separated (Windows). If provided, the script is
+  # searched within those directories.
+  # Defaults to '/usr/sbin:/usr/bin:/sbin:/bin' or 'C:\Windows\system32;C:\Windows;C:\Windows\System32\Wbem;' if not provided, depending on the 
+  # platform.
+  path: /usr/local/bin
 
+  # a file & path of the logger file, where all errors, info or traces from the clf executable are kept.
+  # Defaults to current directory or temporary directory with 'clf.log' as filename.
+  logger: /var/log/clf.log
+
+  # a path & file name where clf is keeping its runtime information. This is used to restart the search from the last
+  # offset reached from the last clf run.
+  snapshotfile: /var/log
+
+
+# a list of logfiles & tags, to search for patterns. This is either a list of logfiles, or a command giving back a list of 
+# files to search for.
 searches:
-  - logfile: /var/log/syslog
+  # a logfile to search.
+  - logfile: /var/log/messages
+    # a list of associated tags, to refer to this search
     tags: 
-      - name: tag1
+      # nothing but a tag name
+      - name: association
+        # a list of comma-separated options to manage the search. Current supported options are:
+        # runscript: if present, means the provided script will be called
+        # rewind: restart the search from the beginning of the file
         options: "runscript"
+
+        # a script or command to be called, every time a hit is found.
         script:
           path: tests/assets/notify.py
-          args: ['arg1', 'arg2', 'arg3']        
+          args: ['arg1', 'arg2', 'arg3']
+          
+        # a list of patterns to match. 
         patterns:
           critical:
             regexes: ['error (\w+)', '(\w+):\s+Trying to associate with ([\w:]+)'] 

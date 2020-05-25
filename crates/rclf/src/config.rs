@@ -46,14 +46,12 @@ use regex::Regex;
 use serde::Deserialize;
 
 use crate::{
-    callback::{Callback, ChildReturn},
+    callback::Callback,
     error::AppError,
     logfile::LookupRet,
     pattern::{PatternSet, PatternType},
     variables::RuntimeVariables,
 };
-
-//
 
 /// A list of options which are specific to a search. They might or might not be used. If an option is not present, it's deemed false.
 /// By default, all options are either false, or use the default corresponding type.
@@ -127,7 +125,16 @@ impl From<String> for SearchOptions {
         let v: Vec<_> = option_list.split(",").map(|x| x.trim()).collect();
 
         // use Rust macro to add bool options if any
-        add_bool_option!(v, opt, runscript, rewind, keepoutput, dontbreak);
+        add_bool_option!(
+            v,
+            opt,
+            runscript,
+            rewind,
+            keepoutput,
+            dontbreak,
+            savethresholdcount,
+            protocol
+        );
 
         // other options like key=value if any
         // first build a vector of such options. We first search for = and then split according to '='
@@ -170,7 +177,10 @@ pub enum LogSource {
     LogFile(String),
 
     #[serde(rename = "loglist")]
-    LogList { cmd: String, args: Vec<String> },
+    LogList {
+        cmd: String,
+        args: Option<Vec<String>>,
+    },
 }
 
 /// This is the core structure which handles data used to search into the logfile. These are
@@ -367,8 +377,11 @@ impl From<Config<LogSource>> for Config<PathBuf> {
                     cmd: _cmd,
                     args: _args,
                 } => {
+                    //
+                    let script_args = _args.as_ref().and_then(|f| Some(f.as_slice()));
+
                     // get list of files from command
-                    let files = Callback::get_list(_cmd, _args.as_slice()).unwrap();
+                    let files = Callback::get_list(_cmd, script_args).unwrap();
                     println!("{:?}", files);
 
                     // create Search structure with the files we found, and a clone of all tags
@@ -390,26 +403,43 @@ impl From<Config<LogSource>> for Config<PathBuf> {
     }
 }
 
-// #[cfg(test)]
-// mod tests {
-//     use super::*;
-//     //use std::path::PathBuf;
+#[cfg(test)]
+mod tests {
+    use super::*;
+    //use std::path::PathBuf;
 
-//     #[test]
-//     fn test_canonicalize() {
-//         use std::io::ErrorKind;
-//         use std::path::PathBuf;
+    #[test]
+    fn search_options() {
+        let opts = SearchOptions::from("runscript, keepoutput, rewind, criticalthreshold=10, warningthreshold=15, logfilemissing=foo,protocol, savethresholdcount, sticky=5, dontbreak".to_string());
 
-//         let script = Script {
-//             path: PathBuf::from("foo"),
-//             args: None,
-//             timeout: 0,
-//         };
-//         let path_list = "/usr:/dev:/usr/lib:/usr/bin:/bin";
-//         let pathbuf_list: Vec<_> = path_list.split(":").map(|p| PathBuf::from(p)).collect();
-//         assert_eq!(
-//             script.canonicalize(&pathbuf_list).unwrap_err().kind(),
-//             ErrorKind::NotFound
-//         );
-//     }
-// }
+        assert!(opts.runscript);
+        assert!(opts.keepoutput);
+        assert!(opts.rewind);
+        assert!(opts.savethresholdcount);
+        assert!(opts.dontbreak);
+        assert!(opts.protocol);
+
+        assert_eq!(opts.criticalthreshold, 10);
+        assert_eq!(opts.warningthreshold, 15);
+        assert_eq!(opts.sticky, 5);
+        assert_eq!(opts.criticalthreshold, 10);
+        assert_eq!(&opts.logfilemissing.unwrap(), "foo");
+    }
+
+    #[test]
+    fn global_options() {
+        let yaml = r#"
+            path: /usr/foo1
+            outputdir: /usr/foo2
+            snapshotfile: /usr/foo3/snap.foo
+            logger: /usr/foo4/foo.log
+        "#;
+
+        let opts: GlobalOptions = serde_yaml::from_str(yaml).expect("unable to read YAML");
+
+        assert_eq!(&opts.path, "/usr/foo1");
+        assert_eq!(opts.outputdir, PathBuf::from("/usr/foo2"));
+        assert_eq!(opts.snapshotfile, PathBuf::from("/usr/foo3/snap.foo"));
+        assert_eq!(opts.logger, PathBuf::from("/usr/foo4/foo.log"));
+    }
+}

@@ -46,14 +46,19 @@ impl CliOptions {
         let matches = App::new("Log files reader")
             .version("0.1")
             .author("Alain Viguier dandyvica@gmail.com")
-            .about("A log file checker inspired by the Nagios check_logfiles plugin")
+            .about(r#"A log file checker inspired by the Nagios check_logfiles plugin. Checklogfiles (clf) will try to detect some regex patterns
+            in logfiles specified in a YAML configuration file.
+
+            Project home page: https://github.com/dandyvica/clf
+            
+            "#)
             .arg(
                 Arg::with_name("config")
                     .long_help("The name and path of the YAML configuration file, containing logfiles to search for and patterns to match.")
                     .short("c")
                     .long("config")
                     .required(true)
-                    .help("Name of the YAML configuration file. Use dash '-' for standard input")
+                    .help("Name of the YAML configuration file. Use dash '-' for standard input.")
                     .takes_value(true),
             )
             .arg(
@@ -61,7 +66,7 @@ impl CliOptions {
                     .short("l")
                     .long("clflog")
                     .required(false)
-                    .help("Name of the log file for logging information")
+                    .help("Name of the log file for logging information of this process.")
                     .takes_value(true),
             )
             .arg(
@@ -69,7 +74,7 @@ impl CliOptions {
                     .short("d")
                     .long("delsnap")
                     .required(false)
-                    .help("Delete snapshot file before searching")
+                    .help("Delete snapshot file before searching.")
                     .takes_value(false),
             )
             .arg(
@@ -77,7 +82,7 @@ impl CliOptions {
                     .short("n")
                     .long("checkconf")
                     .required(false)
-                    .help("Check configuration file correctness, print it out and exit")
+                    .help("Check configuration file correctness, print it out and exit.")
                     .takes_value(false),
             )
             .arg(
@@ -85,7 +90,7 @@ impl CliOptions {
                     .short("g")
                     .long("loglevel")
                     .required(false)
-                    .help("When logger is enabled, sets the minimum logger level. Possible values are: Error, Warn, Info, Debug, Trace. Defaults to Error.")
+                    .help("When logger is enabled, sets the minimum logger level.")
                     .possible_values(&["Error", "Warn", "Info", "Debug", "Trace"])
                     .takes_value(true),
             )

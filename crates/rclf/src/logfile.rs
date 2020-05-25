@@ -2,11 +2,9 @@
 //! coming from the processing of the log file, every time it's read to look for patterns.
 use log::{debug, info};
 use std::collections::HashMap;
-use std::path::{Path, PathBuf};
-//use std::time::{Instant, SystemTime};
 use std::fs::File;
 use std::io::{BufRead, BufReader, Read, Seek, SeekFrom};
-use std::process::Child;
+use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
 #[cfg(target_os = "linux")]
@@ -294,8 +292,10 @@ impl Lookup for LogFile {
                     // is there a match, regarding also exceptions?
                     if let Some(re) = wrapper.tag.is_match(&line) {
                         debug!(
-                            "found a match tag={}, re=({:?},{})",
+                            "found a match tag={}, line={}, line#={}, re=({:?},{})",
                             wrapper.tag.name,
+                            line.clone(),
+                            line_number,
                             re.0,
                             re.1.as_str()
                         );

@@ -1,5 +1,6 @@
 //! This is where ad-hoc variables are stored. These are meant to be used from with the
 //! configuration file.
+use log::{debug, info, trace};
 use std::cmp::Eq;
 use std::collections::HashMap;
 use std::fmt::Debug;
@@ -74,18 +75,23 @@ impl RuntimeVariables {
     pub fn insert_captures(&mut self, re: &Regex, text: &str) {
         // get the captures
         let caps = re.captures(text).unwrap();
+        trace!("caps={:?}", caps);
 
         // now loop and get text corresponding to either name or position
         for (i, cg_name) in re.capture_names().enumerate() {
             match cg_name {
-                None => self.insert(&format!("CAPTURE{}", i), caps.get(i).unwrap().as_str()),
+                None => {
+                    if let Some(cg) = caps.get(i) {
+                        self.insert(&format!("CAPTURE{}", i), cg.as_str());
+                    }
+                }
                 Some(cap_name) => self.insert(cap_name, caps.name(cap_name).unwrap().as_str()),
             };
         }
     }
 
     /// Replaces variables in the argument list and returns a new list where each arg is replaced, if any, by a variable's value.
-    pub fn substitue(&self, old_args: &[&str]) -> Vec<String> {
+    pub fn substitute(&self, old_args: &[&str]) -> Vec<String> {
         old_args
             .iter()
             .map(|arg| self.replace(arg))
@@ -102,8 +108,8 @@ impl RuntimeVariables {
         new_s.to_string()
     }
 
-    /// Add user defined variables into the variables namespace.
-    pub fn add_uservars(&mut self, user_vars: &UserVars) {}
+    // Add user defined variables into the variables namespace.
+    //pub fn add_uservars(&mut self, user_vars: &UserVars) {}
 }
 
 /// User variables can be defined as part of the global namespace.
@@ -121,7 +127,7 @@ mod tests {
         let text = "my name is john fitzgerald kennedy, president of the USA";
 
         let mut v = RuntimeVariables::new();
-        v.add_capture_groups(&re, text);
+        v.insert_captures(&re, text);
 
         assert_eq!(
             v.0.get("CLF_CAPTURE0").unwrap(),
@@ -140,13 +146,13 @@ mod tests {
         let re = Regex::new(r"^([a-z\s]+) (\w+) (\w+) (?P<LASTNAME>\w+)").unwrap();
         let text = "my name is john fitzgerald kennedy, president of the USA";
         let mut v = RuntimeVariables::new();
-        v.add_capture_groups(&re, text);
+        v.insert_captures(&re, text);
 
         let args = &[
             "Hi, CLF_CAPTURE1",
             "(CLF_CAPTURE2 CLF_CAPTURE3) CLF_LASTNAME. I'm the president of the USA.",
         ];
-        let new_args = v.substitue(args);
+        let new_args = v.substitute(args);
 
         assert_eq!(
             new_args,

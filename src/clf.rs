@@ -1,3 +1,4 @@
+use log::{debug, info, trace};
 use std::fs::OpenOptions;
 use std::io::{stdin, Read};
 use std::path::PathBuf;
