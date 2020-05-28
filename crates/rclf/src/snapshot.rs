@@ -136,7 +136,7 @@ mod tests {
     "#;
 
     #[test]
-    fn test_load() {
+    fn load() {
         let data: Snapshot = serde_json::from_str(JSON).unwrap();
 
         let keys: Vec<_> = data.snapshot.keys().collect();
@@ -147,7 +147,7 @@ mod tests {
 
     #[test]
     #[cfg(target_family = "unix")]
-    fn test_or_insert() {
+    fn or_insert() {
         let mut data: Snapshot = serde_json::from_str(JSON).unwrap();
         assert!(data.snapshot.contains_key(&PathBuf::from("/usr/bin/zip")));
         assert!(data

@@ -1,6 +1,6 @@
 use log::{debug, info, trace};
 use std::fs::OpenOptions;
-use std::io::{stdin, Read};
+use std::io::{stdin, ErrorKind, Read};
 use std::path::PathBuf;
 use std::process::exit;
 use std::thread;
@@ -13,7 +13,7 @@ use simplelog::*;
 
 use rclf::{
     callback::ChildReturn,
-    config::{Config, LogSource},
+    config::{default_logger, Config, LogSource},
     error::AppError,
     logfile::{Lookup, Wrapper},
     snapshot::Snapshot,
@@ -36,6 +36,32 @@ fn main() -> Result<(), AppError> {
 
     // manage arguments from command line
     let options = CliOptions::get_options();
+
+    // builds the logger from cli or the default one
+    let default_logger = default_logger();
+    let logger = &options.clf_logfile.as_deref().unwrap_or(&default_logger);
+
+    // initialize logger
+    // first get level filter from cli
+    match WriteLogger::init(
+        options.log_level,
+        simplelog::ConfigBuilder::new()
+            .set_time_format("%H:%M:%S.%f".to_string())
+            .build(),
+        OpenOptions::new()
+            .append(true)
+            .create(true)
+            .open(logger)
+            .unwrap(),
+    ) {
+        Ok(_) => (),
+        Err(e) => {
+            eprintln!("unable to create log file, error={}", e);
+            exit(EXIT_LOGGER_ERROR);
+        }
+    };
+    info!("using configuration file {:?}", &options.config_file);
+    info!("options {:?}", &options);
 
     // load configuration file as specified from the command line
     // handle case of stdin input
@@ -71,38 +97,6 @@ fn main() -> Result<(), AppError> {
         println!("{:#?}", config);
         exit(EXIT_CONFIG_CHECK);
     }
-
-    // which is the default logger ?
-    let logger = &options
-        .clf_logfile
-        .as_deref()
-        .unwrap_or(config.get_logger_name());
-
-    // --------------------------------------------------------------------------------------------------------------
-    // initialize logger
-    // --------------------------------------------------------------------------------------------------------------
-
-    // first get level filter from
-
-    match WriteLogger::init(
-        options.log_level,
-        simplelog::ConfigBuilder::new()
-            .set_time_format("%H:%M:%S.%f".to_string())
-            .build(),
-        OpenOptions::new()
-            .append(true)
-            .create(true)
-            .open(logger)
-            .unwrap(),
-    ) {
-        Ok(_) => (),
-        Err(e) => {
-            eprintln!("unable to create log file, error={}", e);
-            exit(EXIT_LOGGER_ERROR);
-        }
-    };
-    info!("using configuration file {:?}", &options.config_file);
-    info!("options {:?}", &options);
 
     // create initial variables
     let mut vars = RuntimeVariables::new();
@@ -176,6 +170,7 @@ fn main() -> Result<(), AppError> {
     }
 
     // write snapshot
+    debug!("saving snapshot file {}", &snapfile.display());
     if let Err(e) = snapshot.save(&snapfile) {
         eprintln!("unable to save snapshot file {:?}, error={}", &snapfile, e);
         exit(EXIT_SNAPSHOT_SAVE_ERROR);
@@ -185,13 +180,23 @@ fn main() -> Result<(), AppError> {
     info!("waiting for all processes to finish");
     wait_children(children_list);
 
-    info!("end of searches, elapsed={}", now.elapsed().as_secs_f32());
+    info!(
+        "end of searches, elapsed={} seconds",
+        now.elapsed().as_secs_f32()
+    );
 
     // print out final results
     Ok(())
 }
 
+/// Manage end of all started processes from clf.
 fn wait_children(children_list: Vec<ChildReturn>) {
+    // just wait a little for all commands to finish. Otherwise, the last process will not be considered to be finished.
+    if !children_list.is_empty() {
+        let wait_timeout = std::time::Duration::from_millis(1000);
+        thread::sleep(wait_timeout);
+    }
+
     // store thread handles to wait for their job to finish
     let mut thread_handles = Vec::new();
 
@@ -205,35 +210,88 @@ fn wait_children(children_list: Vec<ChildReturn>) {
         let pid = child.id();
         let path = started_child.path;
 
-        // now if timeout has not yet occured, start a new thread to wait and kill process ??
-        let elapsed = started_child.start_time.unwrap().elapsed().as_secs();
+        debug!(
+            "managing end of process, pid:{}, path:{}",
+            pid,
+            path.display()
+        );
 
-        // if timeout occured, try to kill anyway ;-)
-        if elapsed > started_child.timeout {
-            match child.kill() {
-                Ok(_) => info!("process {} already killed", child.id()),
-                Err(e) => info!("error {}", e),
-            }
-        }
-        // else wait a little ;-)
-        else {
-            let mutex = std::sync::Mutex::new(child);
-            let arc = std::sync::Arc::new(mutex);
-
-            debug!(
-                "waiting for script={}, pid={} to finish",
+        // use try_wait() to check if command has exited
+        match child.try_wait() {
+            // child has already exited. So check output status code if any
+            Ok(Some(status)) => info!(
+                "command with path: {}, pid: {} exited with: {}",
                 path.display(),
-                pid
-            );
+                pid,
+                status
+            ),
 
-            let child_thread = thread::spawn(move || {
-                thread::sleep(Duration::from_secs(20));
-                let mut guard = arc.lock().unwrap();
-                guard.kill();
-            });
+            // child has not exited. Spawn a new thread to wait at most the timeout defined
+            Ok(None) => {
+                debug!("========> None");
 
-            thread_handles.push(child_thread);
-        }
+                // now if timeout has not yet occured, start a new thread to wait and kill process ??
+                let elapsed = started_child.start_time.unwrap().elapsed().as_secs();
+
+                // if timeout occured, try to kill anyway ;-)
+                if elapsed > started_child.timeout {
+                    match child.kill() {
+                        Ok(_) => info!("process {} killed", child.id()),
+                        Err(e) => {
+                            if e.kind() == ErrorKind::InvalidInput {
+                                info!("process {} already killed", child.id());
+                            } else {
+                                info!(
+                                    "error:{} trying to kill process pid:{}, path: {}",
+                                    e,
+                                    pid,
+                                    path.display()
+                                );
+                            }
+                        }
+                    }
+                } else {
+                    // wait a little and spawn a new thread to kill the command
+                    let mutex = std::sync::Mutex::new(child);
+                    let arc = std::sync::Arc::new(mutex);
+
+                    // we'll wait at least the remaining seconds
+                    let secs_to_wait = started_child.timeout - elapsed;
+
+                    debug!(
+                        "waiting for script={}, pid={} to finish",
+                        path.display(),
+                        pid
+                    );
+
+                    let child_thread = thread::spawn(move || {
+                        thread::sleep(Duration::from_secs(secs_to_wait));
+                        let mut guard = arc.lock().unwrap();
+
+                        match guard.kill() {
+                            Ok(_) => info!("process {} killed", guard.id()),
+                            Err(e) => {
+                                if e.kind() == ErrorKind::InvalidInput {
+                                    info!("process {} already killed", guard.id());
+                                } else {
+                                    info!(
+                                        "error:{} trying to kill process pid:{}, path: {}",
+                                        e,
+                                        pid,
+                                        path.display()
+                                    );
+                                }
+                            }
+                        }
+                    });
+
+                    thread_handles.push(child_thread);
+                }
+            }
+
+            // unlikely error
+            Err(e) => println!("error attempting to wait: {} for pid:{}", e, pid),
+        };
     }
 
     // wait for thread to finish

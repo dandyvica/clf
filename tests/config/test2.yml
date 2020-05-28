@@ -1,0 +1,22 @@
+---
+searches:
+  - loglist: { 
+      cmd: 'find',
+      args: ['/var/log', "-maxdepth", "1", "-type", "f"]
+    }
+    tags: 
+      - name: all_logs
+        options: "runscript,"
+        script: { 
+          path: "tests/scripts/echovars.py", 
+          args: ['arg1', 'arg2', 'arg3']
+        }
+        patterns:
+          critical: {
+            regexes: [
+              'error'
+            ]
+          }
+
+
+      

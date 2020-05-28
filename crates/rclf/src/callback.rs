@@ -47,8 +47,10 @@ pub struct Callback {
 
 impl Callback {
     /// This spawns a command and expects a list of file names.
-    pub fn get_list<S: AsRef<OsStr>>(cmd: S, args: Option<&[String]>) -> Result<Vec<PathBuf>, AppError>
-    {
+    pub fn get_list<S: AsRef<OsStr>>(
+        cmd: S,
+        args: Option<&[String]>,
+    ) -> Result<Vec<PathBuf>, AppError> {
         let output = match args {
             None => Command::new(&cmd).output()?,
             Some(_args) => Command::new(&cmd).args(_args).output()?,
@@ -141,24 +143,42 @@ mod tests {
     #[test]
     #[cfg(target_os = "linux")]
     fn list_files_find() {
-        let files = Callback::get_list(&"find", Some(&["/var/log".to_string(), "-ctime".to_string(), "+1".to_string()]))
-            .expect("error listing files");
+        let files = Callback::get_list(
+            &"find",
+            Some(&[
+                "/var/log".to_string(),
+                "-ctime".to_string(),
+                "+1".to_string(),
+            ]),
+        )
+        .expect("error listing files");
         assert!(files.len() > 10);
         assert!(files.iter().all(|f| f.starts_with("/var/log")));
     }
     #[test]
     #[cfg(target_os = "linux")]
     fn list_files_ls() {
-        let files =
-            Callback::get_list(&"bash", Some(&["-c".to_string(), "ls /var/log/*.log".to_string()])).expect("error listing files");
+        let files = Callback::get_list(
+            &"bash",
+            Some(&["-c".to_string(), "ls /var/log/*.log".to_string()]),
+        )
+        .expect("error listing files");
         assert!(files.len() > 10);
         assert!(files.iter().all(|f| f.starts_with("/var/log")));
     }
     #[test]
     #[cfg(target_os = "windows")]
     fn list_files_shell() {
-        // let files = Callback::get_list("find", &["/var/log", "-ctime", "+1"]).expect("error listing files");
-        // assert!(files.len() > 10);
-        // assert!(files.iter().all(|f| f.starts_with("/var/log")));
+        let files = Callback::get_list(
+            &"cmd.exe",
+            Some(&[
+                "/c".to_string(),
+                r"dir /b c:\windows\system32\*.dll".to_string(),
+            ]),
+        )
+        .expect("error listing files");
+        //println!("{:?}", files);
+        assert!(files.len() > 1000);
+        //assert!(files.iter().all(|f| f.ends_with("dll")));
     }
 }

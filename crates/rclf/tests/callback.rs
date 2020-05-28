@@ -5,8 +5,9 @@ use serde::Deserialize;
 use rclf::{callback::Callback, variables::RuntimeVariables};
 
 #[test]
+#[cfg(target_family = "unix")]
 fn list_files_command() {
-    let files = Callback::get_list("tests/assets/ls.sh", None).expect("error listing files");
+    let files = Callback::get_list("tests/scripts/ls.sh", None).expect("error listing files");
     assert!(files.len() > 10);
     println!("{:?}", files);
 }

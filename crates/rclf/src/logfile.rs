@@ -2,7 +2,7 @@
 //! coming from the processing of the log file, every time it's read to look for patterns.
 use log::{debug, info};
 use std::collections::HashMap;
-use std::fs::File;
+use std::fs::{File, Metadata};
 use std::io::{BufRead, BufReader, Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
@@ -99,22 +99,15 @@ impl LogFile {
         //let time = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH)?;
 
         // get inode & dev ID
-        let mut inode = 0u64;
-        let mut dev = 0u64;
-
-        // inode & dev are platform specific
-        if cfg!(target_os = "linux") {
-            inode = metadata.ino();
-            dev = metadata.dev();
-        }
+        let ids = LogFile::get_ids(&metadata);
 
         Ok(LogFile {
             path: canon,
             directory: directory,
             extension: extension,
             compressed: compressed,
-            inode: inode,
-            dev: dev,
+            inode: ids.0,
+            dev: ids.1,
             rundata: HashMap::new(),
         })
     }
@@ -139,6 +132,17 @@ impl LogFile {
             name: name.to_string(),
             ..Default::default()
         })
+    }
+
+    /// Sets UNIX inode and dev identifiers.
+    #[cfg(target_family = "unix")]
+    pub fn get_ids(metadata: &Metadata) -> (u64, u64) {
+        (metadata.ino(), metadata.dev())
+    }
+
+    #[cfg(target_family = "windows")]
+    pub fn get_ids(metadata: &Metadata) -> (u64, u64) {
+        (0, 0)
     }
 }
 
@@ -407,7 +411,7 @@ mod tests {
 
     #[test]
     #[cfg(target_os = "linux")]
-    fn test_new() {
+    fn new() {
         let mut lf_ok = LogFile::new("/usr/bin/zip").unwrap();
         assert_eq!(lf_ok.path.to_str(), Some("/usr/bin/zip"));
         assert!(lf_ok.extension.is_none());
@@ -441,7 +445,7 @@ mod tests {
     }
 
     #[test]
-    fn test_deserialize() {
+    fn deserialize() {
         let mut json = crate::logfile::tests::load_json();
 
         assert!(json.contains_key(&PathBuf::from("/usr/bin/zip")));
@@ -463,7 +467,7 @@ mod tests {
     }
 
     #[test]
-    fn test_or_insert() {
+    fn or_insert() {
         let mut json = crate::logfile::tests::load_json();
 
         {
@@ -493,35 +497,34 @@ mod tests {
         // assert_eq!(json[1].rundata.get("tag3").unwrap().last_line, 999);
     }
 
-    // #[test]
-    // #[cfg(target_os = "windows")]
-    // fn test_new() {
-    //     let lf_ok = LogFile::new(r"C:\Windows\System32\cmd.exe", true).unwrap();
-    //     assert_eq!(lf_ok.path.to_str(), Some(r"C:\Windows\System32\cmd.exe"));
-    //     assert_eq!(lf_ok.extension.unwrap(), "exe");
+    #[test]
+    #[cfg(target_os = "windows")]
+    fn new() {
+        let lf_ok = LogFile::new(r"C:\Windows\System32\cmd.exe").unwrap();
+        //assert_eq!(lf_ok.path.as_os_str(), std::ffi::OsStr::new(r"C:\Windows\System32\cmd.exe"));
+        assert_eq!(lf_ok.extension.unwrap(), "exe");
 
-    //     // file not found
-    //     let mut lf_err = LogFile::new(r"C:\Windows\System32\foo.exe", true);
-    //     assert!(lf_err.is_err());
-    //     match lf_err.unwrap_err() {
-    //         AppError::App { err: e, msg: _ } => assert_eq!(e, AppCustomError::FileNotAccessible),
-    //         _ => panic!("error not expected here!"),
-    //     };
+        // file not found
+        let mut lf_err = LogFile::new(r"C:\Windows\System32\foo.exe");
+        assert!(lf_err.is_err());
+        match lf_err.unwrap_err() {
+            AppError::App { err: e, msg: _ } => assert_eq!(e, AppCustomErrorKind::FileNotUsable),
+            _ => panic!("error not expected here!"),
+        };
 
-    //     // not a file
-    //     lf_err = LogFile::new(r"C:\Windows\System32", true);
-    //     assert!(lf_err.is_err());
-    //     match lf_err.unwrap_err() {
-    //         AppError::App { err: e, msg: _ } => assert_eq!(e, AppCustomError::NotAFile),
-    //         _ => panic!("error not expected here!"),
-    //     };
+        // not a file
+        lf_err = LogFile::new(r"C:\Windows\System32");
+        match lf_err.unwrap_err() {
+            AppError::App { err: e, msg: _ } => assert_eq!(e, AppCustomErrorKind::FileNotUsable),
+            _ => panic!("error not expected here!"),
+        };
 
-    //     // file has no root
-    //     lf_err = LogFile::new(r"Windows\System32\cmd.exe", true);
-    //     assert!(lf_err.is_err());
-    //     match lf_err.unwrap_err() {
-    //         AppError::App { err: e, msg: _ } => assert_eq!(e, AppCustomError::FileHasNoRoot),
-    //         _ => panic!("error not expected here!"),
-    //     };
-    // }
+        // file has no root
+        lf_err = LogFile::new(r"Windows\System32\cmd.exe");
+        assert!(lf_err.is_err());
+        match lf_err.unwrap_err() {
+            AppError::App { err: e, msg: _ } => assert_eq!(e, AppCustomErrorKind::FileNotUsable),
+            _ => panic!("error not expected here!"),
+        };
+    }
 }

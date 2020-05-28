@@ -10,30 +10,7 @@
 //!
 //!
 //!
-//!
-//!
-//!
-//!
-//!
-//!
-//!
-//!
-//!
-//!
-//!
-//!
-//!
-//!
-//!
-//!
-//!
-//!
-//!
-//!
-//!
-//!
-//!
-//!
+
 //!
 
 //use std::convert::TryFrom;
@@ -41,7 +18,7 @@ use std::fs::File;
 use std::io::Read;
 use std::path::{Path, PathBuf};
 
-use log::debug;
+use log::{debug, error, info};
 use regex::Regex;
 use serde::Deserialize;
 
@@ -264,7 +241,7 @@ pub struct GlobalOptions {
     /// The snapshot file name.
     pub snapshotfile: PathBuf,
 
-    /// Logger file where `clf` executable logs
+    /// Logger file where `clf` executable logs.
     pub logger: PathBuf,
 }
 
@@ -292,6 +269,13 @@ impl Default for GlobalOptions {
             logger: logger_path,
         }
     }
+}
+
+/// Builds a default logger file.
+pub fn default_logger() -> PathBuf {
+    let mut logger_path = std::env::current_dir().unwrap_or(std::env::temp_dir());
+    logger_path.push("clf.log");
+    logger_path
 }
 
 /// The main search configuration used to search patterns in a logfile. This is loaded from
@@ -377,12 +361,29 @@ impl From<Config<LogSource>> for Config<PathBuf> {
                     cmd: _cmd,
                     args: _args,
                 } => {
-                    //
+                    // get optional arguments
                     let script_args = _args.as_ref().and_then(|f| Some(f.as_slice()));
 
-                    // get list of files from command
-                    let files = Callback::get_list(_cmd, script_args).unwrap();
-                    println!("{:?}", files);
+                    // get list of files from command or script
+                    let files = match Callback::get_list(_cmd, script_args) {
+                        Ok(file_list) => {
+                            if file_list.is_empty() {
+                                info!(
+                                    "no files returned by command: {}, with args: {:?}",
+                                    _cmd, _args
+                                );
+                            }
+                            file_list
+                        }
+                        Err(e) => {
+                            error!(
+                                "error: {} when executing command: {}, args: {:?}",
+                                e, _cmd, _args
+                            );
+                            break;
+                        }
+                    };
+                    debug!("returned files: {:?}", files);
 
                     // create Search structure with the files we found, and a clone of all tags
                     for file in &files {

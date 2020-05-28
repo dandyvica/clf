@@ -6,6 +6,7 @@ use std::convert::{From, TryFrom};
 use regex::{Regex, RegexSet};
 use serde::Deserialize;
 //use pcre2::Regex;
+use log::debug;
 
 use crate::error::{AppCustomErrorKind, AppError};
 
@@ -91,6 +92,7 @@ impl Pattern {
     pub fn is_match(&self, text: &str) -> Option<&Regex> {
         // dismiss exceptions at first
         if self.is_exception(text) {
+            debug!("exception regex occured!");
             return None;
         }
 

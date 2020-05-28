@@ -1,15 +1,55 @@
 ---
-global:
-  path: foo
-
 searches:
   - logfile: tests/logfiles/large_access.log
     tags: 
-      - name: tag1
-        options: "dontbreak"
-        script:
-          path: tests/scripts/notify.py
-          args: ['arg1']        
+      - name: http_access
+        options: "runscript,"
+        script: { 
+          path: "tests/scripts/echovars.py", 
+          args: ['arg1', 'arg2', 'arg3']
+        }
         patterns:
-          critical:
-            regexes: ['^195\.(?P<ip>[\d\.]+)'] 
+          critical: {
+            regexes: [
+              'GET\s+([/\w]+)\s+HTTP/1\.1"\s+(?P<code>\d+)\s+(?P<length>\d+)',
+              'POST\s+([/\w\.]+)\s+HTTP/1\.1"\s+(?P<code>\d+)\s+(?P<length>\d+)'
+            ],
+            exceptions: [
+              'AppleWebKit/537\.36'
+            ]
+          }
+  - logfile: tests/logfiles/large_access.log.gz
+    tags: 
+      - name: http_access_gzipped
+        options: "runscript,"
+        script: { 
+          path: "tests/scripts/echovars.py", 
+          args: ['arg1', 'arg2', 'arg3']
+        }
+        patterns:
+          critical: {
+            regexes: [
+              'GET\s+([/\w]+)\s+HTTP/1\.1"\s+(?P<code>\d+)\s+(?P<length>\d+)',
+              'POST\s+([/\w\.]+)\s+HTTP/1\.1"\s+(?P<code>\d+)\s+(?P<length>\d+)'
+            ],
+            exceptions: [
+              'AppleWebKit/537\.36'
+            ]
+          }
+  - loglist: { 
+      cmd: 'find',
+      args: ['/var/log', "-maxdepth", "1", "-type", "f"]
+    }
+    tags: 
+      - name: all_logs
+        options: "runscript,"
+        script: { 
+          path: "tests/scripts/echovars.py", 
+          args: ['arg1', 'arg2', 'arg3']
+        }
+        patterns:
+          critical: {
+            regexes: [
+              'error'
+            ]
+          }
