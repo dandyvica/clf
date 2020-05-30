@@ -25,7 +25,8 @@ use crate::{
 #[derive(Debug, Serialize, Deserialize, Default)]
 pub struct RunData {
     /// tag name
-    name: String,
+    #[serde(rename = "name")]
+    tag_name: String,
 
     /// position of the last run. Used to seek the file pointer to this point.
     last_offset: u64,
@@ -35,6 +36,20 @@ pub struct RunData {
 
     /// last time logfile is processed
     last_run: u64,
+}
+
+impl RunData {
+    /// Returns the `tag_name` field value.
+    #[inline(always)]
+    pub fn get_tagname(&self) -> &str {
+        &self.tag_name
+    }
+
+    /// Returns the `last_run` field value.
+    #[inline(always)]
+    pub fn get_lastrun(&self) -> u64 {
+        self.last_run
+    }
 }
 
 /// A wrapper to get logfile information and its related attributes.
@@ -59,7 +74,7 @@ pub struct LogFile {
     dev: u64,
 
     /// Run time data that are stored each time a logfile is searched for patterns.
-    rundata: HashMap<String, RunData>,
+    pub rundata: HashMap<String, RunData>,
 }
 
 impl LogFile {
@@ -129,9 +144,15 @@ impl LogFile {
     /// tag name passed in argument.
     pub fn or_insert(&mut self, name: &str) -> &mut RunData {
         self.rundata.entry(name.to_string()).or_insert(RunData {
-            name: name.to_string(),
+            tag_name: name.to_string(),
             ..Default::default()
         })
+    }
+
+    /// Returns a reference on `Rundata`.
+    #[inline(always)]
+    pub fn get_mut_rundata(&mut self) -> &HashMap<String, RunData> {
+        &self.rundata
     }
 
     /// Sets UNIX inode and dev identifiers.

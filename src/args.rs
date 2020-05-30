@@ -4,6 +4,9 @@ use std::str::FromStr;
 use clap::{App, Arg};
 use simplelog::LevelFilter;
 
+/// We define here the maximum size for the logger file (in Mb).
+const MAX_LOGGER_SIZE: u16 = 10;
+
 // This structure holds the command line arguments
 #[derive(Debug)]
 pub struct CliOptions {
@@ -11,7 +14,8 @@ pub struct CliOptions {
     pub clf_logfile: Option<PathBuf>,
     pub delete_snapfile: bool,
     pub check_conf: bool,
-    pub log_level: LevelFilter,
+    pub logger_level: LevelFilter,
+    pub max_logger_size: u16,
 }
 
 /// Implements `Default` trait for `CliOptions`.
@@ -22,32 +26,18 @@ impl Default for CliOptions {
             clf_logfile: None,
             delete_snapfile: false,
             check_conf: false,
-            log_level: LevelFilter::Error,
+            logger_level: LevelFilter::Error,
+            max_logger_size: MAX_LOGGER_SIZE,
         }
     }
 }
 
 impl CliOptions {
-    // pub fn new() -> CliOptions {
-    //     CliOptions {
-    //         config_file: "".to_string(),
-    //         // input_file: "".to_string(),
-    //         // output_file: "".to_string(),
-    //         // progress_bar: false,
-    //         // stats: false,
-    //         // limit: 0usize,
-    //         // debug: false,
-    //         // ot_list: Vec::new(),
-    //         // output_allowed: true,
-    //     }
-    // }
-
     pub fn get_options() -> CliOptions {
         let matches = App::new("Log files reader")
             .version("0.1")
             .author("Alain Viguier dandyvica@gmail.com")
-            .about(r#"A log file checker inspired by the Nagios check_logfiles plugin. Checklogfiles (clf) will try to detect some regex patterns
-            in logfiles specified in a YAML configuration file.
+            .about(r#"A log file checker inspired by the Nagios check_logfiles plugin. Checklogfiles (clf) will try to detect some regex patterns in logfiles specified in a YAML configuration file.
 
             Project home page: https://github.com/dandyvica/clf
             
@@ -94,6 +84,14 @@ impl CliOptions {
                     .possible_values(&["Error", "Warn", "Info", "Debug", "Trace"])
                     .takes_value(true),
             )
+            .arg(
+                Arg::with_name("logsize")
+                    .short("m")
+                    .long("logsize")
+                    .required(false)
+                    .help("When logger is enabled, sets the maximum logger size (in Mb).")
+                    .takes_value(true),
+            )
             .get_matches();
 
         // save all cli options into a structure
@@ -101,12 +99,6 @@ impl CliOptions {
 
         // config file is mandatory
         options.config_file = PathBuf::from(matches.value_of("config").unwrap());
-
-        // logfile file is optional
-        // options.clf_logfile = match matches.value_of("clflog") {
-        //     Some(log) => Some(PathBuf::from(log)),
-        //     None => None,
-        // };
 
         options.clf_logfile = matches
             .value_of("clflog")
@@ -116,11 +108,15 @@ impl CliOptions {
         options.check_conf = matches.is_present("chkcnf");
         options.delete_snapfile = matches.is_present("delsnap");
 
-        options.log_level = matches
+        options.logger_level = matches
             .value_of("loglevel")
             .map_or(LevelFilter::Error, |opt| {
                 LevelFilter::from_str(opt).unwrap()
             });
+
+        options.max_logger_size = matches
+            .value_of("logsize")
+            .map_or(MAX_LOGGER_SIZE, |v| v.parse().unwrap());
 
         options
     }

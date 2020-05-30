@@ -44,7 +44,7 @@ fn main() -> Result<(), AppError> {
     // initialize logger
     // first get level filter from cli
     match WriteLogger::init(
-        options.log_level,
+        options.logger_level,
         simplelog::ConfigBuilder::new()
             .set_time_format("%H:%M:%S.%f".to_string())
             .build(),
@@ -148,7 +148,7 @@ fn main() -> Result<(), AppError> {
 
             // wraps all structures into a helper struct
             let mut wrapper = Wrapper {
-                global: &config.global,
+                global: config.get_global(),
                 tag: &tag,
                 vars: &mut vars,
             };
@@ -171,7 +171,7 @@ fn main() -> Result<(), AppError> {
 
     // write snapshot
     debug!("saving snapshot file {}", &snapfile.display());
-    if let Err(e) = snapshot.save(&snapfile) {
+    if let Err(e) = snapshot.save(&snapfile, config.get_snapshot_retention()) {
         eprintln!("unable to save snapshot file {:?}, error={}", &snapfile, e);
         exit(EXIT_SNAPSHOT_SAVE_ERROR);
     }

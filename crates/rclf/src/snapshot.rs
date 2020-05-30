@@ -3,8 +3,10 @@ use std::collections::HashMap;
 use std::fs::File;
 use std::io::{BufReader, ErrorKind};
 use std::path::{Path, PathBuf};
+use std::time::SystemTime;
 
 use serde::{Deserialize, Serialize};
+use log::debug;
 
 use crate::{error::AppError, logfile::LogFile};
 
@@ -53,9 +55,26 @@ impl Snapshot {
     }
 
     /// Serialize snapshot data to a JSON file.
-    pub fn save<P: AsRef<Path>>(&self, snapshot_file: P) -> Result<(), AppError> {
+    pub fn save<P: AsRef<Path>>(
+        &mut self,
+        snapshot_file: P,
+        snapshot_retention: u64,
+    ) -> Result<(), AppError> {
+        // get number of seconds
+        let time = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH)?;
+
+        // first delete tags having run before retention
+        debug!("checking retention time for snapshot");
+        for (_, logfile) in &mut self.snapshot {
+            logfile
+                .rundata
+                .retain(|_, v| time.as_secs() - v.get_lastrun() < snapshot_retention);
+        }
+
+        // then just saves this file.
         let json_file = File::create(snapshot_file)?;
         serde_json::to_writer_pretty(json_file, self)?;
+
         Ok(())
     }
 

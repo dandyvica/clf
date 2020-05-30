@@ -33,7 +33,102 @@ Current release is 0.1 and currently in development. It should be considered as 
 ## Format of the YAML configuration file
 The current format of the configuration file needed to define where and what to search is a standard YAML format. 
 
+Example of a YAML configuration file, to search for patterns in 
+
 Following is a list of current tags defined in the configuration file:
+
+```yaml
+---
+# a list of global options, valid for all searches.
+global:
+  # a list of ':'-separated list of paths (UNIX) or ';'-separated (Windows). If provided, the script is
+  # searched within those directories.
+  # Defaults to '/usr/sbin:/usr/bin:/sbin:/bin' or 'C:\Windows\system32;C:\Windows;C:\Windows\System32\Wbem;' if not provided, depending on the 
+  # platform.
+  path: "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+
+  # a path & file name where clf is keeping its runtime information. This is used to restart the search from the last
+  # offset reached from the last clf run.
+  snapshot_file: /tmp/snapshot.json
+
+  # retention time for tags in seconds
+  snapshot_retention: 5
+
+# a list of logfiles & tags, to search for patterns. This is either a list of logfiles, or a command giving back a list of 
+# files to search for.
+searches:
+  # name & path of the logfile to search
+  - logfile: tests/logfiles/large_access.log
+
+    # list of tags to refer to
+    tags: 
+
+      # tag name
+      - name: http_access
+
+        # a list of comma-separated options to manage the search. Current supported options are:
+        # runscript: if present, means the provided script will be called
+        # rewind: restart the search from the beginning of the file
+        options: "runscript,"
+
+        # a script or command to be called, every time a hit is found.
+        script: { 
+          path: "tests/scripts/echovars.py", 
+          args: ['arg1', 'arg2', 'arg3']
+        }
+
+        # list of patterns to match
+        patterns:
+          critical: {
+            regexes: [
+              'GET\s+([/\w]+)\s+HTTP/1\.1"\s+(?P<code>\d+)\s+(?P<length>\d+)',
+              'POST\s+([/\w\.]+)\s+HTTP/1\.1"\s+(?P<code>\d+)\s+(?P<length>\d+)'
+            ],
+            exceptions: [
+              'AppleWebKit/537\.36'
+            ]
+          }
+
+      
+  # name & path of the logfile to search. This file is gzipped.
+  - logfile: tests/logfiles/large_access.log.gz
+    tags: 
+      - name: http_access_gzipped
+        options: "runscript,"
+        script: { 
+          path: "tests/scripts/echovars.py", 
+          args: ['arg1', 'arg2', 'arg3']
+        }
+        patterns:
+          critical: {
+            regexes: [
+              'GET\s+([/\w]+)\s+HTTP/1\.1"\s+(?P<code>\d+)\s+(?P<length>\d+)',
+              'POST\s+([/\w\.]+)\s+HTTP/1\.1"\s+(?P<code>\d+)\s+(?P<length>\d+)'
+            ],
+            exceptions: [
+              'AppleWebKit/537\.36'
+            ]
+          }
+
+  # this time, a list of files is given by executing this command and capturing its output.
+  - loglist: { 
+      cmd: 'find',
+      args: ['/var/log', "-maxdepth", "1", "-type", "f"]
+    }
+    tags: 
+      - name: all_logs
+        options: "runscript,"
+        script: { 
+          path: "tests/scripts/echovars.py", 
+          args: ['arg1', 'arg2', 'arg3']
+        }
+        patterns:
+          critical: {
+            regexes: [
+              'error'
+            ]
+          }
+```
 
 ## Environment provided to the called scripts or commands
 Whenever a match is found when searching a logfile, if provided, as script is called, with optional arguments. A list of environment variables is created and passed to the created process, to be used by the called script. Following is the list of created variables:

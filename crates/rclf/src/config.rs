@@ -233,16 +233,19 @@ impl From<Search<LogSource>> for Search<PathBuf> {
 pub struct GlobalOptions {
     /// A list of paths, separated by either ':' for unix, or ';' for Windows. This is
     /// where the script, if any, will be searched for. Default to PATH or Path depending on the platform.
-    pub path: String,
+    path: String,
 
     /// A directory where matches lines will be stored.
-    pub outputdir: PathBuf,
+    output_dir: PathBuf,
 
     /// The snapshot file name.
-    pub snapshotfile: PathBuf,
+    snapshot_file: PathBuf,
 
-    /// Logger file where `clf` executable logs.
-    pub logger: PathBuf,
+    /// Retention time for tags.
+    snapshot_retention: u64,
+
+    // Logger file where `clf` executable logs.
+    //logger: PathBuf,
 }
 
 /// Default implementation, rather than serde default field attribute.
@@ -264,9 +267,10 @@ impl Default for GlobalOptions {
 
         GlobalOptions {
             path: path_var,
-            outputdir: std::env::temp_dir(),
-            snapshotfile: crate::snapshot::Snapshot::default_name(),
-            logger: logger_path,
+            output_dir: std::env::temp_dir(),
+            snapshot_file: crate::snapshot::Snapshot::default_name(),
+            snapshot_retention: 3600,
+            //logger: logger_path,
         }
     }
 }
@@ -285,21 +289,34 @@ pub fn default_logger() -> PathBuf {
 pub struct Config<T: Clone> {
     /// List of global options, which apply for all searches.
     #[serde(default = "GlobalOptions::default")]
-    pub global: GlobalOptions,
+    global: GlobalOptions,
 
     /// list of searches.
     pub searches: Vec<Search<T>>,
 }
 
 impl<T: Clone> Config<T> {
+    /// Returns a reference on `global` fields.
+    #[inline(always)]
+    pub fn get_global(&self) -> &GlobalOptions {
+        &self.global
+    }
     /// Returns the name of the snapshot file
+    #[inline(always)]
     pub fn get_snapshot_name(&self) -> &PathBuf {
-        &self.global.snapshotfile
+        &self.global.snapshot_file
     }
 
     /// Returns the name of the logger file
-    pub fn get_logger_name(&self) -> &PathBuf {
-        &self.global.logger
+    // #[inline(always)]
+    // pub fn get_logger_name(&self) -> &PathBuf {
+    //     &self.global.logger
+    // }
+
+    /// Returns the snapshot retention
+    #[inline(always)]
+    pub fn get_snapshot_retention(&self) -> u64 {
+        self.global.snapshot_retention
     }
 }
 
@@ -439,8 +456,8 @@ mod tests {
         let opts: GlobalOptions = serde_yaml::from_str(yaml).expect("unable to read YAML");
 
         assert_eq!(&opts.path, "/usr/foo1");
-        assert_eq!(opts.outputdir, PathBuf::from("/usr/foo2"));
-        assert_eq!(opts.snapshotfile, PathBuf::from("/usr/foo3/snap.foo"));
-        assert_eq!(opts.logger, PathBuf::from("/usr/foo4/foo.log"));
+        assert_eq!(opts.output_dir, PathBuf::from("/usr/foo2"));
+        assert_eq!(opts.snapshot_file, PathBuf::from("/usr/foo3/snap.foo"));
+        //assert_eq!(opts.logger, PathBuf::from("/usr/foo4/foo.log"));
     }
 }
