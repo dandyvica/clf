@@ -74,7 +74,7 @@ pub struct LogFile {
     dev: u64,
 
     /// Run time data that are stored each time a logfile is searched for patterns.
-    pub rundata: HashMap<String, RunData>,
+    rundata: HashMap<String, RunData>,
 }
 
 impl LogFile {
@@ -85,10 +85,8 @@ impl LogFile {
     pub fn new<P: AsRef<Path>>(file_name: P) -> Result<LogFile, AppError> {
         // check if we can really use the file
         let path = PathBuf::from(file_name.as_ref());
-        let directory = path.parent().and_then(|p| Some(p.to_path_buf()));
-        let extension = path
-            .extension()
-            .and_then(|x| Some(x.to_string_lossy().to_string()));
+        let directory = path.parent().map(|p| p.to_path_buf());
+        let extension = path.extension().map(|x| x.to_string_lossy().to_string());
 
         if !path.is_usable() {
             return Err(AppError::App {
@@ -97,7 +95,7 @@ impl LogFile {
             });
         }
 
-        const COMPRESSED_EXT: &'static [&'static str] = &["gz", "zip", "xz"];
+        const COMPRESSED_EXT: &[&str] = &["gz", "zip", "xz"];
         let compressed = match &extension {
             None => false,
             Some(s) => COMPRESSED_EXT.contains(&s.as_str()),
@@ -118,9 +116,9 @@ impl LogFile {
 
         Ok(LogFile {
             path: canon,
-            directory: directory,
-            extension: extension,
-            compressed: compressed,
+            directory,
+            extension,
+            compressed,
             inode: ids.0,
             dev: ids.1,
             rundata: HashMap::new(),
@@ -151,8 +149,8 @@ impl LogFile {
 
     /// Returns a reference on `Rundata`.
     #[inline(always)]
-    pub fn get_mut_rundata(&mut self) -> &HashMap<String, RunData> {
-        &self.rundata
+    pub fn get_mut_rundata(&mut self) -> &mut HashMap<String, RunData> {
+        &mut self.rundata
     }
 
     /// Sets UNIX inode and dev identifiers.
@@ -170,7 +168,7 @@ impl LogFile {
 /// Two log files are considered equal if they have the same name, inode & dev.
 impl PartialEq for LogFile {
     fn eq(&self, other: &Self) -> bool {
-        self.path == other.path && self.dev == other.dev && self.inode == self.inode
+        self.path == other.path && self.dev == other.dev && self.inode == other.inode
     }
 }
 
@@ -183,8 +181,7 @@ pub trait Seeker {
 
 impl Seeker for BufReader<File> {
     fn set_offset(&mut self, offset: u64) -> Result<u64, AppError> {
-        self.seek(SeekFrom::Start(offset))
-            .map_err(|e| AppError::Io(e))
+        self.seek(SeekFrom::Start(offset)).map_err(AppError::Io)
     }
 }
 
@@ -236,7 +233,7 @@ impl Lookup for LogFile {
         let file = File::open(&self.path)?;
 
         // if file is compressed, we need to call a specific reader
-        let child_return = match self.extension.as_deref() {
+        match self.extension.as_deref() {
             Some("gz") => {
                 let decoder = GzDecoder::new(file);
                 let reader = BufReader::new(decoder);
@@ -246,10 +243,7 @@ impl Lookup for LogFile {
                 let reader = BufReader::new(file);
                 self.lookup_from_reader(reader, wrapper)
             }
-        };
-
-        //output
-        child_return
+        }
     }
 
     fn lookup_from_reader<R: BufRead + Seeker>(
@@ -273,6 +267,7 @@ impl Lookup for LogFile {
 
         // get rundata corresponding to tag name, or insert that new one is not yet in snapshot
         let mut rundata = self.or_insert(&wrapper.tag.name);
+        println!("tagname: {:?}, rundata:{:?}\n\n", &wrapper.tag.name, rundata);
 
         // initialize counters
         let mut bytes_count = 0;
@@ -497,7 +492,7 @@ mod tests {
                 .unwrap()
                 .or_insert("another_tag");
 
-            assert_eq!(rundata1.name, "another_tag");
+            assert_eq!(rundata1.tag_name, "another_tag");
         }
 
         let logfile1 = json.get_mut(&PathBuf::from("/usr/bin/zip")).unwrap();

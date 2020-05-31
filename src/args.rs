@@ -26,7 +26,7 @@ impl Default for CliOptions {
             clf_logfile: None,
             delete_snapfile: false,
             check_conf: false,
-            logger_level: LevelFilter::Error,
+            logger_level: LevelFilter::Info,
             max_logger_size: MAX_LOGGER_SIZE,
         }
     }

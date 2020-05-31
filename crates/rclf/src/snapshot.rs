@@ -5,8 +5,8 @@ use std::io::{BufReader, ErrorKind};
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
-use serde::{Deserialize, Serialize};
 use log::debug;
+use serde::{Deserialize, Serialize};
 
 use crate::{error::AppError, logfile::LogFile};
 
@@ -65,10 +65,13 @@ impl Snapshot {
 
         // first delete tags having run before retention
         debug!("checking retention time for snapshot");
-        for (_, logfile) in &mut self.snapshot {
-            logfile
-                .rundata
-                .retain(|_, v| time.as_secs() - v.get_lastrun() < snapshot_retention);
+        //for (_, logfile) in &mut self.snapshot {
+        for logfile in self.snapshot.values_mut() {
+            let rundata = logfile.get_mut_rundata();
+            // logfile
+            //     .rundata
+            //     .retain(|_, v| time.as_secs() - v.get_lastrun() < snapshot_retention);
+            rundata.retain(|_, v| time.as_secs() - v.get_lastrun() < snapshot_retention);
         }
 
         // then just saves this file.
@@ -80,22 +83,40 @@ impl Snapshot {
 
     /// Ensures a value is in the entry by inserting a value if empty, and returns a
     /// mutable reference to the value in the entry.
-    pub fn or_insert<P: AsRef<Path>>(&mut self, path: P) -> Result<&mut LogFile, AppError> {
+    // pub fn or_insert<P: AsRef<Path>>(&mut self, path: P) -> Result<&mut LogFile, AppError> {
+    //     // is logfile already in the snapshot ?
+    //     if !self.snapshot.contains_key(path.as_ref()) {
+    //         // create a new LogFile
+    //         let logfile = LogFile::new(&path)?;
+    //         println!("logfile={:?}", logfile);
+    //         let opt = self
+    //             .snapshot
+    //             .insert(path.as_ref().clone().to_path_buf(), logfile);
+    //         debug_assert!(opt.is_none());
+    //         debug_assert!(self.snapshot.contains_key(path.as_ref()));
+    //     }
+    //     debug_assert!(self.snapshot.contains_key(path.as_ref()));
+    //     debug_assert!(self.snapshot.get_mut(path.as_ref()).is_some());
+
+    //     Ok(self.snapshot.get_mut(path.as_ref()).unwrap())
+    // }
+    pub fn or_insert(&mut self, path: &PathBuf) -> Result<&mut LogFile, AppError> {
         // is logfile already in the snapshot ?
-        if !self.snapshot.contains_key(path.as_ref()) {
+        if !self.snapshot.contains_key(path) {
             // create a new LogFile
             let logfile = LogFile::new(&path)?;
+            println!("logfile={:?}", logfile);
             let opt = self
                 .snapshot
-                .insert(path.as_ref().clone().to_path_buf(), logfile);
+                .insert(path.clone().to_path_buf(), logfile);
             debug_assert!(opt.is_none());
-            debug_assert!(self.snapshot.contains_key(path.as_ref()));
+            debug_assert!(self.snapshot.contains_key(path));
         }
-        debug_assert!(self.snapshot.contains_key(path.as_ref()));
-        debug_assert!(self.snapshot.get_mut(path.as_ref()).is_some());
+        debug_assert!(self.snapshot.contains_key(path));
+        debug_assert!(self.snapshot.get_mut(path).is_some());
 
-        Ok(self.snapshot.get_mut(path.as_ref()).unwrap())
-    }
+        Ok(self.snapshot.get_mut(path).unwrap())
+    }    
 }
 
 #[cfg(test)]

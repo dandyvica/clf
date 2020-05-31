@@ -136,7 +136,7 @@ fn main() -> Result<(), AppError> {
     // loop through all searches
     for search in &config.searches {
         // log some useful info
-        info!("searching for logfile={:?}", &search.logfile);
+        info!("------------ searching for logfile={:?}", &search.logfile);
 
         // create a LogFile struct or get it from snapshot
         let logfile = snapshot.or_insert(&search.logfile)?;

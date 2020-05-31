@@ -1,6 +1,6 @@
 //! This is where ad-hoc variables are stored. These are meant to be used from with the
 //! configuration file.
-use log::{debug, info, trace};
+use log::trace;
 use std::cmp::Eq;
 use std::collections::HashMap;
 use std::fmt::Debug;
@@ -10,7 +10,7 @@ use std::ops::{Deref, DerefMut};
 use regex::Regex;
 
 /// Variable name prefix to be inserted for each variable.
-const VAR_PREFIX: &'static str = "CLF_";
+const VAR_PREFIX: &str = "CLF_";
 
 #[derive(Debug)]
 pub struct Variables<K, V>(HashMap<K, V>)
@@ -105,7 +105,7 @@ impl RuntimeVariables {
         for (var, value) in &self.0 {
             new_s = new_s.as_str().replace(var.as_str(), value.as_str());
         }
-        new_s.to_string()
+        new_s
     }
 
     // Add user defined variables into the variables namespace.

@@ -101,7 +101,7 @@ impl Pattern {
             .0
             .iter()
             .find(|re| re.is_match(text))
-            .and_then(|re| Some(re))
+            .map(|re| re)
     }
 }
 
@@ -158,14 +158,12 @@ impl PatternSet {
         if let Some(critical) = &self.critical {
             return critical
                 .is_match(text)
-                .and_then(|re| Some((PatternType::critical, re)));
+                .map(|re| (PatternType::critical, re));
         }
 
         // and then warning
         if let Some(warning) = &self.warning {
-            return warning
-                .is_match(text)
-                .and_then(|re| Some((PatternType::warning, re)));
+            return warning.is_match(text).map(|re| (PatternType::warning, re));
         }
 
         None

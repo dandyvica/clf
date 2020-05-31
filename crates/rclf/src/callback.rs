@@ -4,7 +4,7 @@ use std::path::PathBuf;
 use std::process::{Child, Command};
 use std::time::Instant;
 
-use log::{debug, error, info};
+use log::{debug, info};
 use serde::Deserialize;
 
 /// Returns the number of seconds for a standard timeout when not defined in the YAML file.
@@ -61,7 +61,7 @@ impl Callback {
 
         Ok(output_as_str
             .lines()
-            .map(|s| PathBuf::from(s))
+            .map(PathBuf::from)
             .collect::<Vec<PathBuf>>())
     }
 

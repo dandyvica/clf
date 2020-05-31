@@ -99,7 +99,7 @@ impl From<String> for SearchOptions {
         let mut opt = SearchOptions::default();
 
         // convert the input list to a vector
-        let v: Vec<_> = option_list.split(",").map(|x| x.trim()).collect();
+        let v: Vec<_> = option_list.split(',').map(|x| x.trim()).collect();
 
         // use Rust macro to add bool options if any
         add_bool_option!(
@@ -115,7 +115,7 @@ impl From<String> for SearchOptions {
 
         // other options like key=value if any
         // first build a vector of such options. We first search for = and then split according to '='
-        let kv_options: Vec<_> = v.iter().filter(|&x| x.contains("=")).collect();
+        let kv_options: Vec<_> = v.iter().filter(|&x| x.contains('=')).collect();
 
         // need to test whether we found 'key=value' options
         if !kv_options.is_empty() {
@@ -124,7 +124,7 @@ impl From<String> for SearchOptions {
 
             // now we can safely split
             for kv in &kv_options {
-                let splitted_options: Vec<_> = kv.split("=").map(|x| x.trim()).collect();
+                let splitted_options: Vec<_> = kv.split('=').map(|x| x.trim()).collect();
                 let key = splitted_options[0];
                 let value = splitted_options[1];
 
@@ -243,7 +243,6 @@ pub struct GlobalOptions {
 
     /// Retention time for tags.
     snapshot_retention: u64,
-
     // Logger file where `clf` executable logs.
     //logger: PathBuf,
 }
@@ -253,16 +252,17 @@ impl Default for GlobalOptions {
     fn default() -> Self {
         // default path
         let path_var = if cfg!(target_family = "unix") {
-            std::env::var("PATH").unwrap_or("/usr/sbin:/usr/bin:/sbin:/bin".to_string())
+            std::env::var("PATH").unwrap_or_else(|_| "/usr/sbin:/usr/bin:/sbin:/bin".to_string())
         } else if cfg!(target_family = "windows") {
-            std::env::var("Path")
-                .unwrap_or(r"C:\Windows\system32;C:\Windows;C:\Windows\System32\Wbem;".to_string())
+            std::env::var("Path").unwrap_or_else(|_| {
+                r"C:\Windows\system32;C:\Windows;C:\Windows\System32\Wbem;".to_string()
+            })
         } else {
             unimplemented!("unsupported OS, file: {}:{}", file!(), line!());
         };
 
         // default logger path
-        let mut logger_path = std::env::current_dir().unwrap_or(std::env::temp_dir());
+        let mut logger_path = std::env::current_dir().unwrap_or_else(|_| std::env::temp_dir());
         logger_path.push("clf.log");
 
         GlobalOptions {
@@ -277,7 +277,7 @@ impl Default for GlobalOptions {
 
 /// Builds a default logger file.
 pub fn default_logger() -> PathBuf {
-    let mut logger_path = std::env::current_dir().unwrap_or(std::env::temp_dir());
+    let mut logger_path = std::env::current_dir().unwrap_or_else(|_| std::env::temp_dir());
     logger_path.push("clf.log");
     logger_path
 }
@@ -379,7 +379,7 @@ impl From<Config<LogSource>> for Config<PathBuf> {
                     args: _args,
                 } => {
                     // get optional arguments
-                    let script_args = _args.as_ref().and_then(|f| Some(f.as_slice()));
+                    let script_args = _args.as_ref().map(|f| f.as_slice());
 
                     // get list of files from command or script
                     let files = match Callback::get_list(_cmd, script_args) {
@@ -448,8 +448,8 @@ mod tests {
     fn global_options() {
         let yaml = r#"
             path: /usr/foo1
-            outputdir: /usr/foo2
-            snapshotfile: /usr/foo3/snap.foo
+            output_dir: /usr/foo2
+            snapshot_file: /usr/foo3/snap.foo
             logger: /usr/foo4/foo.log
         "#;
 
@@ -459,5 +459,48 @@ mod tests {
         assert_eq!(opts.output_dir, PathBuf::from("/usr/foo2"));
         assert_eq!(opts.snapshot_file, PathBuf::from("/usr/foo3/snap.foo"));
         //assert_eq!(opts.logger, PathBuf::from("/usr/foo4/foo.log"));
+    }
+
+    #[test]
+    fn searches() {
+        let yaml = r#"
+    searches:
+        - logfile: tests/logfiles/large_access.log
+          tags: 
+            - name: http_access_get_or_post
+              script: { 
+                path: "tests/scripts/echovars.py", 
+                args: ['arg1', 'arg2', 'arg3']
+              }
+              patterns:
+                warning: {
+                  regexes: [
+                    'GET\s+([/\w]+_logo\.jpg)',
+                  ],
+                  exceptions: [
+                    'Firefox/63.0'
+                  ]
+            - name: http_access_images
+              options: "runscript,"
+              script: { 
+                path: "tests/scripts/echovars.py", 
+                args: ['arg1', 'arg2', 'arg3']
+              }
+              patterns:
+                critical: {
+                  regexes: [
+                    'GET\s+([/\w]+)\s+HTTP/1\.1"\s+(?P<code>\d+)\s+(?P<length>\d+)',
+                    'POST\s+([/\w\.]+)\s+HTTP/1\.1"\s+(?P<code>\d+)\s+(?P<length>\d+)'
+                  ],
+                  exceptions: [
+                    'AppleWebKit/537\.36'
+                  ]
+                }
+        "#;
+
+        let cfg: Config<PathBuf> = serde_yaml::from_str(yaml).expect("unable to read YAML");
+
+        assert_eq!(cfg.searches.len(), 1);
+
     }
 }

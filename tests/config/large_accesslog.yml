@@ -24,7 +24,32 @@ searches:
     tags: 
 
       # tag name
-      - name: http_access
+      - name: http_access_get_or_post
+
+        # a list of comma-separated options to manage the search. Current supported options are:
+        # runscript: if present, means the provided script will be called
+        # rewind: restart the search from the beginning of the file
+        options: "runscript,"
+
+        # a script or command to be called, every time a hit is found.
+        script: { 
+          path: "tests/scripts/echovars.py", 
+          args: ['arg1', 'arg2', 'arg3']
+        }
+
+        # list of patterns to match
+        patterns:
+          warning: {
+            regexes: [
+              'GET\s+([/\w]+_logo\.jpg)',
+            ],
+            exceptions: [
+              'Firefox/63.0'
+            ]
+          }
+
+      # tag name
+      - name: http_access_images
 
         # a list of comma-separated options to manage the search. Current supported options are:
         # runscript: if present, means the provided script will be called
@@ -73,7 +98,7 @@ searches:
   # this time, a list of files is given by executing this command and capturing its output.
   - loglist: { 
       cmd: 'find',
-      args: ['/var/log', "-maxdepth", "1", "-type", "f"]
+      args: ['/var/log', "-maxdepth", "1", "-type", "f", "-name", "[a-d]*.log", "-perm", "644"]
     }
     tags: 
       - name: all_logs
