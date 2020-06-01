@@ -17,7 +17,7 @@ use crate::{
     callback::ChildReturn,
     config::{GlobalOptions, Tag},
     error::{AppCustomErrorKind, AppError},
-    util::Usable,
+    //util::Usable,
     variables::RuntimeVariables,
 };
 
@@ -88,12 +88,12 @@ impl LogFile {
         let directory = path.parent().map(|p| p.to_path_buf());
         let extension = path.extension().map(|x| x.to_string_lossy().to_string());
 
-        if !path.is_usable() {
-            return Err(AppError::App {
-                err: AppCustomErrorKind::FileNotUsable,
-                msg: format!("file {:?} is not usable", path),
-            });
-        }
+        // if !path.is_usable() {
+        //     return Err(AppError::App {
+        //         err: AppCustomErrorKind::FileNotUsable,
+        //         msg: format!("file {:?} is not usable", path),
+        //     });
+        // }
 
         const COMPRESSED_EXT: &[&str] = &["gz", "zip", "xz"];
         let compressed = match &extension {
@@ -267,7 +267,10 @@ impl Lookup for LogFile {
 
         // get rundata corresponding to tag name, or insert that new one is not yet in snapshot
         let mut rundata = self.or_insert(&wrapper.tag.name);
-        println!("tagname: {:?}, rundata:{:?}\n\n", &wrapper.tag.name, rundata);
+        println!(
+            "tagname: {:?}, rundata:{:?}\n\n",
+            &wrapper.tag.name, rundata
+        );
 
         // initialize counters
         let mut bytes_count = 0;
@@ -436,28 +439,28 @@ mod tests {
         assert_eq!(lf_ok.path.to_str(), Some("/etc/hosts.allow"));
         assert_eq!(lf_ok.extension.unwrap(), "allow");
 
-        // file not found
-        let mut lf_err = LogFile::new("/usr/bin/foo");
-        assert!(lf_err.is_err());
-        match lf_err.unwrap_err() {
-            AppError::App { err: e, msg: _ } => assert_eq!(e, AppCustomErrorKind::FileNotUsable),
-            _ => panic!("error not expected here!"),
-        };
+        // // file not found
+        // let mut lf_err = LogFile::new("/usr/bin/foo");
+        // assert!(lf_err.is_err());
+        // match lf_err.unwrap_err() {
+        //     AppError::App { err: e, msg: _ } => assert_eq!(e, AppCustomErrorKind::FileNotUsable),
+        //     _ => panic!("error not expected here!"),
+        // };
 
-        // not a file
-        lf_err = LogFile::new("/usr/bin");
-        match lf_err.unwrap_err() {
-            AppError::App { err: e, msg: _ } => assert_eq!(e, AppCustomErrorKind::FileNotUsable),
-            _ => panic!("error not expected here!"),
-        };
+        // // not a file
+        // lf_err = LogFile::new("/usr/bin");
+        // match lf_err.unwrap_err() {
+        //     AppError::App { err: e, msg: _ } => assert_eq!(e, AppCustomErrorKind::FileNotUsable),
+        //     _ => panic!("error not expected here!"),
+        // };
 
-        // file has no root
-        lf_err = LogFile::new("usr/bin/foo");
-        assert!(lf_err.is_err());
-        match lf_err.unwrap_err() {
-            AppError::App { err: e, msg: _ } => assert_eq!(e, AppCustomErrorKind::FileNotUsable),
-            _ => panic!("error not expected here!"),
-        };
+        // // file has no root
+        // lf_err = LogFile::new("usr/bin/foo");
+        // assert!(lf_err.is_err());
+        // match lf_err.unwrap_err() {
+        //     AppError::App { err: e, msg: _ } => assert_eq!(e, AppCustomErrorKind::FileNotUsable),
+        //     _ => panic!("error not expected here!"),
+        // };
     }
 
     #[test]
@@ -516,31 +519,35 @@ mod tests {
     #[test]
     #[cfg(target_os = "windows")]
     fn new() {
-        let lf_ok = LogFile::new(r"C:\Windows\System32\cmd.exe").unwrap();
+        let mut lf_ok = LogFile::new(r"C:\Windows\System32\cmd.exe").unwrap();
         //assert_eq!(lf_ok.path.as_os_str(), std::ffi::OsStr::new(r"C:\Windows\System32\cmd.exe"));
         assert_eq!(lf_ok.extension.unwrap(), "exe");
 
-        // file not found
-        let mut lf_err = LogFile::new(r"C:\Windows\System32\foo.exe");
-        assert!(lf_err.is_err());
-        match lf_err.unwrap_err() {
-            AppError::App { err: e, msg: _ } => assert_eq!(e, AppCustomErrorKind::FileNotUsable),
-            _ => panic!("error not expected here!"),
-        };
+        lf_ok = LogFile::new(r"c:\windows\system32\drivers\etc\hosts").unwrap();
+        //assert_eq!(lf_ok.path.as_os_str(), std::ffi::OsStr::new(r"C:\Windows\System32\cmd.exe"));
+        assert!(lf_ok.extension.is_none());
 
-        // not a file
-        lf_err = LogFile::new(r"C:\Windows\System32");
-        match lf_err.unwrap_err() {
-            AppError::App { err: e, msg: _ } => assert_eq!(e, AppCustomErrorKind::FileNotUsable),
-            _ => panic!("error not expected here!"),
-        };
+        // // file not found
+        // let mut lf_err = LogFile::new(r"C:\Windows\System32\foo.exe");
+        // assert!(lf_err.is_err());
+        // match lf_err.unwrap_err() {
+        //     AppError::App { err: e, msg: _ } => assert_eq!(e, AppCustomErrorKind::FileNotUsable),
+        //     _ => panic!("error not expected here!"),
+        // };
 
-        // file has no root
-        lf_err = LogFile::new(r"Windows\System32\cmd.exe");
-        assert!(lf_err.is_err());
-        match lf_err.unwrap_err() {
-            AppError::App { err: e, msg: _ } => assert_eq!(e, AppCustomErrorKind::FileNotUsable),
-            _ => panic!("error not expected here!"),
-        };
+        // // not a file
+        // lf_err = LogFile::new(r"C:\Windows\System32");
+        // match lf_err.unwrap_err() {
+        //     AppError::App { err: e, msg: _ } => assert_eq!(e, AppCustomErrorKind::FileNotUsable),
+        //     _ => panic!("error not expected here!"),
+        // };
+
+        // // file has no root
+        // lf_err = LogFile::new(r"Windows\System32\cmd.exe");
+        // assert!(lf_err.is_err());
+        // match lf_err.unwrap_err() {
+        //     AppError::App { err: e, msg: _ } => assert_eq!(e, AppCustomErrorKind::FileNotUsable),
+        //     _ => panic!("error not expected here!"),
+        // };
     }
 }

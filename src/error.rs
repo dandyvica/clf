@@ -19,3 +19,9 @@ pub const EXIT_SNAPSHOT_SAVE_ERROR: i32 = 105;
 
 /// Error when reading stdin
 pub const EXIT_STDIN_ERROR: i32 = 106;
+
+/// Exit when showing options
+pub const EXIT_SHOW_OPTIONS: i32 = 107;
+
+/// Error converting to an integer
+pub const EXIT_ERROR_CONV: i32 = 108;

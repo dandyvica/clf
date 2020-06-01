@@ -1,5 +1,5 @@
 use std::fs::File;
-use std::io::{BufReader, Read, Write};
+use std::io::{BufReader, Read};
 
 use flate2::read::GzDecoder;
 

@@ -20,3 +20,6 @@ path = "src/clf.rs"
 members = [
   "crates/rclf",
 ]
+
+[build.'cfg(windows)']
+target-dir = "c:\temp"

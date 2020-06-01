@@ -9,6 +9,7 @@ pub enum AppCustomErrorKind {
     NoPathForScript,
     UnsupportedPatternType,
     FileNotUsable,
+    NotAFile,
 }
 
 /// A specific error type combining all possible error types in the app.

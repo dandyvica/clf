@@ -276,11 +276,11 @@ impl Default for GlobalOptions {
 }
 
 /// Builds a default logger file.
-pub fn default_logger() -> PathBuf {
-    let mut logger_path = std::env::current_dir().unwrap_or_else(|_| std::env::temp_dir());
-    logger_path.push("clf.log");
-    logger_path
-}
+// pub fn default_logger() -> PathBuf {
+//     let mut logger_path = std::env::current_dir().unwrap_or_else(|_| std::env::temp_dir());
+//     logger_path.push("clf.log");
+//     logger_path
+// }
 
 /// The main search configuration used to search patterns in a logfile. This is loaded from
 /// the YAML file found in the command line argument (or from stdin). This configuration can include a list
@@ -461,15 +461,16 @@ mod tests {
         //assert_eq!(opts.logger, PathBuf::from("/usr/foo4/foo.log"));
     }
 
-    #[test]
+    //#[test]
     fn searches() {
         let yaml = r#"
     searches:
         - logfile: tests/logfiles/large_access.log
           tags: 
             - name: http_access_get_or_post
+              options: "runscript,"
               script: { 
-                path: "tests/scripts/echovars.py", 
+                path: "tests/scripts/echovars.py",
                 args: ['arg1', 'arg2', 'arg3']
               }
               patterns:
@@ -480,27 +481,11 @@ mod tests {
                   exceptions: [
                     'Firefox/63.0'
                   ]
-            - name: http_access_images
-              options: "runscript,"
-              script: { 
-                path: "tests/scripts/echovars.py", 
-                args: ['arg1', 'arg2', 'arg3']
-              }
-              patterns:
-                critical: {
-                  regexes: [
-                    'GET\s+([/\w]+)\s+HTTP/1\.1"\s+(?P<code>\d+)\s+(?P<length>\d+)',
-                    'POST\s+([/\w\.]+)\s+HTTP/1\.1"\s+(?P<code>\d+)\s+(?P<length>\d+)'
-                  ],
-                  exceptions: [
-                    'AppleWebKit/537\.36'
-                  ]
                 }
         "#;
 
         let cfg: Config<PathBuf> = serde_yaml::from_str(yaml).expect("unable to read YAML");
 
         assert_eq!(cfg.searches.len(), 1);
-
     }
 }

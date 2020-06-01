@@ -5,11 +5,11 @@ global:
   # searched within those directories.
   # Defaults to '/usr/sbin:/usr/bin:/sbin:/bin' or 'C:\Windows\system32;C:\Windows;C:\Windows\System32\Wbem;' if not provided, depending on the 
   # platform.
-  path: "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+  path: 'C:\Windows\system32;C:\Windows;C:\Windows\System32\Wbem;'
 
   # a path & file name where clf is keeping its runtime information. This is used to restart the search from the last
   # offset reached from the last clf run.
-  snapshot_file: /tmp/snapshot.json
+  snapshot_file: c:\windows\temp\snapshot.json
 
   # retention time for tags in seconds
   snapshot_retention: 5
@@ -18,7 +18,7 @@ global:
 # files to search for.
 searches:
   # name & path of the logfile to search
-  - logfile: tests/logfiles/large_access.log
+  - logfile: tests\logfiles\large_access.log
 
     # list of tags to refer to
     tags: 
@@ -33,8 +33,8 @@ searches:
 
         # a script or command to be called, every time a hit is found.
         script: { 
-          path: "tests/scripts/echovars.py", 
-          args: ['arg1', 'arg2', 'arg3']
+          path: "python.exe",
+          args: ['tests\scripts\echovars.py', 'arg1', 'arg2', 'arg3']
         }
 
         # list of patterns to match
@@ -58,8 +58,8 @@ searches:
 
         # a script or command to be called, every time a hit is found.
         script: { 
-          path: "tests/scripts/echovars.py", 
-          args: ['arg1', 'arg2', 'arg3']
+          path: "python.exe",
+          args: ['tests\scripts\echovars.py', 'arg1', 'arg2', 'arg3']
         }
 
         # list of patterns to match
@@ -73,16 +73,15 @@ searches:
               'AppleWebKit/537\.36'
             ]
           }
-
       
   # name & path of the logfile to search. This file is gzipped.
-  - logfile: tests/logfiles/large_access.log.gz
+  - logfile: tests\logfiles\large_access.log.gz
     tags: 
       - name: http_access_gzipped
         options: "runscript,"
         script: { 
-          path: "tests/scripts/echovars.py", 
-          args: ['arg1', 'arg2', 'arg3']
+          path: "python.exe",
+          args: ['tests\scripts\echovars.py', 'arg1', 'arg2', 'arg3']
         }
         patterns:
           critical: {
@@ -97,15 +96,15 @@ searches:
 
   # this time, a list of files is given by executing this command and capturing its output.
   - loglist: { 
-      cmd: 'find',
-      args: ['/var/log', "-maxdepth", "1", "-type", "f", "-name", "[a-d]*.log", "-perm", "644"]
+      cmd: 'cmd.exe',
+      args: ['/c', 'dir c:\windows\system32\*.log /s /a /b']
     }
     tags: 
       - name: all_logs
         options: "runscript,"
         script: { 
-          path: "tests/scripts/echovars.py", 
-          args: ['arg1', 'arg2', 'arg3']
+          path: "python.exe",
+          args: ['tests\scripts\echovars.py', 'arg1', 'arg2', 'arg3']
         }
         patterns:
           critical: {
@@ -113,3 +112,4 @@ searches:
               'error'
             ]
           }
+

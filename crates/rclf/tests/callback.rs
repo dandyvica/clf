@@ -1,8 +1,4 @@
-use std::thread;
-
-use serde::Deserialize;
-
-use rclf::{callback::Callback, variables::RuntimeVariables};
+use rclf::callback::Callback;
 
 #[test]
 #[cfg(target_family = "unix")]

@@ -13,10 +13,11 @@ use simplelog::*;
 
 use rclf::{
     callback::ChildReturn,
-    config::{default_logger, Config, LogSource},
+    config::{Config, LogSource},
     error::AppError,
     logfile::{Lookup, Wrapper},
     snapshot::Snapshot,
+    util::Usable,
     variables::RuntimeVariables,
 };
 
@@ -37,9 +38,15 @@ fn main() -> Result<(), AppError> {
     // manage arguments from command line
     let options = CliOptions::get_options();
 
-    // builds the logger from cli or the default one
-    let default_logger = default_logger();
-    let logger = &options.clf_logfile.as_deref().unwrap_or(&default_logger);
+    // print out options if requested and exits
+    if options.show_options {
+        eprintln!("{:#?}", options);
+        exit(EXIT_SHOW_OPTIONS);
+    }
+
+    // builds the logger from cli or the default one from platform specifics
+    //let default_logger = default_logger();
+    let logger = &options.clf_logger;
 
     // initialize logger
     // first get level filter from cli
@@ -56,12 +63,19 @@ fn main() -> Result<(), AppError> {
     ) {
         Ok(_) => (),
         Err(e) => {
-            eprintln!("unable to create log file, error={}", e);
+            eprintln!(
+                "unable to create log file: {}, error: {}",
+                logger.display(),
+                e
+            );
             exit(EXIT_LOGGER_ERROR);
         }
     };
-    info!("using configuration file {:?}", &options.config_file);
-    info!("options {:?}", &options);
+
+    // useful traces
+    eprintln!("using logger file: {}", logger.display());
+    info!("using configuration file: {:?}", &options.config_file);
+    info!("options: {:?}", &options);
 
     // load configuration file as specified from the command line
     // handle case of stdin input
@@ -83,7 +97,7 @@ fn main() -> Result<(), AppError> {
     // check for loading errors
     if let Err(e) = _config {
         eprintln!(
-            "error loading config file {:?}, error = {}",
+            "error loading config file: {:?}, error: {}",
             &options.config_file, e
         );
         exit(EXIT_CONFIG_ERROR);
@@ -107,10 +121,10 @@ fn main() -> Result<(), AppError> {
     // delete snapshot file if asked
     if options.delete_snapfile {
         if let Err(e) = std::fs::remove_file(&snapfile) {
-            // not found could be a viable error
+            // 'not found' could be a viable error
             if e.kind() != std::io::ErrorKind::NotFound {
                 eprintln!(
-                    "unable to delete snapshot file {:?}, error={}",
+                    "unable to delete snapshot file: {:?}, error: {}",
                     &snapfile, e
                 );
                 exit(EXIT_LOGGER_ERROR);
@@ -123,7 +137,7 @@ fn main() -> Result<(), AppError> {
     let mut snapshot = match Snapshot::load(&snapfile) {
         Ok(s) => s,
         Err(e) => {
-            eprintln!("unable to load snapshot file {:?}, error={}", &snapfile, e);
+            eprintln!("unable to load snapshot file: {:?}, error: {}", &snapfile, e);
             exit(EXIT_SNAPSHOT_DELETE_ERROR);
         }
     };
@@ -136,7 +150,17 @@ fn main() -> Result<(), AppError> {
     // loop through all searches
     for search in &config.searches {
         // log some useful info
-        info!("------------ searching for logfile={:?}", &search.logfile);
+        info!("------------ searching into logfile: {}", &search.logfile.display());
+
+        // checks if logfile is accessible. If not, no need to move further
+        if let Err(e) = &search.logfile.is_usable() {
+            error!(
+                "logfile: {} is not a file or is not accessible, error: {}",
+                &search.logfile.display(),
+                e
+            );
+            continue;
+        }
 
         // create a LogFile struct or get it from snapshot
         let logfile = snapshot.or_insert(&search.logfile)?;
@@ -144,7 +168,7 @@ fn main() -> Result<(), AppError> {
 
         // for each tag, search inside logfile
         for tag in &search.tags {
-            debug!("searching for tag={}", &tag.name);
+            debug!("searching for tag: {}", &tag.name);
 
             // wraps all structures into a helper struct
             let mut wrapper = Wrapper {
@@ -161,10 +185,14 @@ fn main() -> Result<(), AppError> {
                         children_list.push(child_ret.unwrap());
                     }
                 }
-                Err(e) => error!(
-                    "error {} when searching logfile {:?} for tag {}",
-                    e, &search.logfile, &tag.name
-                ),
+                Err(e) => {
+                    error!(
+                        "error: {} when searching logfile: {} for tag: {}",
+                        e,
+                        &search.logfile.display(),
+                        &tag.name
+                    );
+                }
             }
         }
     }
@@ -172,7 +200,7 @@ fn main() -> Result<(), AppError> {
     // write snapshot
     debug!("saving snapshot file {}", &snapfile.display());
     if let Err(e) = snapshot.save(&snapfile, config.get_snapshot_retention()) {
-        eprintln!("unable to save snapshot file {:?}, error={}", &snapfile, e);
+        eprintln!("unable to save snapshot file: {:?}, error: {}", &snapfile, e);
         exit(EXIT_SNAPSHOT_SAVE_ERROR);
     }
 
@@ -181,7 +209,7 @@ fn main() -> Result<(), AppError> {
     wait_children(children_list);
 
     info!(
-        "end of searches, elapsed={} seconds",
+        "end of searches, elapsed: {} seconds",
         now.elapsed().as_secs_f32()
     );
 
@@ -259,7 +287,7 @@ fn wait_children(children_list: Vec<ChildReturn>) {
                     let secs_to_wait = started_child.timeout - elapsed;
 
                     debug!(
-                        "waiting for script={}, pid={} to finish",
+                        "waiting for script: {}, pid: {} to finish",
                         path.display(),
                         pid
                     );

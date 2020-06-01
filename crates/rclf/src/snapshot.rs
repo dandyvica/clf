@@ -106,9 +106,7 @@ impl Snapshot {
             // create a new LogFile
             let logfile = LogFile::new(&path)?;
             println!("logfile={:?}", logfile);
-            let opt = self
-                .snapshot
-                .insert(path.clone().to_path_buf(), logfile);
+            let opt = self.snapshot.insert(path.clone().to_path_buf(), logfile);
             debug_assert!(opt.is_none());
             debug_assert!(self.snapshot.contains_key(path));
         }
@@ -116,7 +114,12 @@ impl Snapshot {
         debug_assert!(self.snapshot.get_mut(path).is_some());
 
         Ok(self.snapshot.get_mut(path).unwrap())
-    }    
+    }
+
+    /// Removes an entry in the snapshot.
+    pub fn remove(&mut self, key: &PathBuf) -> Option<LogFile> {
+        self.snapshot.remove(key)
+    }
 }
 
 #[cfg(test)]
@@ -196,13 +199,13 @@ mod tests {
         assert_eq!(data.snapshot.len(), 2);
         // assert!(keys.contains(&&std::path::PathBuf::from("/etc/hosts.allow")));
 
-        let mut logfile = data.or_insert(&"/bin/gzip");
+        let mut logfile = data.or_insert(&PathBuf::from("/bin/gzip"));
 
         // snapshot has now 3 logfiles
         assert!(data.snapshot.contains_key(&PathBuf::from("/bin/gzip")));
         assert_eq!(data.snapshot.len(), 3);
 
-        logfile = data.or_insert(&"/usr/bin/zip");
+        logfile = data.or_insert(&PathBuf::from("/usr/bin/zip"));
         assert_eq!(data.snapshot.len(), 3);
     }
 }

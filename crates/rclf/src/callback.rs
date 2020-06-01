@@ -155,6 +155,7 @@ mod tests {
         assert!(files.len() > 10);
         assert!(files.iter().all(|f| f.starts_with("/var/log")));
     }
+
     #[test]
     #[cfg(target_os = "linux")]
     fn list_files_ls() {
@@ -166,6 +167,7 @@ mod tests {
         assert!(files.len() > 10);
         assert!(files.iter().all(|f| f.starts_with("/var/log")));
     }
+
     #[test]
     #[cfg(target_os = "windows")]
     fn list_files_shell() {

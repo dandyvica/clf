@@ -1,0 +1,1 @@
+cargo %1 --target-dir=c:\users\moi\desktop\projects\clf
