@@ -17,6 +17,7 @@ use crate::{
     callback::ChildReturn,
     config::{GlobalOptions, Tag},
     error::{AppCustomErrorKind, AppError},
+    pattern::PatternType,
     variables::Variables,
 };
 
@@ -256,6 +257,10 @@ impl Lookup for LogFile {
         // defined a new child handle
         let mut child_return: Option<ChildReturn> = None;
 
+        // this will count number of matches for warning & critical, to see if this matches the thresholds
+        // first is warning, second is critical
+        let mut thresholds = (0u16, 0u16);
+
         // anyway, reset only runtime variables
         wrapper.vars.runtime_vars.clear();
         wrapper.vars.insert(
@@ -312,13 +317,33 @@ impl Lookup for LogFile {
 
                     // is there a match, regarding also exceptions?
                     if let Some(re) = wrapper.tag.is_match(&line) {
+                        // increments thresholds and compare with possible defined limits
+                        match re.0 {
+                            PatternType::warning => {
+                                thresholds.0 += 1;
+                                if thresholds.0 < wrapper.tag.options.warningthreshold {
+                                    line.clear();
+                                    continue;
+                                }
+                            }
+                            PatternType::critical => {
+                                thresholds.1 += 1;
+                                if thresholds.1 < wrapper.tag.options.criticalthreshold {
+                                    line.clear();
+                                    continue;
+                                }
+                            }
+                            _ => (),
+                        };
+
                         debug!(
-                            "found a match tag={}, line={}, line#={}, re=({:?},{})",
+                            "found a match tag={}, line={}, line#={}, re=({:?},{}), thresholds={:?}",
                             wrapper.tag.name,
                             line.clone(),
                             line_number,
                             re.0,
-                            re.1.as_str()
+                            re.1.as_str(),
+                            thresholds
                         );
 
                         // create variables which will be set as environment variables when script is called
@@ -339,11 +364,6 @@ impl Lookup for LogFile {
                         if wrapper.tag.options.runscript {
                             child_return = wrapper.tag.call_script(None, wrapper.vars)?;
                         };
-
-                        // read till the end of file if requested
-                        if !wrapper.tag.options.dontbreak {
-                            //break;
-                        }
                     }
 
                     // reset buffer to not accumulate data
@@ -351,6 +371,7 @@ impl Lookup for LogFile {
                 }
                 // a rare IO error could occur here
                 Err(err) => {
+                    debug!("read_line() error kind: {:?}, line: {}", err.kind(), line);
                     return Err(AppError::Io(err));
                 }
             };

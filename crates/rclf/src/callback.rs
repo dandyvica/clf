@@ -1,5 +1,7 @@
 //! Useful wrapper on the `Command` Rust standard library structure.
 use std::ffi::OsStr;
+use std::io::Write;
+use std::net::TcpStream;
 use std::path::PathBuf;
 use std::process::{Child, Command};
 use std::time::Instant;
@@ -125,6 +127,15 @@ impl Callback {
             timeout: self.timeout,
             start_time: Some(Instant::now()),
         })
+    }
+
+    /// Sends all variables, as a JSON string, to the specified address:port.
+    pub fn send(address: &str, vars: &Variables) -> Result<(), AppError> {
+        let mut stream = TcpStream::connect(address)?;
+        let json = vars.to_json();
+        stream.write(&json.as_bytes())?;
+
+        Ok(())
     }
 }
 

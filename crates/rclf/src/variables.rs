@@ -5,12 +5,13 @@ use std::collections::HashMap;
 use std::fmt::Debug;
 
 use regex::Regex;
+use serde::Serialize;
 
 /// Variable name prefix to be inserted for each variable.
 const VAR_PREFIX: &str = "CLF_";
 
 /// All variables, either runtime or user. These are provided to the callback.
-#[derive(Debug)]
+#[derive(Debug, Serialize)]
 pub struct Variables {
     pub runtime_vars: HashMap<String, String>,
     pub user_vars: Option<HashMap<String, String>>,
@@ -71,7 +72,7 @@ impl Variables {
         new_s
     }
 
-    // Add user defined variables into the variables namespace. Prepend user variables with prefix.
+    /// Adds user defined variables into the variables namespace. Prepend user variables with prefix.
     pub fn insert_uservars(&mut self, user_vars: Option<HashMap<String, String>>) {
         if let Some(uservars) = user_vars {
             // allocate hashmap
@@ -86,10 +87,12 @@ impl Variables {
             }
         };
     }
-}
 
-/// User variables can be defined as part of the global namespace.
-pub struct UserVars(HashMap<String, String>);
+    /// Converts runtime & user variables into a JSON string.
+    pub fn to_json(&self) -> String {
+        serde_json::to_string(&self).unwrap()
+    }
+}
 
 #[cfg(test)]
 mod tests {

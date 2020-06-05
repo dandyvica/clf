@@ -66,9 +66,6 @@ pub struct SearchOptions {
     // Once an error was found, the exitcode will be non-zero until an okpattern resets it or until
     // the error expires after <second> seconds. Do not use this option until you know exactly what you do
     pub sticky: u16,
-
-    /// Don't break and continue reading file until the end. For test purposes
-    pub dontbreak: bool,
 }
 
 /// Convenient macro to add a boolean option
@@ -109,7 +106,6 @@ impl From<String> for SearchOptions {
             runscript,
             rewind,
             keepoutput,
-            dontbreak,
             savethresholdcount,
             protocol
         );
@@ -303,6 +299,7 @@ impl<T: Clone> Config<T> {
     pub fn get_global(&self) -> &GlobalOptions {
         &self.global
     }
+
     /// Returns the name of the snapshot file
     #[inline(always)]
     pub fn get_snapshot_name(&self) -> &PathBuf {
