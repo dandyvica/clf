@@ -18,22 +18,20 @@ This reimplementation in Rust aims at solving original *check_logfiles* drawback
 
 * straightforward distribution: a single executable is needed.
 * enhanced portability: same behaviour between Windows, Linux or BSD-like operating systems.
-* lightning speed: with an execution speed comparable to C or C++, execution time is not a hurdle. Multi-threaded or async/await is a future target.
-* standard configuration file format: opposite to the original *cehck_logfiles* with uses non-standard files, this implementation will use YAML for its configuration files. YAML is best suited comparing to JSON or XML because there's no need to escape chars for regexes expressions.
+* lightning speed: with an execution speed comparable to C or C++, execution time is not a hurdle. Multi-threaded is a future target.
+* standard configuration file format: opposite to the original *check_logfiles* with uses non-standard files (regular *Perl* files containing *Perl* variables), this implementation uses YAML format for its configuration files. YAML is best suited comparing to JSON or XML because there's no need to escape chars for regexes expressions.
 * versatility: coupled with *Jinja2*-like well-known templates, you can imagine lots of possibilities to manage configuration files in a professionnal environment.
 * power: it will take into account not only regular log files, but also list of files command from a shell command or a script.
 * no need for a decompression binary: logfiles are *gunzipped* out of the box.
 * search for current or archived log files.
 
-*Caveat*: Even though the current ```regex``` Rust crate is providing fast regexes checks, it doesn't currently support lookahead/behind patterns.
+*Caveat*: Even though the current ```regex``` Rust crate is providing fast regexes checks, it doesn't currently support _lookahead or lookbehind_ patterns.
 
 ## Releases
 Current release is 0.1 and currently in development. It should be considered as bleeding edge or pre-α stage.
 
 ## Format of the YAML configuration file
-The current format of the configuration file needed to define where and what to search is a standard YAML format. 
-
-Example of a YAML configuration file, to search for patterns in 
+The current format of the configuration file defines where and what to search is a standard YAML format. 
 
 Following is a list of current tags defined in the configuration file:
 
@@ -54,6 +52,14 @@ global:
   # retention time for tags in seconds
   snapshot_retention: 5
 
+  # a list of user variables, if any
+  user_vars:
+    first_name: Al
+    last_name: Pacino
+    city: 'Los Angeles'
+    profession: actor
+
+
 # a list of logfiles & tags, to search for patterns. This is either a list of logfiles, or a command giving back a list of 
 # files to search for.
 searches:
@@ -73,7 +79,7 @@ searches:
 
         # a script or command to be called, every time a hit is found.
         script: { 
-          path: "tests/scripts/echovars.py", 
+          path: "tests/scripts/echovars.py",
           args: ['arg1', 'arg2', 'arg3']
         }
 
@@ -138,7 +144,7 @@ searches:
   # this time, a list of files is given by executing this command and capturing its output.
   - loglist: { 
       cmd: 'find',
-      args: ['/var/log', "-maxdepth", "1", "-type", "f", "-name", "[a-d]*.log", "-perm", "644"]
+      args: ['/var/log', "-maxdepth", "1", "-type", "f", "-name", "[a-d]*.log"]
     }
     tags: 
       - name: all_logs
@@ -153,10 +159,11 @@ searches:
               'error'
             ]
           }
+
 ```
 
 ## Environment provided to the called scripts or commands
-Whenever a match is found when searching a logfile, if provided, as script is called, with optional arguments. A list of environment variables is created and passed to the created process, to be used by the called script. Following is the list of created variables:
+Whenever a match is found when searching a logfile, if provided, a script is called, with optional arguments. A list of environment variables is created and passed to the created process, to be used by the called script. Following is the list of created variables:
 
 variable name | description
 ---                                | --- 
@@ -168,3 +175,28 @@ CLF_MATCHED_RE                     | the regex (as a string) which triggered the
 CLF_MATCHED_RE_TYPE                | the type of regex which riggered the match (critical or warning)
 CLF_CAPTUREn                       | the value of the capture group involved in the match (n >= 0). Only in case of unnamed capture groups
 CLF_cgname                         | the value of the name capture group involved in the match
+CLF_uservar1                       | the value of a user-defined variables defines in the *global:* YAML tag
+
+You could easily gain access to those variables in scripting languages:
+
+* Python: using the ```os.environ``` object, like this:
+
+```python
+[(v,os.environ.get(v)) for v in os.environ if v.startswith("CLF_")]
+```
+
+* Ruby: 
+
+```ruby
+ENV.select { |k,v| k.start_with?("CLF_") }
+```
+
+* bash:
+
+```bash
+#!/bin/bash
+for v in ${!CLF_*}
+do
+    echo $v
+done
+```

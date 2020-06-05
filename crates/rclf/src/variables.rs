@@ -1,73 +1,36 @@
 //! This is where ad-hoc variables are stored. These are meant to be used from with the
 //! configuration file.
 use log::trace;
-use std::cmp::Eq;
 use std::collections::HashMap;
 use std::fmt::Debug;
-use std::hash::Hash;
-use std::ops::{Deref, DerefMut};
 
 use regex::Regex;
 
 /// Variable name prefix to be inserted for each variable.
 const VAR_PREFIX: &str = "CLF_";
 
+/// All variables, either runtime or user. These are provided to the callback.
 #[derive(Debug)]
-pub struct Variables<K, V>(HashMap<K, V>)
-where
-    K: Eq + Hash;
-
-impl<K, V> Variables<K, V>
-where
-    K: Eq + Hash,
-{
-    pub fn inner(&self) -> &HashMap<K, V> {
-        &self.0
-    }
+pub struct Variables {
+    pub runtime_vars: HashMap<String, String>,
+    pub user_vars: Option<HashMap<String, String>>,
 }
 
-// /// `Deref`and `DerefMut` traits implementation.
-impl<K, V> Deref for Variables<K, V>
-where
-    K: Eq + Hash,
-{
-    type Target = HashMap<K, V>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl<K, V> DerefMut for Variables<K, V>
-where
-    K: Eq + Hash,
-{
-    fn deref_mut(&mut self) -> &mut HashMap<K, V> {
-        &mut self.0
-    }
-}
-
-/// A wrapper on a hashmap storing variable names, and their values.
-pub type RuntimeVariables = Variables<String, String>;
-
-impl RuntimeVariables {
-    /// Juste allocates a dedicated hashmap big enough (beefore needing reallocation) to store all our variables.
-    /// 30 should be enough.
+impl Variables {
+    /// Creates a new structure for variables.
     pub fn new() -> Self {
         const NB_VARS: usize = 30;
-        let hmap = HashMap::with_capacity(NB_VARS);
 
-        // add 'static' variables
-        //addvar!(hmap, "IP", "127.0.0.1".to_string());
-        //addvar!(hmap, "HOSTNAME", hostname::get().unwrap().into_string().unwrap());
-
-        Self(hmap)
+        Variables {
+            runtime_vars: HashMap::with_capacity(NB_VARS),
+            user_vars: None,
+        }
     }
 
     /// Just adds a new variable and its value. The `Into` bound make it usable with `String` or `&str`.
     pub fn insert<S: Into<String>>(&mut self, var: &str, value: S) {
-        debug_assert!(!self.0.contains_key(var));
-        self.0
+        debug_assert!(!self.runtime_vars.contains_key(var));
+        self.runtime_vars
             .insert(format!("{}{}", VAR_PREFIX, var), value.into());
     }
 
@@ -102,14 +65,27 @@ impl RuntimeVariables {
     fn replace(&self, s: &str) -> String {
         let mut new_s = String::from(s);
 
-        for (var, value) in &self.0 {
+        for (var, value) in &self.runtime_vars {
             new_s = new_s.as_str().replace(var.as_str(), value.as_str());
         }
         new_s
     }
 
-    // Add user defined variables into the variables namespace.
-    //pub fn add_uservars(&mut self, user_vars: &UserVars) {}
+    // Add user defined variables into the variables namespace. Prepend user variables with prefix.
+    pub fn insert_uservars(&mut self, user_vars: Option<HashMap<String, String>>) {
+        if let Some(uservars) = user_vars {
+            // allocate hashmap
+            self.user_vars = Some(HashMap::<String, String>::new());
+
+            // copy variables by prepending with prefix
+            for (var, value) in uservars.iter() {
+                self.user_vars
+                    .as_mut()
+                    .unwrap()
+                    .insert(format!("{}{}", VAR_PREFIX, var), value.into());
+            }
+        };
+    }
 }
 
 /// User variables can be defined as part of the global namespace.
@@ -126,26 +102,26 @@ mod tests {
         let re = Regex::new(r"^([a-z\s]+) (\w+) (\w+) (?P<LASTNAME>\w+)").unwrap();
         let text = "my name is john fitzgerald kennedy, president of the USA";
 
-        let mut v = RuntimeVariables::new();
+        let mut v = Variables::new();
         v.insert_captures(&re, text);
 
         assert_eq!(
-            v.0.get("CLF_CAPTURE0").unwrap(),
+            v.runtime_vars.get("CLF_CAPTURE0").unwrap(),
             "my name is john fitzgerald kennedy"
         );
-        assert_eq!(v.0.get("CLF_CAPTURE1").unwrap(), "my name is");
-        assert_eq!(v.0.get("CLF_CAPTURE2").unwrap(), "john");
-        assert_eq!(v.0.get("CLF_CAPTURE3").unwrap(), "fitzgerald");
-        assert_eq!(v.0.get("CLF_LASTNAME").unwrap(), "kennedy");
+        assert_eq!(v.runtime_vars.get("CLF_CAPTURE1").unwrap(), "my name is");
+        assert_eq!(v.runtime_vars.get("CLF_CAPTURE2").unwrap(), "john");
+        assert_eq!(v.runtime_vars.get("CLF_CAPTURE3").unwrap(), "fitzgerald");
+        assert_eq!(v.runtime_vars.get("CLF_LASTNAME").unwrap(), "kennedy");
 
-        println!("{:#?}", v.0);
+        println!("{:#?}", v.runtime_vars);
     }
 
     #[test]
     fn replace() {
         let re = Regex::new(r"^([a-z\s]+) (\w+) (\w+) (?P<LASTNAME>\w+)").unwrap();
         let text = "my name is john fitzgerald kennedy, president of the USA";
-        let mut v = RuntimeVariables::new();
+        let mut v = Variables::new();
         v.insert_captures(&re, text);
 
         let args = &[

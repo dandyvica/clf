@@ -17,8 +17,7 @@ use crate::{
     callback::ChildReturn,
     config::{GlobalOptions, Tag},
     error::{AppCustomErrorKind, AppError},
-    //util::Usable,
-    variables::RuntimeVariables,
+    variables::Variables,
 };
 
 /// A wrapper to store log file processing data.
@@ -209,7 +208,7 @@ impl Seeker for BufReader<GzDecoder<File>> {
 pub struct Wrapper<'a> {
     pub global: &'a GlobalOptions,
     pub tag: &'a Tag,
-    pub vars: &'a mut RuntimeVariables,
+    pub vars: &'a mut Variables,
 }
 
 /// Return type for all `Lookup` methods.
@@ -257,9 +256,8 @@ impl Lookup for LogFile {
         // defined a new child handle
         let mut child_return: Option<ChildReturn> = None;
 
-        // anyway, reset variables
-        //wrapper.vars.clear();
-        wrapper.vars.clear();
+        // anyway, reset only runtime variables
+        wrapper.vars.runtime_vars.clear();
         wrapper.vars.insert(
             "LOGFILE",
             self.path.to_str().unwrap_or("error converting PathBuf"),
@@ -344,7 +342,7 @@ impl Lookup for LogFile {
 
                         // read till the end of file if requested
                         if !wrapper.tag.options.dontbreak {
-                            break;
+                            //break;
                         }
                     }
 

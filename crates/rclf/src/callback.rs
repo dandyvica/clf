@@ -13,7 +13,7 @@ const fn default_timeout() -> u64 {
     2 * 3600
 }
 
-use crate::{error::AppError, variables::RuntimeVariables};
+use crate::{error::AppError, variables::Variables};
 
 /// A callback could be either synchronous, or asynchronous.
 #[derive(Debug, Deserialize, PartialEq, Hash, Eq)]
@@ -83,11 +83,7 @@ impl Callback {
 
     /// Spawns the script, and wait at most `timeout` seconds for the job to finish. Updates the PATH
     /// environment variable before spawning the command. Also add all variables as environment variables.
-    pub fn spawn(
-        &self,
-        env_path: Option<&str>,
-        vars: &RuntimeVariables,
-    ) -> Result<ChildReturn, AppError> {
+    pub fn spawn(&self, env_path: Option<&str>, vars: &Variables) -> Result<ChildReturn, AppError> {
         debug!(
             "ready to start {:?} with args={:?}, path={:?}, envs={:?}, current_dir={:?}",
             self.path,
@@ -101,8 +97,13 @@ impl Callback {
         // build Command struct before execution.
         let mut cmd = Command::new(&self.path);
 
-        // variables are always there.
-        cmd.envs(vars.inner());
+        // runtime variables are always there.
+        cmd.envs(&vars.runtime_vars);
+
+        // user variables, maybe
+        if let Some(uservars) = &vars.user_vars {
+            cmd.envs(uservars);
+        }
 
         // update PATH variable if any
         if let Some(path) = env_path {

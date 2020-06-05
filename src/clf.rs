@@ -18,7 +18,7 @@ use rclf::{
     logfile::{Lookup, Wrapper},
     snapshot::Snapshot,
     util::Usable,
-    variables::RuntimeVariables,
+    variables::Variables,
 };
 
 mod args;
@@ -113,7 +113,8 @@ fn main() -> Result<(), AppError> {
     }
 
     // create initial variables
-    let mut vars = RuntimeVariables::new();
+    let mut vars = Variables::new();
+    vars.insert_uservars(config.get_user_vars());
 
     // get snapshot file file
     let snapfile = config.get_snapshot_name();
@@ -137,7 +138,10 @@ fn main() -> Result<(), AppError> {
     let mut snapshot = match Snapshot::load(&snapfile) {
         Ok(s) => s,
         Err(e) => {
-            eprintln!("unable to load snapshot file: {:?}, error: {}", &snapfile, e);
+            eprintln!(
+                "unable to load snapshot file: {:?}, error: {}",
+                &snapfile, e
+            );
             exit(EXIT_SNAPSHOT_DELETE_ERROR);
         }
     };
@@ -150,7 +154,10 @@ fn main() -> Result<(), AppError> {
     // loop through all searches
     for search in &config.searches {
         // log some useful info
-        info!("------------ searching into logfile: {}", &search.logfile.display());
+        info!(
+            "------------ searching into logfile: {}",
+            &search.logfile.display()
+        );
 
         // checks if logfile is accessible. If not, no need to move further
         if let Err(e) = &search.logfile.is_usable() {
@@ -200,7 +207,10 @@ fn main() -> Result<(), AppError> {
     // write snapshot
     debug!("saving snapshot file {}", &snapfile.display());
     if let Err(e) = snapshot.save(&snapfile, config.get_snapshot_retention()) {
-        eprintln!("unable to save snapshot file: {:?}, error: {}", &snapfile, e);
+        eprintln!(
+            "unable to save snapshot file: {:?}, error: {}",
+            &snapfile, e
+        );
         exit(EXIT_SNAPSHOT_SAVE_ERROR);
     }
 

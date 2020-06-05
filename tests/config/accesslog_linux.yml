@@ -14,6 +14,14 @@ global:
   # retention time for tags in seconds
   snapshot_retention: 5
 
+  # a list of user variables, if any
+  user_vars:
+    first_name: Al
+    last_name: Pacino
+    city: 'Los Angeles'
+    profession: actor
+
+
 # a list of logfiles & tags, to search for patterns. This is either a list of logfiles, or a command giving back a list of 
 # files to search for.
 searches:

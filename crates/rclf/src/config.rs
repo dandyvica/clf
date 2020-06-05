@@ -14,6 +14,7 @@
 //!
 
 //use std::convert::TryFrom;
+use std::collections::HashMap;
 use std::fs::File;
 use std::io::Read;
 use std::path::{Path, PathBuf};
@@ -27,7 +28,7 @@ use crate::{
     error::AppError,
     logfile::LookupRet,
     pattern::{PatternSet, PatternType},
-    variables::RuntimeVariables,
+    variables::Variables,
 };
 
 /// A list of options which are specific to a search. They might or might not be used. If an option is not present, it's deemed false.
@@ -186,7 +187,7 @@ impl Tag {
     }
 
     /// Calls the external script, by providing arguments, environment variables and path which will be searched for the command.
-    pub fn call_script(&self, path: Option<&str>, vars: &RuntimeVariables) -> LookupRet {
+    pub fn call_script(&self, path: Option<&str>, vars: &Variables) -> LookupRet {
         // spawns external script if it's existing
         if let Some(script) = &self.script {
             let child = script.spawn(path, vars)?;
@@ -243,8 +244,9 @@ pub struct GlobalOptions {
 
     /// Retention time for tags.
     snapshot_retention: u64,
-    // Logger file where `clf` executable logs.
-    //logger: PathBuf,
+
+    /// A list of user variables if any.
+    user_vars: Option<HashMap<String, String>>,
 }
 
 /// Default implementation, rather than serde default field attribute.
@@ -270,7 +272,7 @@ impl Default for GlobalOptions {
             output_dir: std::env::temp_dir(),
             snapshot_file: crate::snapshot::Snapshot::default_name(),
             snapshot_retention: 3600,
-            //logger: logger_path,
+            user_vars: None,
         }
     }
 }
@@ -307,11 +309,11 @@ impl<T: Clone> Config<T> {
         &self.global.snapshot_file
     }
 
-    /// Returns the name of the logger file
-    // #[inline(always)]
-    // pub fn get_logger_name(&self) -> &PathBuf {
-    //     &self.global.logger
-    // }
+    // Returns the user variables if any. Clone of the original HashMap.
+    #[inline(always)]
+    pub fn get_user_vars(&self) -> Option<HashMap<String, String>> {
+        self.global.user_vars.clone()
+    }
 
     /// Returns the snapshot retention
     #[inline(always)]

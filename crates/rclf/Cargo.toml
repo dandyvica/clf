@@ -17,7 +17,7 @@ wait-timeout = "0.2.0"
 log = "0.4.8"
 simplelog = "^0.7.6"
 #hostname = "0.3.1"
-pcre2 = "0.2.3"
+#pcre2 = "0.2.3"
 
 # [[test]]
 # name = "integration"
