@@ -21,6 +21,9 @@ use crate::{
     variables::Variables,
 };
 
+/// Creates new buffer with this initial capacity.
+const BUFFER_SIZE: usize = 1024;
+
 /// A wrapper to store log file processing data.
 #[derive(Debug, Serialize, Deserialize, Default)]
 pub struct RunData {
@@ -252,7 +255,7 @@ impl Lookup for LogFile {
         wrapper: &mut Wrapper,
     ) -> LookupRet {
         // uses the same buffer
-        let mut line = String::with_capacity(1024);
+        let mut buffer = Vec::with_capacity(BUFFER_SIZE);
 
         // defined a new child handle
         let mut child_return: Option<ChildReturn> = None;
@@ -299,7 +302,10 @@ impl Lookup for LogFile {
 
         loop {
             // read until \n (which is included in the buffer)
-            let ret = reader.read_line(&mut line);
+            let ret = reader.read_until(b'\n', &mut buffer);
+
+            // to deal with UTF-8 conversion problems, use the lossy method. It will replace non-UTF-8 chars with ?
+            let line = String::from_utf8_lossy(&buffer);
 
             // read_line() returns a Result<usize>
             match ret {
@@ -322,14 +328,14 @@ impl Lookup for LogFile {
                             PatternType::warning => {
                                 thresholds.0 += 1;
                                 if thresholds.0 < wrapper.tag.options.warningthreshold {
-                                    line.clear();
+                                    buffer.clear();
                                     continue;
                                 }
                             }
                             PatternType::critical => {
                                 thresholds.1 += 1;
                                 if thresholds.1 < wrapper.tag.options.criticalthreshold {
-                                    line.clear();
+                                    buffer.clear();
                                     continue;
                                 }
                             }
@@ -367,7 +373,7 @@ impl Lookup for LogFile {
                     }
 
                     // reset buffer to not accumulate data
-                    line.clear();
+                    buffer.clear();
                 }
                 // a rare IO error could occur here
                 Err(err) => {

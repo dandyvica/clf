@@ -92,7 +92,7 @@ impl Pattern {
     pub fn is_match(&self, text: &str) -> Option<&Regex> {
         // dismiss exceptions at first
         if self.is_exception(text) {
-            debug!("exception regex occured!");
+            debug!("pattern exception occured!");
             return None;
         }
 
