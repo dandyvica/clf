@@ -29,7 +29,7 @@ impl Snapshot {
     /// Returns a default snapshot file name if not specified in the configuration file.
     pub fn default_name() -> PathBuf {
         let mut snapfile = std::env::temp_dir();
-        snapfile.push("snapshot.json");
+        snapfile.push("clf_snapshot.json");
         snapfile
     }
 
@@ -68,9 +68,6 @@ impl Snapshot {
         //for (_, logfile) in &mut self.snapshot {
         for logfile in self.snapshot.values_mut() {
             let rundata = logfile.get_mut_rundata();
-            // logfile
-            //     .rundata
-            //     .retain(|_, v| time.as_secs() - v.get_lastrun() < snapshot_retention);
             rundata.retain(|_, v| time.as_secs() - v.get_lastrun() < snapshot_retention);
         }
 

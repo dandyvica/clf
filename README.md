@@ -162,6 +162,19 @@ searches:
 
 ```
 
+## Detailed YAML configuration tags
+Each tag in the YAML file could be set to specify a feature. A tag can be eith optional or mandatory.
+
+tag name | mandatory? | description | default
+---                        | --- | --- | ---
+global                     | no  | a list of options, which are set globally for all defined searches | N/A
+path                       | no  | a list of OS-specific paths, separated by either ":" for Unix, and ";" for Windows.  This path will be searched for spawning the external script, if the provided script path is relative| '/usr/sbin:/usr/bin:/sbin:/bin' for Unix, or 'C:\Windows\system32;C:\Windows;C:\Windows\System32\Wbem;' for Windows. 
+snapshot_file              | no  | a file which will keep runtime data | '/tmp/clf_snapshot.json' on Unix, or any temporary Windows directory plus 'clf_snapshot.json'
+snapshot_retention         | no  | number of seconds after which runtime data will be deleted from snapshot file | 0 which means keep forever
+user_vars                  | no  | a YAML list of user-defined variables. These will be provided as environment variables, prefixed with 'CLF_', to the called script | N/A
+                        
+---
+
 ## Environment provided to the called scripts or commands
 Whenever a match is found when searching a logfile, if provided, a script is called, with optional arguments. A list of environment variables is created and passed to the created process, to be used by the called script. Following is the list of created variables:
 
