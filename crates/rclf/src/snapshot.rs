@@ -80,23 +80,6 @@ impl Snapshot {
 
     /// Ensures a value is in the entry by inserting a value if empty, and returns a
     /// mutable reference to the value in the entry.
-    // pub fn or_insert<P: AsRef<Path>>(&mut self, path: P) -> Result<&mut LogFile, AppError> {
-    //     // is logfile already in the snapshot ?
-    //     if !self.snapshot.contains_key(path.as_ref()) {
-    //         // create a new LogFile
-    //         let logfile = LogFile::new(&path)?;
-    //         println!("logfile={:?}", logfile);
-    //         let opt = self
-    //             .snapshot
-    //             .insert(path.as_ref().clone().to_path_buf(), logfile);
-    //         debug_assert!(opt.is_none());
-    //         debug_assert!(self.snapshot.contains_key(path.as_ref()));
-    //     }
-    //     debug_assert!(self.snapshot.contains_key(path.as_ref()));
-    //     debug_assert!(self.snapshot.get_mut(path.as_ref()).is_some());
-
-    //     Ok(self.snapshot.get_mut(path.as_ref()).unwrap())
-    // }
     pub fn or_insert(&mut self, path: &PathBuf) -> Result<&mut LogFile, AppError> {
         // is logfile already in the snapshot ?
         if !self.snapshot.contains_key(path) {

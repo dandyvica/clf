@@ -45,27 +45,30 @@ pub struct SearchOptions {
     /// If `true`, the logfile will be search from the beginning, regardless of any saved offset.
     pub rewind: bool,
 
-    // a number which denotes how many lines have to match a pattern until they are considered a critical error
+    /// a number which denotes how many lines have to match a pattern until they are considered a critical error
     pub criticalthreshold: u16,
 
-    // a number which denotes how many lines have to match a pattern until they are considered a warning
+    /// a number which denotes how many lines have to match a pattern until they are considered a warning
     pub warningthreshold: u16,
 
-    // is used to change this UNKNOWN to a different status. With logfilemissing=critical you can have check_file_existence-functionality
+    /// is used to change this UNKNOWN to a different status. With logfilemissing=critical you can have check_file_existence-functionality
     pub logfilemissing: Option<String>,
 
     // controls whether the matching lines are written to a protocol file for later investigation
     pub protocol: bool,
 
-    // controls whether the hit counter will be saved between the runs.
-    // If yes, hit numbers are added until a threshold is reached (criticalthreshold).
-    // Otherwise the run begins with reset counters
+    /// controls whether the hit counter will be saved between the runs.
+    /// If yes, hit numbers are added until a threshold is reached (criticalthreshold).
+    /// Otherwise the run begins with reset counters
     pub savethresholdcount: bool,
 
-    // controls whether an error is propagated through successive runs of check_logfiles.
-    // Once an error was found, the exitcode will be non-zero until an okpattern resets it or until
-    // the error expires after <second> seconds. Do not use this option until you know exactly what you do
+    /// controls whether an error is propagated through successive runs of check_logfiles.
+    /// Once an error was found, the exitcode will be non-zero until an okpattern resets it or until
+    /// the error expires after <second> seconds. Do not use this option until you know exactly what you do
     pub sticky: u16,
+
+    /// Moves to the end of the file for the first read, if the file has not been yet read.
+    pub fastforward: bool,
 }
 
 /// Convenient macro to add a boolean option

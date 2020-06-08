@@ -48,8 +48,10 @@ fn main() -> Result<(), AppError> {
     //let default_logger = default_logger();
     let logger = &options.clf_logger;
 
+    //---------------------------------------------------------------------------------------------------
     // initialize logger
     // first get level filter from cli
+    //---------------------------------------------------------------------------------------------------
     match WriteLogger::init(
         options.logger_level,
         simplelog::ConfigBuilder::new()
@@ -77,8 +79,10 @@ fn main() -> Result<(), AppError> {
     info!("using configuration file: {:?}", &options.config_file);
     info!("options: {:?}", &options);
 
+    //---------------------------------------------------------------------------------------------------
     // load configuration file as specified from the command line
     // handle case of stdin input
+    //---------------------------------------------------------------------------------------------------
     let _config = if options.config_file == PathBuf::from("-") {
         let mut buffer = String::with_capacity(1024);
         let stdin = stdin();
@@ -112,7 +116,9 @@ fn main() -> Result<(), AppError> {
         exit(EXIT_CONFIG_CHECK);
     }
 
-    // create initial variables
+    //---------------------------------------------------------------------------------------------------
+    // create initial variables, both user & runtime
+    //---------------------------------------------------------------------------------------------------
     let mut vars = Variables::new();
     vars.insert_uservars(config.get_user_vars());
 
@@ -134,7 +140,9 @@ fn main() -> Result<(), AppError> {
         info!("deleting snapshot file {:?}", &snapfile);
     }
 
-    // read snapshot data
+    //---------------------------------------------------------------------------------------------------
+    // read snapshot data from file
+    //---------------------------------------------------------------------------------------------------
     let mut snapshot = match Snapshot::load(&snapfile) {
         Ok(s) => s,
         Err(e) => {
@@ -151,7 +159,9 @@ fn main() -> Result<(), AppError> {
     );
     debug!("{:#?}", config);
 
+    //---------------------------------------------------------------------------------------------------
     // loop through all searches
+    //---------------------------------------------------------------------------------------------------
     for search in &config.searches {
         // log some useful info
         info!(
@@ -184,7 +194,7 @@ fn main() -> Result<(), AppError> {
                 vars: &mut vars,
             };
 
-            // now we can search for the pattern and save the thread handle if a script was called
+            // now we can search for the pattern and save the child handle if a script was called
             match logfile.lookup(&mut wrapper) {
                 Ok(child_ret) => {
                     // add child only is has really been started

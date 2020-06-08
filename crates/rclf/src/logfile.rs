@@ -252,16 +252,51 @@ impl Lookup for LogFile {
         }
     }
 
+    /// The main function of the whole process. Reads a logfile and tests for each line if it matches the regexes.
+    ///
+    /// Detailed design:
+    ///
+    /// 1. initialize local variables
+    ///     - buffer which will hold read data from each line
+    ///     - a `Child` structure which will receive its value from the optional call to a spawned script
+    ///     - line and bytes read counters whichkeep track of current line and current number of bytes read
+    ///
+    /// 2. reset `RunData` fields depending on local options
+    ///     - get a mutable reference on `RunData` structure
+    ///     - reset thresholds if `savethresholdcount` is set: those thresholds trigger a callback whenever they are reached
+    ///     - set current file pointers (offset and line number) to the last ones recorded in the `RunData` structure. If local option
+    ///       is set to `rewind`, read from the beginning of the file and set offsets accordingly
+    ///
+    /// 3. loop to read each line of the file
+    ///     - read a line as a byte Vec and convert (lossy) to UTF-8
+    ///     - test if each line matches a pattern
+    ///     - if yes:
+    ///         - test if thresholds are reached. If not loop
+    ///         - add rumtime variables, only related to the current line, pattern etc
+    ///         - if a script is defined to be called, call the script and save the `Child` return structure
+
     fn lookup_from_reader<R: BufRead + Seeker>(
         &mut self,
         mut reader: R,
         wrapper: &mut Wrapper,
     ) -> LookupRet {
+        //------------------------------------------------------------------------------------
+        // 1. initialize local variables
+        //------------------------------------------------------------------------------------
+
         // uses the same buffer
         let mut buffer = Vec::with_capacity(BUFFER_SIZE);
 
-        // defined a new child handle
+        // define a new child handle. This is an Option because the script couldn't be called if not requested so
         let mut child_return: Option<ChildReturn> = None;
+
+        // initialize line & byte counters
+        let mut bytes_count = 0;
+        let mut line_number = 0;
+
+        //------------------------------------------------------------------------------------
+        // 2. reset `RunData` fields depending on local options
+        //------------------------------------------------------------------------------------
 
         // anyway, reset only runtime variables
         wrapper.vars.runtime_vars.clear();
@@ -270,7 +305,7 @@ impl Lookup for LogFile {
             self.path.to_str().unwrap_or("error converting PathBuf"),
         );
 
-        // get rundata corresponding to tag name, or insert that new one is not yet in snapshot
+        // get rundata corresponding to tag name, or insert that new one if not yet in the snapshot file
         let mut rundata = self.or_insert(&wrapper.tag.name);
         println!(
             "tagname: {:?}, rundata:{:?}\n\n",
@@ -279,15 +314,11 @@ impl Lookup for LogFile {
 
         // resets thresholds if requested
         // this will count number of matches for warning & critical, to see if this matches the thresholds
-        // first is warning, second is critical        
+        // first is warning, second is critical
         if !wrapper.tag.options.savethresholdcount {
             rundata.critical_threshold = 0;
             rundata.warning_threshold = 0;
         }
-
-        // initialize counters
-        let mut bytes_count = 0;
-        let mut line_number = 0;
 
         // if we don't need to read the file from the beginning, adjust counters and set offset
         if !wrapper.tag.options.rewind {
@@ -296,17 +327,14 @@ impl Lookup for LogFile {
             reader.set_offset(rundata.last_offset)?;
         }
 
-        // move to position if already recorded, and not rewind
-        //if !tag.options.rewind && rundata.last_offset != 0 {
-        // if !tag.options.rewind && rundata.last_offset != 0 {
-        //     reader.set_offset(rundata.last_offset)?;
-        // }
-
         info!(
             "starting read from last offset={}, last line={}",
             bytes_count, line_number
         );
 
+        //------------------------------------------------------------------------------------
+        // 3. loop to read each line of the file
+        //------------------------------------------------------------------------------------
         loop {
             // read until \n (which is included in the buffer)
             let ret = reader.read_until(b'\n', &mut buffer);
@@ -319,7 +347,6 @@ impl Lookup for LogFile {
                 Ok(bytes_read) => {
                     // EOF: save last file address to restart from this address for next run
                     if bytes_read == 0 {
-                        //self.last_offset = reader.seek(SeekFrom::Current(0)).unwrap();
                         break;
                     }
 
