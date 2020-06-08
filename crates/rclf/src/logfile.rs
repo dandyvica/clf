@@ -39,6 +39,12 @@ pub struct RunData {
 
     /// last time logfile is processed
     last_run: u64,
+
+    /// critical threshold count
+    critical_threshold: u16,
+
+    /// warning threshold count
+    warning_threshold: u16,
 }
 
 impl RunData {
@@ -110,9 +116,6 @@ impl LogFile {
 
         // get metadata if possible
         let metadata = path.metadata()?;
-
-        // calculate number of seconds since EPOCH
-        //let time = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH)?;
 
         // get inode & dev ID
         let ids = LogFile::get_ids(&metadata);
@@ -260,10 +263,6 @@ impl Lookup for LogFile {
         // defined a new child handle
         let mut child_return: Option<ChildReturn> = None;
 
-        // this will count number of matches for warning & critical, to see if this matches the thresholds
-        // first is warning, second is critical
-        let mut thresholds = (0u16, 0u16);
-
         // anyway, reset only runtime variables
         wrapper.vars.runtime_vars.clear();
         wrapper.vars.insert(
@@ -277,6 +276,14 @@ impl Lookup for LogFile {
             "tagname: {:?}, rundata:{:?}\n\n",
             &wrapper.tag.name, rundata
         );
+
+        // resets thresholds if requested
+        // this will count number of matches for warning & critical, to see if this matches the thresholds
+        // first is warning, second is critical        
+        if !wrapper.tag.options.savethresholdcount {
+            rundata.critical_threshold = 0;
+            rundata.warning_threshold = 0;
+        }
 
         // initialize counters
         let mut bytes_count = 0;
@@ -326,15 +333,18 @@ impl Lookup for LogFile {
                         // increments thresholds and compare with possible defined limits
                         match re.0 {
                             PatternType::warning => {
-                                thresholds.0 += 1;
-                                if thresholds.0 < wrapper.tag.options.warningthreshold {
+                                rundata.warning_threshold += 1;
+                                if rundata.warning_threshold < wrapper.tag.options.warningthreshold
+                                {
                                     buffer.clear();
                                     continue;
                                 }
                             }
                             PatternType::critical => {
-                                thresholds.1 += 1;
-                                if thresholds.1 < wrapper.tag.options.criticalthreshold {
+                                rundata.critical_threshold += 1;
+                                if rundata.critical_threshold
+                                    < wrapper.tag.options.criticalthreshold
+                                {
                                     buffer.clear();
                                     continue;
                                 }
@@ -343,13 +353,14 @@ impl Lookup for LogFile {
                         };
 
                         debug!(
-                            "found a match tag={}, line={}, line#={}, re=({:?},{}), thresholds={:?}",
+                            "found a match tag={}, line={}, line#={}, re=({:?},{}), warning_threshold={}, critical_threshold={}",
                             wrapper.tag.name,
                             line.clone(),
                             line_number,
                             re.0,
                             re.1.as_str(),
-                            thresholds
+                            rundata.warning_threshold,
+                            rundata.critical_threshold
                         );
 
                         // create variables which will be set as environment variables when script is called
