@@ -18,18 +18,54 @@ use std::collections::HashMap;
 use std::fs::File;
 use std::io::Read;
 use std::path::{Path, PathBuf};
+use std::str::FromStr;
 
 use log::{debug, error, info};
 use regex::Regex;
 use serde::Deserialize;
 
 use crate::{
-    callback::Callback,
+    callback::{Callback, ChildData},
     error::AppError,
-    logfile::LookupRet,
     pattern::{PatternSet, PatternType},
     variables::Variables,
 };
+
+/// Specifies the behaviour in case of an error when opening a logfile (either not found, no credentials, etc).
+#[derive(Debug, Deserialize, Clone)]
+#[allow(non_camel_case_types)]
+pub enum LogfileMissing {
+    critical,
+    warning,
+    unknown,
+}
+
+/// Default implementation whic boils down to critical
+impl Default for LogfileMissing {
+    fn default() -> Self {
+        LogfileMissing::critical
+    }
+}
+
+/// Needed because it is specified in the search option
+impl FromStr for LogfileMissing {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "unknown" => Ok(LogfileMissing::unknown),
+            "warning" => Ok(LogfileMissing::warning),
+            "critical" => Ok(LogfileMissing::critical),
+            &_ => {
+                error!(
+                    "unknown logfilemissing value: {}, falling back to critical",
+                    s
+                );
+                Ok(LogfileMissing::critical)
+            }
+        }
+    }
+}
 
 /// A list of options which are specific to a search. They might or might not be used. If an option is not present, it's deemed false.
 /// By default, all options are either false, or use the default corresponding type.
@@ -52,7 +88,7 @@ pub struct SearchOptions {
     pub warningthreshold: u16,
 
     /// is used to change this UNKNOWN to a different status. With logfilemissing=critical you can have check_file_existence-functionality
-    pub logfilemissing: Option<String>,
+    pub logfilemissing: LogfileMissing,
 
     // controls whether the matching lines are written to a protocol file for later investigation
     pub protocol: bool,
@@ -135,7 +171,7 @@ impl From<String> for SearchOptions {
 
                 // special case for this
                 if key == "logfilemissing" {
-                    opt.logfilemissing = Some(value.to_string());
+                    opt.logfilemissing = LogfileMissing::from_str(value).unwrap();
                 }
             }
         }
@@ -167,6 +203,10 @@ pub struct Tag {
     /// A name to identify the tag.
     pub name: String,
 
+    /// Tells whether we process this tag or not. Useful for testing purposes.
+    #[serde(default = "Tag::process_default")]
+    pub process: bool,
+
     /// A list of options specific to this search. As such options are optional, add a default `serde`
     /// directive.
     #[serde(default = "SearchOptions::default")]
@@ -185,12 +225,30 @@ impl Tag {
         self.patterns.is_match(text)
     }
 
+    ///
+    pub fn process_default() -> bool {
+        true
+    }
+
     /// Calls the external script, by providing arguments, environment variables and path which will be searched for the command.
-    pub fn call_script(&self, path: Option<&str>, vars: &Variables) -> LookupRet {
-        // spawns external script if it's existing
-        if let Some(script) = &self.script {
-            let child = script.spawn(path, vars)?;
-            Ok(Some(child))
+    pub fn call_script(
+        &self,
+        path: Option<&str>,
+        vars: &Variables,
+    ) -> Result<Option<ChildData>, AppError> {
+        // if the script tag has been defined...
+        if let Some(callback) = &self.script {
+            // if callback is a script to spawn, call it
+            if callback.path.is_some() {
+                let child = callback.spawn(path, vars)?;
+                Ok(Some(child))
+            // if a network script is defined, send it data through JSON
+            } else if callback.address.is_some() {
+                let _res = callback.send(vars)?;
+                return Ok(None);
+            } else {
+                Ok(None)
+            }
         } else {
             Ok(None)
         }
@@ -204,6 +262,9 @@ pub struct Search<T: Clone> {
     /// the logfile name to check
     #[serde(flatten)]
     pub logfile: T,
+
+    #[serde(default = "LogfileMissing::default")]
+    pub io_error: LogfileMissing,
 
     /// a unique identifier for this search
     pub tags: Vec<Tag>,
@@ -222,6 +283,7 @@ impl From<Search<LogSource>> for Search<PathBuf> {
 
         Search {
             logfile: logfile.clone(),
+            io_error: search_logsource.io_error.clone(),
             tags: search_logsource.tags.clone(),
         }
     }
@@ -233,7 +295,7 @@ impl From<Search<LogSource>> for Search<PathBuf> {
 pub struct GlobalOptions {
     /// A list of paths, separated by either ':' for unix, or ';' for Windows. This is
     /// where the script, if any, will be searched for. Default to PATH or Path depending on the platform.
-    path: String,
+    pub path: String,
 
     /// A directory where matches lines will be stored.
     output_dir: PathBuf,
@@ -409,6 +471,7 @@ impl From<Config<LogSource>> for Config<PathBuf> {
                         // create a new Search structure based on the file we just found
                         let search_pathbuf = Search::<PathBuf> {
                             logfile: file.clone(),
+                            io_error: search.io_error.clone(),
                             tags: search.tags.clone(),
                         };
 
@@ -436,7 +499,6 @@ mod tests {
         assert!(opts.keepoutput);
         assert!(opts.rewind);
         assert!(opts.savethresholdcount);
-        assert!(opts.dontbreak);
         assert!(opts.protocol);
 
         assert_eq!(opts.criticalthreshold, 10);

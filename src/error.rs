@@ -1,7 +1,5 @@
 //! List of errors from the `clf`executable. Different from the `rclf` crate error module.
 
-/// List of exit codes
-
 /// Error during loading of the YAML file.
 pub const EXIT_CONFIG_ERROR: i32 = 101;
 

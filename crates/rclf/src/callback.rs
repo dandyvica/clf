@@ -36,8 +36,11 @@ pub enum CallbackClass {
 /// A structure representing a command to start
 #[derive(Debug, Deserialize, Clone)]
 pub struct Callback {
-    /// The name of the script/command to start.
-    path: PathBuf,
+    /// The name of the script/command to start if defined.
+    pub path: Option<PathBuf>,
+
+    /// The address:port of the remote or local script to which sent the data, as JSON.
+    pub address: Option<String>,
 
     /// Option arguments of the previous.
     args: Option<Vec<String>>,
@@ -85,7 +88,7 @@ impl Callback {
 
     /// Spawns the script, and wait at most `timeout` seconds for the job to finish. Updates the PATH
     /// environment variable before spawning the command. Also add all variables as environment variables.
-    pub fn spawn(&self, env_path: Option<&str>, vars: &Variables) -> Result<ChildReturn, AppError> {
+    pub fn spawn(&self, env_path: Option<&str>, vars: &Variables) -> Result<ChildData, AppError> {
         debug!(
             "ready to start {:?} with args={:?}, path={:?}, envs={:?}, current_dir={:?}",
             self.path,
@@ -97,7 +100,8 @@ impl Callback {
         );
 
         // build Command struct before execution.
-        let mut cmd = Command::new(&self.path);
+        debug_assert!(self.path.is_some());
+        let mut cmd = Command::new(&self.path.as_ref().unwrap());
 
         // runtime variables are always there.
         cmd.envs(&vars.runtime_vars);
@@ -121,17 +125,23 @@ impl Callback {
         let child = cmd.spawn()?;
         info!("starting script {:?}, pid={}", self.path, child.id());
 
-        Ok(ChildReturn {
+        Ok(ChildData {
             child: Some(child),
-            path: self.path.clone(),
+            path: self.path.as_ref().unwrap().clone(),
             timeout: self.timeout,
             start_time: Some(Instant::now()),
         })
     }
 
     /// Sends all variables, as a JSON string, to the specified address:port.
-    pub fn send(address: &str, vars: &Variables) -> Result<(), AppError> {
-        let mut stream = TcpStream::connect(address)?;
+    pub fn send(&self, vars: &Variables) -> Result<(), AppError> {
+        debug_assert!(self.address.is_some());
+        let mut stream = TcpStream::connect(&self.address.as_ref().unwrap())?;
+
+        debug!(
+            "sending JOSN data to address: {}",
+            &self.address.as_ref().unwrap()
+        );
         let json = vars.to_json();
         stream.write(&json.as_bytes())?;
 
@@ -141,7 +151,7 @@ impl Callback {
 
 /// Return structure from a call to a script. Gathers all relevant data, instead of a mere tuple.
 #[derive(Debug, Default)]
-pub struct ChildReturn {
+pub struct ChildData {
     pub child: Option<Child>,
     pub path: PathBuf,
     pub timeout: u64,

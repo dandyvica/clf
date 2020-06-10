@@ -65,7 +65,6 @@ impl Snapshot {
 
         // first delete tags having run before retention
         debug!("checking retention time for snapshot");
-        //for (_, logfile) in &mut self.snapshot {
         for logfile in self.snapshot.values_mut() {
             let rundata = logfile.get_mut_rundata();
             rundata.retain(|_, v| time.as_secs() - v.get_lastrun() < snapshot_retention);
@@ -85,7 +84,7 @@ impl Snapshot {
         if !self.snapshot.contains_key(path) {
             // create a new LogFile
             let logfile = LogFile::new(&path)?;
-            println!("logfile={:?}", logfile);
+            //println!("logfile={:?}", logfile);
             let opt = self.snapshot.insert(path.clone().to_path_buf(), logfile);
             debug_assert!(opt.is_none());
             debug_assert!(self.snapshot.contains_key(path));
@@ -124,13 +123,17 @@ mod tests {
                         "name": "tag1",
                         "last_offset": 1000,
                         "last_line": 10,
-                        "last_run": 1000000
-                    },
+                        "last_run": 1000000,
+                        "critical_threshold": 10,
+                        "warning_threshold": 10 
+                    },                       
                     "tag2": {
                         "name": "tag2",
                         "last_offset": 1000,
                         "last_line": 10,
-                        "last_run": 1000000
+                        "last_run": 1000000,
+                        "critical_threshold": 10,
+                        "warning_threshold": 10                        
                     }
                 }
             },
@@ -144,13 +147,17 @@ mod tests {
                         "name": "tag3",
                         "last_offset": 1000,
                         "last_line": 10,
-                        "last_run": 1000000
+                        "last_run": 1000000,
+                        "critical_threshold": 10,
+                        "warning_threshold": 10
                     },
                     "tag4": {
                         "name": "tag3",
                         "last_offset": 1500,
                         "last_line": 10,
-                        "last_run": 1000000
+                        "last_run": 1000000,
+                        "critical_threshold": 10,
+                        "warning_threshold": 10
                     }
                 }
             }

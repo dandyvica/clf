@@ -1,6 +1,6 @@
 //! A structure representing a logfile, with all its related attributes. Those attributes are
 //! coming from the processing of the log file, every time it's read to look for patterns.
-use log::{debug, info};
+use log::{debug, info, trace};
 use std::collections::HashMap;
 use std::fs::{File, Metadata};
 use std::io::{BufRead, BufReader, Read, Seek, SeekFrom};
@@ -14,9 +14,10 @@ use flate2::read::GzDecoder;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    callback::ChildReturn,
+    callback::ChildData,
     config::{GlobalOptions, Tag},
     error::{AppCustomErrorKind, AppError},
+    nagios::{LogfileMatchCounter, MatchCounter},
     pattern::PatternType,
     variables::Variables,
 };
@@ -216,11 +217,12 @@ pub struct Wrapper<'a> {
     pub global: &'a GlobalOptions,
     pub tag: &'a Tag,
     pub vars: &'a mut Variables,
+    pub global_exit_counter: &'a mut MatchCounter,
+    pub logfile_exit_counter: &'a mut LogfileMatchCounter,
 }
 
 /// Return type for all `Lookup` methods.
-pub type LookupReturn<T> = Result<T, AppError>;
-pub type LookupRet = LookupReturn<Option<ChildReturn>>;
+pub type LookupRet = Result<Vec<ChildData>, AppError>;
 
 /// Trait, implemented by `LogFile` to search patterns.
 pub trait Lookup {
@@ -258,7 +260,7 @@ impl Lookup for LogFile {
     ///
     /// 1. initialize local variables
     ///     - buffer which will hold read data from each line
-    ///     - a `Child` structure which will receive its value from the optional call to a spawned script
+    ///     - a `Child` vector which will receive its value from the optional call to a spawned script
     ///     - line and bytes read counters whichkeep track of current line and current number of bytes read
     ///
     /// 2. reset `RunData` fields depending on local options
@@ -283,16 +285,25 @@ impl Lookup for LogFile {
         //------------------------------------------------------------------------------------
         // 1. initialize local variables
         //------------------------------------------------------------------------------------
+        trace!(
+            "#######################> start processing logfile:{} for tag:{}",
+            self.path.display(),
+            wrapper.tag.name
+        );
 
         // uses the same buffer
         let mut buffer = Vec::with_capacity(BUFFER_SIZE);
 
         // define a new child handle. This is an Option because the script couldn't be called if not requested so
-        let mut child_return: Option<ChildReturn> = None;
+        let mut children = Vec::new();
 
         // initialize line & byte counters
         let mut bytes_count = 0;
         let mut line_number = 0;
+
+        trace!("global_exit_counter: {:?}", &wrapper.global_exit_counter);
+        trace!("logfile_exit_counter: {:?}", &wrapper.logfile_exit_counter);
+        let mut logfile_counter = &mut wrapper.logfile_exit_counter.or_default(&self.path);
 
         //------------------------------------------------------------------------------------
         // 2. reset `RunData` fields depending on local options
@@ -307,18 +318,11 @@ impl Lookup for LogFile {
 
         // get rundata corresponding to tag name, or insert that new one if not yet in the snapshot file
         let mut rundata = self.or_insert(&wrapper.tag.name);
-        println!(
+        trace!(
             "tagname: {:?}, rundata:{:?}\n\n",
-            &wrapper.tag.name, rundata
+            &wrapper.tag.name,
+            rundata
         );
-
-        // resets thresholds if requested
-        // this will count number of matches for warning & critical, to see if this matches the thresholds
-        // first is warning, second is critical
-        if !wrapper.tag.options.savethresholdcount {
-            rundata.critical_threshold = 0;
-            rundata.warning_threshold = 0;
-        }
 
         // if we don't need to read the file from the beginning, adjust counters and set offset
         if !wrapper.tag.options.rewind {
@@ -353,11 +357,12 @@ impl Lookup for LogFile {
                     // we've been reading a new line successfully
                     line_number += 1;
                     bytes_count += bytes_read as u64;
-                    //println!("====> line#={}, file={}", line_number, line);
+
+                    trace!("====> line#={}, line={}", line_number, line);
 
                     // is there a match, regarding also exceptions?
                     if let Some(re) = wrapper.tag.is_match(&line) {
-                        // increments thresholds and compare with possible defined limits
+                        // increments thresholds and compare with possible defined limits and accumulate counters for plugin output
                         match re.0 {
                             PatternType::warning => {
                                 rundata.warning_threshold += 1;
@@ -366,6 +371,8 @@ impl Lookup for LogFile {
                                     buffer.clear();
                                     continue;
                                 }
+                                wrapper.global_exit_counter.warning_count += 1;
+                                logfile_counter.warning_count += 1;
                             }
                             PatternType::critical => {
                                 rundata.critical_threshold += 1;
@@ -375,6 +382,8 @@ impl Lookup for LogFile {
                                     buffer.clear();
                                     continue;
                                 }
+                                wrapper.global_exit_counter.critical_count += 1;
+                                logfile_counter.critical_count += 1;
                             }
                             _ => (),
                         };
@@ -390,23 +399,29 @@ impl Lookup for LogFile {
                             rundata.critical_threshold
                         );
 
-                        // create variables which will be set as environment variables when script is called
-                        wrapper
-                            .vars
-                            .insert("LINE_NUMBER", format!("{}", line_number));
-                        wrapper.vars.insert("LINE", line.clone());
-                        wrapper.vars.insert("MATCHED_RE", re.1.as_str());
-                        wrapper.vars.insert("MATCHED_RE_TYPE", re.0);
-                        wrapper.vars.insert("TAG", &wrapper.tag.name);
-
-                        wrapper.vars.insert_captures(re.1, &line);
-
-                        debug!("added variables: {:?}", wrapper.vars);
-
-                        // now call script if there's an external script to call, if we're told to do so
-                        //debug_assert!(&tag.options.is_some());
+                        // if we've been asked to trigger the script, first add relevant variables
                         if wrapper.tag.options.runscript {
-                            child_return = wrapper.tag.call_script(None, wrapper.vars)?;
+                            // create variables which will be set as environment variables when script is called
+
+                            wrapper
+                                .vars
+                                .insert("LINE_NUMBER", format!("{}", line_number));
+                            wrapper.vars.insert("LINE", line.clone());
+                            wrapper.vars.insert("MATCHED_RE", re.1.as_str());
+                            wrapper.vars.insert("MATCHED_RE_TYPE", re.0);
+                            wrapper.vars.insert("TAG", &wrapper.tag.name);
+
+                            wrapper.vars.insert_captures(re.1, &line);
+
+                            debug!("added variables: {:?}", wrapper.vars);
+
+                            // now call script
+                            if let Some(child) = wrapper
+                                .tag
+                                .call_script(Some(&wrapper.global.path), wrapper.vars)?
+                            {
+                                children.push(child);
+                            }
                         };
                     }
 
@@ -425,11 +440,28 @@ impl Lookup for LogFile {
         rundata.last_offset = bytes_count;
         rundata.last_line = line_number;
 
+        // resets thresholds if requested
+        // this will count number of matches for warning & critical, to see if this matches the thresholds
+        // first is warning, second is critical
+        if !wrapper.tag.options.savethresholdcount {
+            rundata.critical_threshold = 0;
+            rundata.warning_threshold = 0;
+        }
+
         // and last run
         let time = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH)?;
         rundata.last_run = time.as_secs();
 
-        Ok(child_return)
+        trace!("logfile counter:{:?}", logfile_counter);
+        trace!("global_exit_counter: {:?}", &wrapper.global_exit_counter);
+        trace!("logfile_exit_counter: {:?}", &wrapper.logfile_exit_counter);
+        trace!(
+            "========================> end processing logfile:{} for tag:{}",
+            self.path.display(),
+            wrapper.tag.name
+        );
+
+        Ok(children)
     }
 }
 
@@ -454,13 +486,17 @@ mod tests {
                         "name": "tag1",
                         "last_offset": 1000,
                         "last_line": 10,
-                        "last_run": 1000000
+                        "last_run": 1000000,
+                        "critical_threshold": 10,
+                        "warning_threshold": 10
                     },
                     "tag2": {
                         "name": "tag2",
                         "last_offset": 1000,
                         "last_line": 10,
-                        "last_run": 1000000
+                        "last_run": 1000000,
+                        "critical_threshold": 10,
+                        "warning_threshold": 10
                     }
                 }
             },
@@ -474,13 +510,17 @@ mod tests {
                         "name": "tag3",
                         "last_offset": 1000,
                         "last_line": 10,
-                        "last_run": 1000000
+                        "last_run": 1000000,
+                        "critical_threshold": 10,
+                        "warning_threshold": 10
                     },
                     "tag4": {
                         "name": "tag4",
                         "last_offset": 1000,
                         "last_line": 10,
-                        "last_run": 1000000
+                        "last_run": 1000000,
+                        "critical_threshold": 10,
+                        "warning_threshold": 10
                     }
                 }
             }

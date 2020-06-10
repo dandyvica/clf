@@ -6,11 +6,12 @@ use clap::{App, Arg};
 use simplelog::LevelFilter;
 
 use crate::error::EXIT_ERROR_CONV;
+use rclf::nagios::NagiosVersion;
 
 /// We define here the maximum size for the logger file (in Mb).
-const MAX_LOGGER_SIZE: u16 = 10;
+const MAX_LOGGER_SIZE: u64 = 10 * 1024 * 1024;
 
-// This structure holds the command line arguments
+/// This structure holds the command line arguments.
 #[derive(Debug)]
 pub struct CliOptions {
     pub config_file: PathBuf,
@@ -18,8 +19,9 @@ pub struct CliOptions {
     pub delete_snapfile: bool,
     pub check_conf: bool,
     pub logger_level: LevelFilter,
-    pub max_logger_size: u16,
+    pub max_logger_size: u64,
     pub show_options: bool,
+    pub nagios_version: NagiosVersion,
 }
 
 /// Implements `Default` trait for `CliOptions`.
@@ -37,6 +39,7 @@ impl Default for CliOptions {
             logger_level: LevelFilter::Info,
             max_logger_size: MAX_LOGGER_SIZE,
             show_options: false,
+            nagios_version: NagiosVersion::NagiosNrpe3,
         }
     }
 }
@@ -53,7 +56,7 @@ impl CliOptions {
             "#)
             .arg(
                 Arg::with_name("config")
-                    .long_help("The name and path of the YAML configuration file, containing logfiles to search for and patterns to match.")
+                    .long_help("Mandatory argument. The name and path of the YAML configuration file, containing logfiles to search for and patterns to match.")
                     .short("c")
                     .long("config")
                     .required(true)
@@ -78,7 +81,7 @@ impl CliOptions {
             )
             .arg(
                 Arg::with_name("chkcnf")
-                    .short("n")
+                    .short("e")
                     .long("checkconf")
                     .required(false)
                     .help("Check configuration file correctness, print it out and exit.")
@@ -89,7 +92,7 @@ impl CliOptions {
                     .short("g")
                     .long("loglevel")
                     .required(false)
-                    .help("When logger is enabled, sets the minimum logger level.")
+                    .help("When logger is enabled, set the minimum logger level. Defaults to 'Info'.")
                     .possible_values(&["Off", "Error", "Warn", "Info", "Debug", "Trace"])
                     .takes_value(true),
             )
@@ -98,7 +101,7 @@ impl CliOptions {
                     .short("m")
                     .long("logsize")
                     .required(false)
-                    .help("When logger is enabled, sets the maximum logger size (in Mb).")
+                    .help("When logger is enabled, set the maximum logger size (in Mb). If specified, logger file will be deleted if current size is over this value.")
                     .takes_value(true),
             )
             .arg(
@@ -106,8 +109,17 @@ impl CliOptions {
                     .short("s")
                     .long("showopt")
                     .required(false)
-                    .help("Just shows the command line options passed and exits.")
+                    .help("Just show the command line options passed and exit.")
                     .takes_value(false),
+            )
+            .arg(
+                Arg::with_name("nagver")
+                    .short("n")
+                    .long("nagver")
+                    .required(false)
+                    .help("Set the Nagios NRPE protocol version used for plugin output. Defaults to version 3.")
+                    .possible_values(&["2", "3"])
+                    .takes_value(true),
             )
             .get_matches();
 
@@ -130,17 +142,19 @@ impl CliOptions {
         options.delete_snapfile = matches.is_present("delsnap");
         options.show_options = matches.is_present("showopt");
 
-        // options.logger_level = matches
-        //     .value_of("loglevel")
-        //     .map_or(LevelFilter::Info, |opt| LevelFilter::from_str(opt).unwrap());
         if matches.is_present("loglevel") {
             options.logger_level =
                 LevelFilter::from_str(matches.value_of("loglevel").unwrap()).unwrap();
         }
 
+        if matches.is_present("nagver") {
+            options.nagios_version =
+                NagiosVersion::from_str(matches.value_of("nagver").unwrap()).unwrap();
+        }
+
         if matches.is_present("logsize") {
             let value = matches.value_of("logsize").unwrap();
-            let size = match value.parse::<u16>() {
+            let size = match value.parse::<u64>() {
                 Ok(s) => s,
                 Err(e) => {
                     eprintln!(
@@ -150,12 +164,8 @@ impl CliOptions {
                     exit(EXIT_ERROR_CONV);
                 }
             };
-            options.max_logger_size = size;
+            options.max_logger_size = size * 1024 * 1024;
         }
-
-        // options.max_logger_size = matches
-        //     .value_of("logsize")
-        //     .map_or(MAX_LOGGER_SIZE, |v| v.parse().unwrap());
 
         options
     }

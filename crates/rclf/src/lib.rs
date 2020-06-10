@@ -5,6 +5,7 @@ pub mod error;
 pub mod callback;
 pub mod config;
 pub mod logfile;
+pub mod nagios;
 pub mod pattern;
 pub mod snapshot;
 pub mod util;

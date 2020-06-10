@@ -6,7 +6,7 @@ use std::convert::{From, TryFrom};
 use regex::{Regex, RegexSet};
 use serde::Deserialize;
 //use pcre2::Regex;
-use log::debug;
+use log::{debug, trace};
 
 use crate::error::{AppCustomErrorKind, AppError};
 
@@ -92,7 +92,7 @@ impl Pattern {
     pub fn is_match(&self, text: &str) -> Option<&Regex> {
         // dismiss exceptions at first
         if self.is_exception(text) {
-            debug!("pattern exception occured!");
+            debug!("pattern exception occured for text: {}", text);
             return None;
         }
 
@@ -156,13 +156,15 @@ impl PatternSet {
     pub fn is_match(&self, text: &str) -> Option<(PatternType, &Regex)> {
         // try to match critical pattern first
         if let Some(critical) = &self.critical {
-            return critical
-                .is_match(text)
-                .map(|re| (PatternType::critical, re));
+            if let Some(re) = critical.is_match(text) {
+                trace!("critical is trigerred");
+                return Some((PatternType::critical, re));
+            }
         }
 
         // and then warning
         if let Some(warning) = &self.warning {
+            trace!("warning is trigerred");
             return warning.is_match(text).map(|re| (PatternType::warning, re));
         }
 
