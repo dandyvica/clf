@@ -29,43 +29,8 @@ use crate::{
     error::AppError,
     pattern::{PatternSet, PatternType},
     variables::Variables,
+    nagios::NagiosError,
 };
-
-/// Specifies the behaviour in case of an error when opening a logfile (either not found, no credentials, etc).
-#[derive(Debug, Deserialize, Clone)]
-#[allow(non_camel_case_types)]
-pub enum LogfileMissing {
-    critical,
-    warning,
-    unknown,
-}
-
-/// Default implementation whic boils down to critical
-impl Default for LogfileMissing {
-    fn default() -> Self {
-        LogfileMissing::critical
-    }
-}
-
-/// Needed because it is specified in the search option
-impl FromStr for LogfileMissing {
-    type Err = ();
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            "unknown" => Ok(LogfileMissing::unknown),
-            "warning" => Ok(LogfileMissing::warning),
-            "critical" => Ok(LogfileMissing::critical),
-            &_ => {
-                error!(
-                    "unknown logfilemissing value: {}, falling back to critical",
-                    s
-                );
-                Ok(LogfileMissing::critical)
-            }
-        }
-    }
-}
 
 /// A list of options which are specific to a search. They might or might not be used. If an option is not present, it's deemed false.
 /// By default, all options are either false, or use the default corresponding type.
@@ -86,9 +51,6 @@ pub struct SearchOptions {
 
     /// a number which denotes how many lines have to match a pattern until they are considered a warning
     pub warningthreshold: u16,
-
-    /// is used to change this UNKNOWN to a different status. With logfilemissing=critical you can have check_file_existence-functionality
-    pub logfilemissing: LogfileMissing,
 
     // controls whether the matching lines are written to a protocol file for later investigation
     pub protocol: bool,
@@ -170,9 +132,9 @@ impl From<String> for SearchOptions {
                 add_typed_option!(splitted_options, warningthreshold, opt, u16);
 
                 // special case for this
-                if key == "logfilemissing" {
-                    opt.logfilemissing = LogfileMissing::from_str(value).unwrap();
-                }
+                // if key == "logfilemissing" {
+                //     opt.logfilemissing = LogfileMissing::from_str(value).unwrap();
+                // }
             }
         }
 
@@ -263,8 +225,8 @@ pub struct Search<T: Clone> {
     #[serde(flatten)]
     pub logfile: T,
 
-    #[serde(default = "LogfileMissing::default")]
-    pub io_error: LogfileMissing,
+    #[serde(default = "NagiosError::default")]
+    pub io_error: NagiosError,
 
     /// a unique identifier for this search
     pub tags: Vec<Tag>,
@@ -493,7 +455,7 @@ mod tests {
 
     #[test]
     fn search_options() {
-        let opts = SearchOptions::from("runscript, keepoutput, rewind, criticalthreshold=10, warningthreshold=15, logfilemissing=foo,protocol, savethresholdcount, sticky=5, dontbreak".to_string());
+        let opts = SearchOptions::from("runscript, keepoutput, rewind, criticalthreshold=10, warningthreshold=15, protocol, savethresholdcount, sticky=5, dontbreak".to_string());
 
         assert!(opts.runscript);
         assert!(opts.keepoutput);
@@ -505,7 +467,7 @@ mod tests {
         assert_eq!(opts.warningthreshold, 15);
         assert_eq!(opts.sticky, 5);
         assert_eq!(opts.criticalthreshold, 10);
-        assert_eq!(&opts.logfilemissing.unwrap(), "foo");
+        //assert_eq!(&opts.logfilemissing.unwrap(), "foo");
     }
 
     #[test]

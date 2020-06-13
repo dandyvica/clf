@@ -2,7 +2,7 @@ use log::{debug, info};
 use std::fs::OpenOptions;
 use std::io::{stdin, ErrorKind, Read};
 use std::path::PathBuf;
-use std::process::exit;
+use std::process::{exit, id};
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -14,9 +14,8 @@ use simplelog::*;
 use rclf::{
     callback::ChildData,
     config::{Config, LogSource},
-    error::AppError,
     logfile::{Lookup, Wrapper},
-    nagios::{LogfileMatchCounter, MatchCounter, NagiosVersion},
+    nagios::{LogfileMatchCounter, MatchCounter, NagiosError, NagiosVersion},
     snapshot::Snapshot,
     util::Usable,
     variables::Variables,
@@ -28,7 +27,7 @@ use args::CliOptions;
 mod error;
 use error::*;
 
-fn main() -> Result<(), AppError> {
+fn main() {
     // tick time
     let now = Instant::now();
 
@@ -48,7 +47,7 @@ fn main() -> Result<(), AppError> {
     // print out options if requested and exits
     if options.show_options {
         eprintln!("{:#?}", options);
-        exit(EXIT_SHOW_OPTIONS);
+        exit(AppExitCode::SHOW_OPTIONS as i32);
     }
 
     // builds the logger from cli or the default one from platform specifics
@@ -77,7 +76,7 @@ fn main() -> Result<(), AppError> {
                 logger.display(),
                 e
             );
-            exit(EXIT_LOGGER_ERROR);
+            exit(AppExitCode::LOGGER_ERROR as i32);
         }
     };
 
@@ -96,7 +95,7 @@ fn main() -> Result<(), AppError> {
 
         if let Err(e) = handle.read_to_string(&mut buffer) {
             eprintln!("error reading stdin: {}", e);
-            exit(EXIT_STDIN_ERROR);
+            exit(AppExitCode::STDIN_ERROR as i32);
         }
 
         Config::<LogSource>::from_str(&buffer)
@@ -110,7 +109,7 @@ fn main() -> Result<(), AppError> {
             "error loading config file: {:?}, error: {}",
             &options.config_file, e
         );
-        exit(EXIT_CONFIG_ERROR);
+        exit(AppExitCode::CONFIG_ERROR as i32);
     }
 
     // replace, if any, "loglist" by "logfile"
@@ -119,7 +118,7 @@ fn main() -> Result<(), AppError> {
     // print out config if requested and exit
     if options.check_conf {
         println!("{:#?}", config);
-        exit(EXIT_CONFIG_CHECK);
+        exit(AppExitCode::CONFIG_CHECK as i32);
     }
 
     //---------------------------------------------------------------------------------------------------
@@ -140,7 +139,7 @@ fn main() -> Result<(), AppError> {
                     "unable to delete snapshot file: {:?}, error: {}",
                     &snapfile, e
                 );
-                exit(EXIT_LOGGER_ERROR);
+                exit(AppExitCode::LOGGER_ERROR as i32);
             }
         };
         info!("deleting snapshot file {:?}", &snapfile);
@@ -156,7 +155,7 @@ fn main() -> Result<(), AppError> {
                 "unable to load snapshot file: {:?}, error: {}",
                 &snapfile, e
             );
-            exit(EXIT_SNAPSHOT_DELETE_ERROR);
+            exit(AppExitCode::SNAPSHOT_DELETE_ERROR as i32);
         }
     };
     info!(
@@ -185,14 +184,25 @@ fn main() -> Result<(), AppError> {
 
             // report missing logfile
             // get a mutable reference on inner counter structure
-            let mut logfile_counter = &mut logfile_exit_counter.or_default(&search.logfile);
-            logfile_counter.app_error = (search.io_error.clone(), Some(err.to_string()));
+            //let mut logfile_counter = &mut logfile_exit_counter.or_default(&search.logfile);
+            //logfile_counter.app_error = (search.io_error.clone(), Some(err.to_string()));
 
             continue;
         }
 
         // create a LogFile struct or get it from snapshot
-        let logfile = snapshot.or_insert(&search.logfile)?;
+        let logfile = match snapshot.or_insert(&search.logfile) {
+            Ok(log) => log,
+            Err(e) => {
+                error!(
+                    "unexpected error {:?}, file:{}, line{}",
+                    e,
+                    file!(),
+                    line!()
+                );
+                exit(AppExitCode::SNAPSHOT_DELETE_ERROR as i32);
+            }
+        };
         debug!("calling or_insert() at line {}", line!());
 
         // for each tag, search inside logfile
@@ -247,7 +257,7 @@ fn main() -> Result<(), AppError> {
             "unable to save snapshot file: {:?}, error: {}",
             &snapfile, e
         );
-        exit(EXIT_SNAPSHOT_SAVE_ERROR);
+        exit(AppExitCode::SNAPSHOT_SAVE_ERROR as i32);
     }
 
     // teardown
@@ -273,7 +283,12 @@ fn main() -> Result<(), AppError> {
     );
 
     // print out final results
-    Ok(())
+    //Ok(())
+
+    // final exit
+    let exit_code = NagiosError::from(&global_exit_counter);
+    info!("exiting process pid:{}, exit code:{:?}", id(), exit_code);
+    exit(exit_code as i32);
 }
 
 /// Manage end of all started processes from clf.
@@ -393,24 +408,24 @@ fn nagios_output(
     logfile_counter: &LogfileMatchCounter,
     nagios_version: &NagiosVersion,
 ) {
-    // first, test if an I/O error has been detected for a logfile in any of the processed logfile.
-    // if so, the overall result will boil down to the first error detected
-    if let Some(logfile_in_error) = logfile_counter.iter().find(|io| io.1.app_error.1.is_some()) {
-        println!("{}|", logfile_in_error.1.output().0);
-    } else {
-        // get global exit data, because its printed out anyway
-        let global_exit_data = global_counter.output();
-        println!("{}|", global_exit_data.0);
-    }
+    // // first, test if an I/O error has been detected for a logfile in any of the processed logfile.
+    // // if so, the overall result will boil down to the first error detected
+    // if let Some(logfile_in_error) = logfile_counter.iter().find(|io| io.1.app_error.1.is_some()) {
+    //     println!("{}|", logfile_in_error.1.output().0);
+    // } else {
+    //     // get global exit data, because its printed out anyway
+    //     let global_exit_data = global_counter.output();
+    //     println!("{}|", global_exit_data.0);
+    // }
 
-    match nagios_version {
-        NagiosVersion::NagiosNrpe3 => {
-            for (path, counter) in logfile_counter.iter() {
-                let logfile_exit_data = counter.output();
-                println!("{}: {}", path.display(), logfile_exit_data.0);
-            }
-        }
+    // match nagios_version {
+    //     NagiosVersion::NagiosNrpe3 => {
+    //         for (path, counter) in logfile_counter.iter() {
+    //             let logfile_exit_data = counter.output();
+    //             println!("{}: {}", path.display(), logfile_exit_data.0);
+    //         }
+    //     }
 
-        NagiosVersion::NagiosNrpe2 => {}
-    };
+    //     NagiosVersion::NagiosNrpe2 => {}
+    // };
 }

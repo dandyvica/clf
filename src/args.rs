@@ -5,7 +5,7 @@ use std::str::FromStr;
 use clap::{App, Arg};
 use simplelog::LevelFilter;
 
-use crate::error::EXIT_ERROR_CONV;
+use crate::error::AppExitCode;
 use rclf::nagios::NagiosVersion;
 
 /// We define here the maximum size for the logger file (in Mb).
@@ -161,7 +161,7 @@ impl CliOptions {
                         "error converting value logsize: {} into an integer, error: {}",
                         value, e
                     );
-                    exit(EXIT_ERROR_CONV);
+                    exit(AppExitCode::ERROR_CONV as i32);
                 }
             };
             options.max_logger_size = size * 1024 * 1024;

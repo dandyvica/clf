@@ -30,6 +30,13 @@ This reimplementation in Rust aims at solving original *check_logfiles* drawback
 ## Releases
 Current release is 0.1 and currently in development. It should be considered as bleeding edge or pre-α stage.
 
+## Principle of operation
+The *clf* executable processing is simple. After reading the YAML configuration file passed in the command line, it reads each logfile (or a list of logfiles provided by an external command or script) and tests each line against the defined regexes. If a match is found, it triggers an external script, either by spawning a new process and providing a set of environment variables to this process (and optionnally updating the *PATH* or *Path* variable, depending on the OS). Or by establishing a new socket connection to a remote address and port configured in the configuration file, and sending a JSON data structure with a set of variables coming from the search.
+
+The plugin output and exit code is depending on what is found in the provided logfiles.
+
+## Command line arguments
+
 ## Format of the YAML configuration file
 The current format of the configuration file defines where and what to search is a standard YAML format. 
 
@@ -165,15 +172,26 @@ searches:
 ## Detailed YAML configuration tags
 Each tag in the YAML file could be set to specify a feature. A tag can be eith optional or mandatory.
 
-tag name | mandatory? | description | default
----                        | --- | --- | ---
-global                     | no  | a list of options, which are set globally for all defined searches | N/A
-path                       | no  | a list of OS-specific paths, separated by either ":" for Unix, and ";" for Windows.  This path will be searched for spawning the external script, if the provided script path is relative| '/usr/sbin:/usr/bin:/sbin:/bin' for Unix, or 'C:\Windows\system32;C:\Windows;C:\Windows\System32\Wbem;' for Windows. 
-snapshot_file              | no  | a file which will keep runtime data | '/tmp/clf_snapshot.json' on Unix, or any temporary Windows directory plus 'clf_snapshot.json'
-snapshot_retention         | no  | number of seconds after which runtime data will be deleted from snapshot file | 0 which means keep forever
-user_vars                  | no  | a YAML list of user-defined variables. These will be provided as environment variables, prefixed with 'CLF_', to the called script | N/A
-                        
+tag name | mandatory? | description
+---                        | --- | --- 
+global       | no  |  a list of options, which are set globally for all defined searches
+path         | no  |  This path will be searched for spawning the external script, if the provided script path is relative. Will defaults to '/usr/sbin:/usr/bin:/sbin:/bin' for Unix, or 'C:\Windows\system32;C:\Windows;C:\Windows\System32\Wbem;' for Windows.               
+snapshot_file              | no  | a file which will keep runtime data. If not present, defaults to '/tmp/clf_snapshot.json' on Unix, or any temporary Windows directory plus 'clf_snapshot.json'
+snapshot_retention         | no  | number of seconds after which runtime data will be deleted from snapshot file, for a specific tag. 0 means keep forever, default is ??
+user_vars                  | no  | a YAML list of user-defined variables. These will be provided as environment variables, prefixed with 'CLF_', to the called script
+searches    | yes | a list of data defining where to search for, what to search for, and which action to trigger on a match
+logfile     | yes | the path to the logfile to search for. If defined as a relative path, it'll be relative to the current directory
+process     | no  | set it to *false* if you don't want to process the logfile. Defaults to *true* if not present
+tags        | yes | a YAML list of structures, defining what to search
+name        | yes | a label to refer to for this search
+options     | no | a list of options specific to a tag and controlling how search is managed. See below for a complete list of possible options
+script      | no | a definition of an external script to call, whenever a match is found in the logfile
+path        | yes | the absolute or relative path to the external script
+args        | no | a YAML list of optional arguments, given to the external script when called
+patterns    | yes | a list of either warning or critical regexes, which are tested to match for each line
 ---
+
+## Patterns definition
 
 ## Environment provided to the called scripts or commands
 Whenever a match is found when searching a logfile, if provided, a script is called, with optional arguments. A list of environment variables is created and passed to the created process, to be used by the called script. Following is the list of created variables:
