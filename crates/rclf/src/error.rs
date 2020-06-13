@@ -10,6 +10,7 @@ pub enum AppCustomErrorKind {
     UnsupportedPatternType,
     FileNotUsable,
     NotAFile,
+    UnsupportedSearchOption,
 }
 
 /// A specific error type combining all possible error types in the app.

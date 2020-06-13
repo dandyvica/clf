@@ -96,7 +96,7 @@ searches:
   - logfile: tests/logfiles/small_access.log.gz
     tags: 
       - name: http_access_gzipped
-        options: "runscript,"
+        #options: "runscript,"
         script: { 
           path: "tests/scripts/echovars.py", 
           args: ['arg1', 'arg2', 'arg3']
@@ -119,7 +119,7 @@ searches:
     }
     tags: 
       - name: all_logs
-        options: "runscript,"
+        #options: "runscript,"
         script: { 
           path: "tests/scripts/echovars.py", 
           args: ['arg1', 'arg2', 'arg3']

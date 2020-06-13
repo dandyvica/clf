@@ -15,7 +15,7 @@ use rclf::{
     callback::ChildData,
     config::{Config, LogSource},
     logfile::{Lookup, Wrapper},
-    nagios::{LogfileMatchCounter, LogfileCounter, MatchCounter, NagiosError, NagiosVersion},
+    nagios::{LogfileCounter, LogfileMatchCounter, MatchCounter, NagiosError, NagiosVersion},
     snapshot::Snapshot,
     util::Usable,
     variables::Variables,
@@ -275,11 +275,7 @@ fn main() {
     debug!("global exit counters: {:?}", global_counter);
     debug!("logfile exit counters: {:?}", logfile_counter);
 
-    nagios_output(
-        &global_counter,
-        &logfile_counter,
-        &options.nagios_version,
-    );
+    nagios_output(&global_counter, &logfile_counter, &options.nagios_version);
 
     // print out final results
     //Ok(())
@@ -422,7 +418,9 @@ fn nagios_output(
         NagiosVersion::NagiosNrpe3 => {
             for (path, counter) in logfile_counter.iter() {
                 match counter {
-                    LogfileCounter::Stats(stats) => println!("{}: {}", path.display(), stats.output()),
+                    LogfileCounter::Stats(stats) => {
+                        println!("{}: {}", path.display(), stats.output())
+                    }
                     LogfileCounter::ErrorMsg(msg) => println!("{}: {}", path.display(), msg),
                 }
             }

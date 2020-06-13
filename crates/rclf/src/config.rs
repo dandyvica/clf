@@ -15,6 +15,7 @@
 
 //use std::convert::TryFrom;
 use std::collections::HashMap;
+use std::convert::TryFrom;
 use std::fs::File;
 use std::io::Read;
 use std::path::{Path, PathBuf};
@@ -25,7 +26,7 @@ use serde::Deserialize;
 
 use crate::{
     callback::{Callback, ChildData},
-    error::AppError,
+    error::{AppCustomErrorKind, AppError},
     nagios::NagiosError,
     pattern::{PatternSet, PatternType},
     variables::Variables,
@@ -34,7 +35,7 @@ use crate::{
 /// A list of options which are specific to a search. They might or might not be used. If an option is not present, it's deemed false.
 /// By default, all options are either false, or use the default corresponding type.
 #[derive(Debug, Deserialize, Default, Clone)]
-#[serde(from = "String")]
+#[serde(try_from = "String")]
 pub struct SearchOptions {
     /// If `true`, the defined script will be run a first match.
     pub runscript: bool,
@@ -91,17 +92,42 @@ macro_rules! add_typed_option {
 }
 
 /// Converts a list of comma-separated options to a `SearchOptions` structure.
-impl From<String> for SearchOptions {
-    fn from(option_list: String) -> Self {
+impl TryFrom<String> for SearchOptions {
+    type Error = AppError;
+
+    fn try_from(option_list: String) -> Result<Self, Self::Error> {
+        // list of valid options
+        const VALID_OPTIONS: &[&str] = &[
+            "runscript",
+            "keepoutput",
+            "rewind",
+            "criticalthreshold",
+            "warningthreshold",
+            "protocol",
+            "savethresholdcount",
+            "sticky",
+            "fastforward",
+        ];
+
         // create a default options structure
         let mut opt = SearchOptions::default();
 
         // convert the input list to a vector
-        let v: Vec<_> = option_list.split(',').map(|x| x.trim()).collect();
+        let opt_list: Vec<_> = option_list.split(',').map(|x| x.trim()).collect();
+
+        // checks if there're any invalid arguments
+        for opt in &opt_list {
+            if VALID_OPTIONS.iter().all(|x| !opt.contains(x)) {
+                return Err(AppError::App {
+                    err: AppCustomErrorKind::UnsupportedSearchOption,
+                    msg: format!("search option: {}  is not supported", opt),
+                });
+            }
+        }
 
         // use Rust macro to add bool options if any
         add_bool_option!(
-            v,
+            opt_list,
             opt,
             runscript,
             rewind,
@@ -112,7 +138,7 @@ impl From<String> for SearchOptions {
 
         // other options like key=value if any
         // first build a vector of such options. We first search for = and then split according to '='
-        let kv_options: Vec<_> = v.iter().filter(|&x| x.contains('=')).collect();
+        let kv_options: Vec<_> = opt_list.iter().filter(|&x| x.contains('=')).collect();
 
         // need to test whether we found 'key=value' options
         if !kv_options.is_empty() {
@@ -137,7 +163,7 @@ impl From<String> for SearchOptions {
             }
         }
 
-        opt
+        Ok(opt)
     }
 }
 
