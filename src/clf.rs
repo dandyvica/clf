@@ -15,7 +15,7 @@ use rclf::{
     callback::ChildData,
     config::{Config, LogSource},
     logfile::{Lookup, Wrapper},
-    nagios::{LogfileMatchCounter, MatchCounter, NagiosError, NagiosVersion},
+    nagios::{LogfileMatchCounter, LogfileCounter, MatchCounter, NagiosError, NagiosVersion},
     snapshot::Snapshot,
     util::Usable,
     variables::Variables,
@@ -39,10 +39,10 @@ fn main() {
     let options = CliOptions::get_options();
 
     // this will keep cumulative number of critical or warning matches and will be used for plugin output
-    let mut global_exit_counter: MatchCounter = MatchCounter::default();
+    let mut global_counter: MatchCounter = MatchCounter::default();
 
     // and this for each invididual file
-    let mut logfile_exit_counter = LogfileMatchCounter::new();
+    let mut logfile_counter = LogfileMatchCounter::new();
 
     // print out options if requested and exits
     if options.show_options {
@@ -183,9 +183,8 @@ fn main() {
             );
 
             // report missing logfile
-            // get a mutable reference on inner counter structure
-            //let mut logfile_counter = &mut logfile_exit_counter.or_default(&search.logfile);
-            //logfile_counter.app_error = (search.io_error.clone(), Some(err.to_string()));
+            let error_msg = format!("{}", err);
+            logfile_counter.set_error(&search.logfile, &error_msg);
 
             continue;
         }
@@ -219,8 +218,8 @@ fn main() {
                 global: config.get_global(),
                 tag: &tag,
                 vars: &mut vars,
-                global_exit_counter: &mut global_exit_counter,
-                logfile_exit_counter: &mut logfile_exit_counter,
+                global_counter: &mut global_counter,
+                logfile_counter: &mut logfile_counter,
             };
 
             // now we can search for the pattern and save the child handle if a script was called
@@ -243,7 +242,7 @@ fn main() {
                     );
 
                     // get a mutable reference on inner counter structure
-                    // let mut logfile_counter = &mut logfile_exit_counter.or_default(&search.logfile);
+                    // let mut logfile_counter = &mut logfile_counter.or_default(&search.logfile);
                     // logfile_counter.app_error = (tag.options.logfilemissing.clone(), Some(err));
                 }
             }
@@ -273,12 +272,12 @@ fn main() {
     );
 
     // display output to comply to Nagios plug-in convention
-    debug!("global exit counters: {:?}", global_exit_counter);
-    debug!("logfile exit counters: {:?}", logfile_exit_counter);
+    debug!("global exit counters: {:?}", global_counter);
+    debug!("logfile exit counters: {:?}", logfile_counter);
 
     nagios_output(
-        &global_exit_counter,
-        &logfile_exit_counter,
+        &global_counter,
+        &logfile_counter,
         &options.nagios_version,
     );
 
@@ -286,7 +285,7 @@ fn main() {
     //Ok(())
 
     // final exit
-    let exit_code = NagiosError::from(&global_exit_counter);
+    let exit_code = NagiosError::from(&global_counter);
     info!("exiting process pid:{}, exit code:{:?}", id(), exit_code);
     exit(exit_code as i32);
 }
@@ -418,14 +417,17 @@ fn nagios_output(
     //     println!("{}|", global_exit_data.0);
     // }
 
-    // match nagios_version {
-    //     NagiosVersion::NagiosNrpe3 => {
-    //         for (path, counter) in logfile_counter.iter() {
-    //             let logfile_exit_data = counter.output();
-    //             println!("{}: {}", path.display(), logfile_exit_data.0);
-    //         }
-    //     }
+    // plugin output depends on the Nagios version
+    match nagios_version {
+        NagiosVersion::NagiosNrpe3 => {
+            for (path, counter) in logfile_counter.iter() {
+                match counter {
+                    LogfileCounter::Stats(stats) => println!("{}: {}", path.display(), stats.output()),
+                    LogfileCounter::ErrorMsg(msg) => println!("{}: {}", path.display(), msg),
+                }
+            }
+        }
 
-    //     NagiosVersion::NagiosNrpe2 => {}
-    // };
+        NagiosVersion::NagiosNrpe2 => {}
+    };
 }

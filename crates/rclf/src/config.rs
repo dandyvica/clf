@@ -18,7 +18,6 @@ use std::collections::HashMap;
 use std::fs::File;
 use std::io::Read;
 use std::path::{Path, PathBuf};
-use std::str::FromStr;
 
 use log::{debug, error, info};
 use regex::Regex;
@@ -27,9 +26,9 @@ use serde::Deserialize;
 use crate::{
     callback::{Callback, ChildData},
     error::AppError,
+    nagios::NagiosError,
     pattern::{PatternSet, PatternType},
     variables::Variables,
-    nagios::NagiosError,
 };
 
 /// A list of options which are specific to a search. They might or might not be used. If an option is not present, it's deemed false.
@@ -123,8 +122,8 @@ impl From<String> for SearchOptions {
             // now we can safely split
             for kv in &kv_options {
                 let splitted_options: Vec<_> = kv.split('=').map(|x| x.trim()).collect();
-                let key = splitted_options[0];
-                let value = splitted_options[1];
+                let _key = splitted_options[0];
+                let _value = splitted_options[1];
 
                 // add additional non-boolean options if any
                 add_typed_option!(splitted_options, criticalthreshold, opt, u16);

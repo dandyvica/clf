@@ -7,3 +7,4 @@ Cargo.lock
 clf.log
 *.log
 *.gz
+/examples

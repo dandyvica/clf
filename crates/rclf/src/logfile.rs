@@ -217,8 +217,8 @@ pub struct Wrapper<'a> {
     pub global: &'a GlobalOptions,
     pub tag: &'a Tag,
     pub vars: &'a mut Variables,
-    pub global_exit_counter: &'a mut MatchCounter,
-    pub logfile_exit_counter: &'a mut LogfileMatchCounter,
+    pub global_counter: &'a mut MatchCounter,
+    pub logfile_counter: &'a mut LogfileMatchCounter,
 }
 
 /// Return type for all `Lookup` methods.
@@ -301,9 +301,9 @@ impl Lookup for LogFile {
         let mut bytes_count = 0;
         let mut line_number = 0;
 
-        trace!("global_exit_counter: {:?}", &wrapper.global_exit_counter);
-        trace!("logfile_exit_counter: {:?}", &wrapper.logfile_exit_counter);
-        let mut logfile_counter = &mut wrapper.logfile_exit_counter.or_default(&self.path);
+        trace!("global_counter: {:?}", &wrapper.global_counter);
+        trace!("logfile_counter: {:?}", &wrapper.logfile_counter);
+        let logfile_counter = &mut wrapper.logfile_counter.or_default(&self.path);
 
         //------------------------------------------------------------------------------------
         // 2. reset `RunData` fields depending on local options
@@ -371,8 +371,8 @@ impl Lookup for LogFile {
                                     buffer.clear();
                                     continue;
                                 }
-                                wrapper.global_exit_counter.warning_count += 1;
-                                logfile_counter.warning_count += 1;
+                                wrapper.global_counter.warning_count += 1;
+                                logfile_counter.inc_warning();
                             }
                             PatternType::critical => {
                                 rundata.critical_threshold += 1;
@@ -382,8 +382,8 @@ impl Lookup for LogFile {
                                     buffer.clear();
                                     continue;
                                 }
-                                wrapper.global_exit_counter.critical_count += 1;
-                                logfile_counter.critical_count += 1;
+                                wrapper.global_counter.critical_count += 1;
+                                logfile_counter.inc_critical();
                             }
                             _ => (),
                         };
@@ -453,8 +453,8 @@ impl Lookup for LogFile {
         rundata.last_run = time.as_secs();
 
         trace!("logfile counter:{:?}", logfile_counter);
-        trace!("global_exit_counter: {:?}", &wrapper.global_exit_counter);
-        trace!("logfile_exit_counter: {:?}", &wrapper.logfile_exit_counter);
+        trace!("global_counter: {:?}", &wrapper.global_counter);
+        trace!("logfile_counter: {:?}", &wrapper.logfile_counter);
         trace!(
             "========================> end processing logfile:{} for tag:{}",
             self.path.display(),

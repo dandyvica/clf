@@ -1,6 +1,5 @@
 //! List of Nagios specific const or structures.
 use std::collections::HashMap;
-use std::fmt;
 use std::path::PathBuf;
 use std::str::FromStr;
 
@@ -107,20 +106,6 @@ pub struct MatchCounter {
     pub warning_count: u16,
 }
 
-//#[derive(Debug)]
-// pub enum MatchCounter {
-//     Stats {
-//         /// Number of matches triggered by a critical pattern.
-//         critical_count: u16,
-
-//         /// Number of matches triggered by a warning pattern.
-//         warning_count: u16,
-//     },
-//     Error(String),
-// }
-
-/// Structure used to
-
 /// Get the exit code from the MatchCounter
 impl From<&MatchCounter> for NagiosError {
     fn from(m: &MatchCounter) -> Self {
@@ -148,7 +133,7 @@ impl From<&MatchCounter> for NagiosError {
 
 impl MatchCounter {
     /// Builds the string for plugin output
-    pub fn output(&self, nagios_error: &Option<NagiosError>) -> String {
+    pub fn output(&self) -> String {
         match self {
             // neither errors nor warnings
             MatchCounter {
@@ -182,9 +167,34 @@ impl MatchCounter {
     }
 }
 
-/// This will hold error counters for each logfile
+/// A counter for logfiles: either a set a counter, or an error message when this logfile can't be opened.
 #[derive(Debug)]
-pub struct LogfileMatchCounter(pub HashMap<PathBuf, MatchCounter>);
+pub enum LogfileCounter {
+    Stats(MatchCounter),
+    ErrorMsg(String),
+}
+
+impl LogfileCounter {
+    /// Helper function to increment the `Stats` enum branch.
+    pub fn inc_warning(&mut self) {
+        match self {
+            LogfileCounter::Stats(counter) => counter.warning_count += 1,
+            LogfileCounter::ErrorMsg(_) => (),
+        }
+    }
+
+    /// Helper function to increment the `Stats` enum branch.
+    pub fn inc_critical(&mut self) {
+        match self {
+            LogfileCounter::Stats(counter) => counter.critical_count += 1,
+            LogfileCounter::ErrorMsg(_) => (),
+        }
+    }
+}
+
+/// This will hold error counters for each logfile processed.
+#[derive(Debug)]
+pub struct LogfileMatchCounter(pub HashMap<PathBuf, LogfileCounter>);
 
 impl LogfileMatchCounter {
     /// Just defines a new empty counter structure.
@@ -192,14 +202,23 @@ impl LogfileMatchCounter {
         LogfileMatchCounter(HashMap::with_capacity(30))
     }
 
-    /// Ensures a value is in the entry by inserting the default if empty, and returns a mutable reference to the value in the entry.
-    pub fn or_default(&mut self, path: &PathBuf) -> &mut MatchCounter {
-        self.0.entry(path.clone()).or_default()
+    /// If calling this method, we know we're using only the enum `Stats` branch.
+    pub fn or_default(&mut self, path: &PathBuf) -> &mut LogfileCounter {
+        self.0
+            .entry(path.clone())
+            .or_insert_with(|| LogfileCounter::Stats(MatchCounter::default()))
     }
 
     /// A fast way to iterate through internal field.
-    pub fn iter(&self) -> std::collections::hash_map::Iter<PathBuf, MatchCounter> {
+    pub fn iter(&self) -> std::collections::hash_map::Iter<PathBuf, LogfileCounter> {
         self.0.iter()
+    }
+
+    /// Sets the error message for the `ErrorMsg` branch.
+    pub fn set_error(&mut self, path: &PathBuf, msg: &str) {
+        let _ = self
+            .0
+            .insert(path.clone(), LogfileCounter::ErrorMsg(msg.to_string()));
     }
 }
 
