@@ -1,0 +1,43 @@
+---
+# a list of logfiles & tags, to search for patterns. This is either a list of logfiles, or a command giving back a list of 
+# files to search for.
+searches:
+  # name & path of the logfile to search
+  - logfile: tests/logfiles/small_access.log
+
+    # list of tags to refer to
+    tags: 
+
+      # tag name
+      - name: http_access_get_or_post
+
+        # set it to false if you don't want to process this tag. This is particularly useful for testing purposes, without changing other fields
+        process: true
+
+        # a list of comma-separated options to manage the search. Current supported options are:
+        # runscript: if present, means the provided script will be called
+        # rewind: restart the search from the beginning of the file
+        #options: "warningthreshold=0"
+
+        # a script or command to be called, every time a hit is found.
+        script: { 
+          path: "tests/scripts/echovars.py",
+          args: ['arg1', 'arg2', 'arg3']
+        }
+
+        # list of patterns to match
+        patterns:
+          critical: {
+            regexes: [
+              'GET\s+([/\w]+)\s+HTTP/1\.1"\s+(?P<code>\d+)\s+(?P<length>\d+)',
+            ],
+          }
+          warning: {
+            regexes: [
+              'POST\s+([/\w\.]+)\s+HTTP/1\.1"\s+(?P<code>\d+)\s+(?P<length>\d+)'
+            ],
+            exceptions: [
+              '^\d{2,3}\.'
+            ]
+          }
+

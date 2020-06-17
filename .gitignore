@@ -8,3 +8,4 @@ clf.log
 *.log
 *.gz
 /examples
+/tests/tmp

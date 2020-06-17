@@ -101,7 +101,7 @@ impl CliOptions {
                     .short("m")
                     .long("logsize")
                     .required(false)
-                    .help("When logger is enabled, set the maximum logger size (in Mb). If specified, logger file will be deleted if current size is over this value.")
+                    .help("When logger is enabled, set the maximum logger size (in Mb). If specified, logger file will be deleted if current size is over this value. Defaults to 10 MB.")
                     .takes_value(true),
             )
             .arg(

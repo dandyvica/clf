@@ -31,7 +31,7 @@ This reimplementation in Rust aims at solving original *check_logfiles* drawback
 Current release is 0.1 and currently in development. It should be considered as bleeding edge or pre-α stage.
 
 ## Principle of operation
-The *clf* executable processing is simple. After reading the YAML configuration file passed in the command line, it reads each logfile (or a list of logfiles provided by an external command or script) and tests each line against the defined regexes. If a match is found, it triggers an external script, either by spawning a new process and providing a set of environment variables to this process (and optionnally updating the *PATH* or *Path* variable, depending on the OS). Or by establishing a new socket connection to a remote address and port configured in the configuration file, and sending a JSON data structure with a set of variables coming from the search.
+The *clf* executable processing is simple. After reading the YAML configuration file passed to the command line, it reads each logfile (or a list of logfiles provided by an external command or script) and tests each line against the defined regexes. If a match is found, it triggers an external script, either by spawning a new process and providing a set of environment variables to this process (and optionnally updating the *PATH* or *Path* variable, depending on the OS). Or by establishing a new socket connection to a remote address and port configured in the configuration file, and sending a JSON data structure with a set of variables coming from the search.
 
 The plugin output and exit code is depending on what is found in the provided logfiles.
 
@@ -191,7 +191,43 @@ args        | no | a YAML list of optional arguments, given to the external scri
 patterns    | yes | a list of either warning or critical regexes, which are tested to match for each line
 ---
 
+The way *clf* searches in logfiles is controlled, for each tag, by a list of comma-separated options. Some are only boolean options, soem others require to be set using an equality:
+
+option | description
+--- | ---
+runscript                | if set, the defined script will be call for each line where a *critical* or *warning* pattern matches
+rewind                   | if set, *clf* will read the considered logfile from the beginning, bypassing any offset recorded in the *snapshot* file
+criticalthreshold=<u16>  | when set to a 2-byte positive integer value, it means that critical errors will not be triggered unless this threshold is reached
+warningthreshold=<u16>   | when set to a 2-byte positive integer value, it means that warning errors will not be triggered unless this threshold is reached
+savethresholdcount       | when set, either critical or warning threshold will be save in the *snapshot* file
+
 ## Patterns definition
+When *clf* fetches a line from a logfile, it compares this string with a list of *critical* regexes defined in the configuration file first, if any. Then it moves to comparing with a list of *warning* regexes if any. Ultimately, it compares with a list of *ok* patterns. This latter comparison makes *clf* to reset ongoing threshold to 0.
+
+For *critical* or *warning* patterns, a list of exceptions can be defined, which invalidate any previous triggered match.
+
+It is manadatory to use single quotes when using regexes, because it doesn't incur escaping characters. 
+
+> Note: the current Rust *regex* crate doesn't support lookahead/lookbehind patterns. This can be alleviated using the *execptions* list, specially for negation regexes.
+
+## Getting a list of files instead of a single one
+Using the *loglist* YAML tag, it's possible to get a list of files. Following is an example for Windows & Linux:
+
+```yaml
+# example of a UNIX command, which returns a list of files
+- loglist: { 
+    cmd: 'find',
+    args: ['/var/log', "-maxdepth", "1", "-type", "f", "-name", "[a-d]*.log"]
+  }
+```
+
+```yaml
+# example of a Windows command, which returns a list of files
+- loglist: { 
+    cmd: 'cmd.exe',
+    args: ['/c', 'dir c:\windows\system32\*.log /s /a /b']
+  }
+```
 
 ## Environment provided to the called scripts or commands
 Whenever a match is found when searching a logfile, if provided, a script is called, with optional arguments. A list of environment variables is created and passed to the created process, to be used by the called script. Following is the list of created variables:
@@ -231,3 +267,98 @@ do
     echo $v
 done
 ```
+
+## List of command-line arguments
+A self-explanatory help can be used with:
+
+```console
+clf --help
+```
+or
+
+```console
+clf -h
+```
+
+Following is a list of cli arguments:
+
+```
+USAGE:
+    clf [FLAGS] [OPTIONS] --config <config>
+
+FLAGS:
+    -e, --checkconf    
+            Check configuration file correctness, print it out and exit.
+
+    -d, --delsnap      
+            Delete snapshot file before searching.
+
+    -h, --help         
+            Prints help information
+
+    -s, --showopt      
+            Just show the command line options passed and exit.
+
+    -V, --version      
+            Prints version information
+
+
+OPTIONS:
+    -l, --clflog <clflog>        
+            Name of the logger file for logging information of this process.
+
+    -c, --config <config>        
+            Mandatory argument. The name and path of the YAML configuration file, containing logfiles to search for and
+            patterns to match.
+    -g, --loglevel <loglevel>    
+            When logger is enabled, set the minimum logger level. Defaults to 'Info'. [possible values: Off, Error,
+            Warn, Info, Debug, Trace]
+    -m, --logsize <logsize>      
+            When logger is enabled, set the maximum logger size (in Mb). If specified, logger file will be deleted if
+            current size is over this value. Defaults to 10 MB.
+    -n, --nagver <nagver>        
+            Set the Nagios NRPE protocol version used for plugin output. Defaults to version 3. [possible values: 2, 3]
+
+```
+
+## Plugin output
+Here is an example of plugin output:
+
+```
+CRITICAL - (errors:662, warnings:28, unknowns:2)
+tests/logfiles/small_access.log.gz: No such file or directory (os error 2)
+/var/log/dpkg.log: OK - (errors:0, warnings:0, unknowns:0)
+/var/log/auth.log: CRITICAL - (errors:146, warnings:0, unknowns:0)
+/var/log/boot.log: Permission denied (os error 13)
+tests/logfiles/small_access.log: CRITICAL - (errors:501, warnings:28, unknowns:0)
+/var/log/bootstrap.log: CRITICAL - (errors:15, warnings:0, unknowns:0)
+/var/log/alternatives.log: OK - (errors:0, warnings:0, unknowns:0)
+```
+
+## Compiling *clf*
+Using the standard *cargo* command:
+
+```console
+$ cargo build --release
+```
+
+To compile with the *musl* library as a standalone static executable:
+
+```
+$ cargo build --target x86_64-unknown-linux-musl --release   
+```
+
+## TODO
+Still missing in the short run:
+
+* write dev()/inode() Linux-equivalent for Windows
+* manage log rotations
+* keep Tcp connection by using a *keepalive* kind-of option
+
+Missing in the long run:
+
+* use an OS thread pool to parallelize logfile search. This, due to the way Rust handles threads, should incur lots of changes in the current code base.
+
+
+
+

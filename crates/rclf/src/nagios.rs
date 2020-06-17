@@ -1,11 +1,12 @@
 //! List of Nagios specific const or structures.
 use std::collections::HashMap;
+use std::fmt;
 use std::path::PathBuf;
 use std::str::FromStr;
 
 use serde::Deserialize;
 
-//use crate::{config::LogfileMissing, error::AppError};
+use crate::{error::AppError, util::DEFAULT_CONTAINER_CAPACITY};
 
 /// enum list of Nagios error codes.
 #[derive(Debug, Deserialize, Clone, PartialEq)]
@@ -23,6 +24,7 @@ impl Default for NagiosError {
     }
 }
 
+/// Simple conversion from a string
 impl FromStr for NagiosError {
     type Err = ();
 
@@ -48,32 +50,6 @@ impl From<NagiosError> for &'static str {
         }
     }
 }
-
-/// Formatted string used to output to NRPE
-// impl fmt::Display for NagiosError {
-//     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-//         write!("{} - {}", self.into(), self as i32
-
-//         match *self {
-//             AppError::Io(ref err) => err.fmt(f),
-//             AppError::Regex(ref err) => err.fmt(f),
-//             AppError::Parse(ref err) => err.fmt(f),
-//             AppError::Yaml(ref err) => err.fmt(f),
-//             AppError::Json(ref err) => err.fmt(f),
-//             AppError::Utf8Error(ref err) => err.fmt(f),
-//             AppError::SystemTime(ref err) => err.fmt(f),
-//             AppError::App { ref err, ref msg } => {
-//                 write!(f, "A custom error occurred {:?}, custom msg {:?}", err, msg)
-//             }
-//         }
-//     }
-// }
-
-/// List of Nagios exit codes & strings
-pub const EXIT_NAGIOS_OK: (i32, &'static str) = (0, "OK");
-pub const EXIT_NAGIOS_WARNING: (i32, &'static str) = (1, "WARNING");
-pub const EXIT_NAGIOS_CRITICAL: (i32, &'static str) = (2, "CRITICAL");
-pub const EXIT_NAGIOS_UNKNOWN: (i32, &'static str) = (3, "UNKNOWN");
 
 /// Nagios protocol version
 #[derive(Debug)]
@@ -104,6 +80,12 @@ pub struct MatchCounter {
 
     /// Number of matches triggered by a warning pattern.
     pub warning_count: u16,
+
+    /// Number of unknowns due to errors reading logfiles.
+    pub unknown_count: u16,
+
+    /// Optional error if an error occured reading file
+    pub logfile_error: Option<AppError>,
 }
 
 /// Get the exit code from the MatchCounter
@@ -114,136 +96,203 @@ impl From<&MatchCounter> for NagiosError {
             MatchCounter {
                 critical_count: 0,
                 warning_count: 0,
+                unknown_count: 0,
+                logfile_error: _,
             } => NagiosError::OK,
+
+            // unkowns only
+            MatchCounter {
+                critical_count: 0,
+                warning_count: 0,
+                unknown_count: _,
+                logfile_error: _,
+            } => NagiosError::UNKNOWN,
 
             // only warnings errors
             MatchCounter {
                 critical_count: 0,
                 warning_count: _,
+                unknown_count: _,
+                logfile_error: _,
             } => NagiosError::WARNING,
 
             // critical errors
             MatchCounter {
                 critical_count: _,
                 warning_count: _,
+                unknown_count: _,
+                logfile_error: _,
             } => NagiosError::CRITICAL,
         }
     }
 }
 
-impl MatchCounter {
-    /// Builds the string for plugin output
-    pub fn output(&self) -> String {
-        match self {
-            // neither errors nor warnings
-            MatchCounter {
-                critical_count: 0,
-                warning_count: 0,
-            } => format!("{:?} - no errors or warnings", NagiosError::OK),
+/// Formatted string used to output to NRPE
+impl fmt::Display for MatchCounter {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        // get error code from counters
+        let nagios_err = NagiosError::from(self);
 
-            // only warnings errors
-            MatchCounter {
-                critical_count,
-                warning_count: 0,
-            } => format!("{:?} - ({} errors)", NagiosError::CRITICAL, critical_count),
+        // output is similar for all errors
+        write!(
+            f,
+            "{:?} - (errors:{}, warnings:{}, unknowns:{})",
+            nagios_err, self.critical_count, self.warning_count, self.unknown_count
+        )
 
-            // only critical errors
-            MatchCounter {
-                critical_count: 0,
-                warning_count,
-            } => format!("{:?} - ({} warnings)", NagiosError::WARNING, warning_count),
+        // match self {
+        //     // neither errors nor warnings
+        //     MatchCounter {
+        //         critical_count: 0,
+        //         warning_count: 0,
+        //     } => write!(f, "{:?} - no errors or warnings", NagiosError::OK),
 
-            // both errors and warnings
-            MatchCounter {
-                critical_count,
-                warning_count,
-            } => format!(
-                "{:?} - ({} errors, {} warnings)",
-                NagiosError::CRITICAL,
-                critical_count,
-                warning_count,
-            ),
-        }
-    }
-}
+        //     // only warnings errors
+        //     MatchCounter {
+        //         critical_count,
+        //         warning_count: 0,
+        //     } => write!(
+        //         f,
+        //         "{:?} - ({} errors)",
+        //         NagiosError::CRITICAL,
+        //         critical_count
+        //     ),
 
-/// A counter for logfiles: either a set a counter, or an error message when this logfile can't be opened.
-#[derive(Debug)]
-pub enum LogfileCounter {
-    Stats(MatchCounter),
-    ErrorMsg(String),
-}
+        //     // only critical errors
+        //     MatchCounter {
+        //         critical_count: 0,
+        //         warning_count,
+        //     } => write!(
+        //         f,
+        //         "{:?} - ({} warnings)",
+        //         NagiosError::WARNING,
+        //         warning_count
+        //     ),
 
-impl LogfileCounter {
-    /// Helper function to increment the `Stats` enum branch.
-    pub fn inc_warning(&mut self) {
-        match self {
-            LogfileCounter::Stats(counter) => counter.warning_count += 1,
-            LogfileCounter::ErrorMsg(_) => (),
-        }
-    }
-
-    /// Helper function to increment the `Stats` enum branch.
-    pub fn inc_critical(&mut self) {
-        match self {
-            LogfileCounter::Stats(counter) => counter.critical_count += 1,
-            LogfileCounter::ErrorMsg(_) => (),
-        }
+        //     // both errors and warnings
+        //     MatchCounter {
+        //         critical_count,
+        //         warning_count,
+        //     } => write!(
+        //         f,
+        //         "{:?} - ({} errors, {} warnings)",
+        //         NagiosError::CRITICAL,
+        //         critical_count,
+        //         warning_count,
+        //     ),
+        // }
     }
 }
 
 /// This will hold error counters for each logfile processed.
 #[derive(Debug)]
-pub struct LogfileMatchCounter(pub HashMap<PathBuf, LogfileCounter>);
+pub struct LogfileMatchCounter(pub HashMap<PathBuf, MatchCounter>);
 
 impl LogfileMatchCounter {
     /// Just defines a new empty counter structure.
     pub fn new() -> Self {
-        LogfileMatchCounter(HashMap::with_capacity(30))
+        LogfileMatchCounter(HashMap::with_capacity(DEFAULT_CONTAINER_CAPACITY))
     }
 
     /// If calling this method, we know we're using only the enum `Stats` branch.
-    pub fn or_default(&mut self, path: &PathBuf) -> &mut LogfileCounter {
-        self.0
-            .entry(path.clone())
-            .or_insert_with(|| LogfileCounter::Stats(MatchCounter::default()))
+    pub fn or_default(&mut self, path: &PathBuf) -> &mut MatchCounter {
+        self.0.entry(path.clone()).or_default()
     }
 
     /// A fast way to iterate through internal field.
-    pub fn iter(&self) -> std::collections::hash_map::Iter<PathBuf, LogfileCounter> {
+    pub fn iter(&self) -> std::collections::hash_map::Iter<PathBuf, MatchCounter> {
         self.0.iter()
     }
 
-    /// Sets the error message for the `ErrorMsg` branch.
-    pub fn set_error(&mut self, path: &PathBuf, msg: &str) {
-        let _ = self
-            .0
-            .insert(path.clone(), LogfileCounter::ErrorMsg(msg.to_string()));
+    /// Checks whether the underlying hashmap contains an error
+    pub fn is_error(&self) -> bool {
+        self.0.iter().any(|(_, v)| v.logfile_error.is_some())
+    }
+}
+
+/// Formatted string used for plugin output
+impl fmt::Display for LogfileMatchCounter {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let mut s = String::with_capacity(crate::util::DEFAULT_STRING_CAPACITY);
+
+        for (path, counter) in self.0.iter() {
+            match &counter.logfile_error {
+                None => s.push_str(&format!("{}: {}\n", path.display(), counter)),
+                Some(error) => s.push_str(&format!("{}: {}\n", path.display(), error)),
+            }
+        }
+
+        write!(f, "{}", s)
     }
 }
 
 mod tests {
-    use std::path::PathBuf;
-
+    //use std::path::PathBuf;
     use super::*;
 
     #[test]
-    fn or_insert() {
-        let mut counter = LogfileMatchCounter::new();
-        assert!(counter.0.is_empty());
+    fn display() {
+        let mut m = MatchCounter {
+            critical_count: 10,
+            warning_count: 100,
+            unknown_count: 0,
+            logfile_error: None,
+        };
+        assert_eq!(
+            &format!("{}", m),
+            "CRITICAL - (errors:10, warnings:100, unknowns:0)"
+        );
 
-        let x = counter.or_default(&PathBuf::from("/usr/bin/gzip"));
-        x.critical_count = 100;
-        x.warning_count = 200;
+        m.unknown_count = 1;
+        assert_eq!(
+            &format!("{}", m),
+            "CRITICAL - (errors:10, warnings:100, unknowns:1)"
+        );
+    }
 
-        let y = counter.or_default(&PathBuf::from("/usr/bin/gzip"));
-        assert_eq!(y.critical_count, 100);
-        assert_eq!(y.warning_count, 200);
+    #[test]
+    fn from_matcher() {
+        let mut m = MatchCounter {
+            critical_count: 0,
+            warning_count: 0,
+            unknown_count: 0,
+            logfile_error: None,
+        };
+        assert_eq!(NagiosError::from(&m), NagiosError::OK);
+
+        m.warning_count = 1;
+        assert_eq!(NagiosError::from(&m), NagiosError::WARNING);
+
+        m.unknown_count = 1;
+        assert_eq!(NagiosError::from(&m), NagiosError::WARNING);
     }
 
     #[test]
     fn convert() {
-        let err = NagiosError::from_str("ok").unwrap();
+        let mut err = NagiosError::from_str("ok").unwrap();
         assert_eq!(err, NagiosError::OK);
+
+        err = NagiosError::from_str("CRITICAL").unwrap();
+        assert_eq!(err, NagiosError::CRITICAL);
+
+        err = NagiosError::from_str("warning").unwrap();
+        assert_eq!(err, NagiosError::WARNING);
+
+        err = NagiosError::from_str("foo").unwrap();
+        assert_eq!(err, NagiosError::UNKNOWN);
+    }
+
+    #[test]
+    fn logfile_matcher() {
+        let mut m = LogfileMatchCounter::new();
+        let mut a = m.or_default(&PathBuf::from("/usr/bin/gzip"));
+        a.logfile_error = Some(AppError::new(
+            crate::error::AppCustomErrorKind::UnsupportedPatternType,
+            "foo",
+        ));
+        let mut b = m.or_default(&PathBuf::from("/usr/bin/md5sum"));
+
+        assert_eq!(m.iter().count(), 2);
+        assert!(m.is_error());
     }
 }

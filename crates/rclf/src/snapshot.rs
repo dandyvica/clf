@@ -26,6 +26,11 @@ impl Snapshot {
         }
     }
 
+    /// Helper function to return the logfile corresponding to `path`
+    pub fn get_logfile(&self, path: &str) -> Option<&LogFile> {
+        self.snapshot.get(&PathBuf::from(path))
+    }
+
     /// Returns a default snapshot file name if not specified in the configuration file.
     pub fn default_name() -> PathBuf {
         let mut snapfile = std::env::temp_dir();

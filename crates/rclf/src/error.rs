@@ -1,5 +1,6 @@
 //! All structures involved in error management. It combines a list a Rust standard library
 //! error types, used crates error types and a specific one to the application.
+use std::io::ErrorKind;
 use std::{fmt, io, num};
 
 /// Error kind specific to an application error, different from standard errors.
@@ -27,6 +28,24 @@ pub enum AppError {
         err: AppCustomErrorKind,
         msg: String,
     },
+}
+
+impl AppError {
+    /// A simple and convenient creation of a new application error
+    pub fn new(err: AppCustomErrorKind, msg: &str) -> Self {
+        AppError::App {
+            err: err,
+            msg: msg.to_string(),
+        }
+    }
+
+    /// Returns the IO error kind branch if any
+    pub fn get_ioerror(&self) -> Option<ErrorKind> {
+        match self {
+            AppError::Io(io_error) => Some(io_error.kind()),
+            _ => None,
+        }
+    }
 }
 
 impl fmt::Display for AppError {

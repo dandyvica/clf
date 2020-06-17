@@ -4,6 +4,12 @@ use std::path::PathBuf;
 
 use crate::error::{AppCustomErrorKind, AppError};
 
+/// Default capacity for all `Vec` or `HashMap` pre-allocations
+pub const DEFAULT_CONTAINER_CAPACITY: usize = 30;
+
+/// Default capacity for all strings pre-allocations
+pub const DEFAULT_STRING_CAPACITY: usize = 1024;
+
 /// Tells whether a `PathBuf` is accessible.
 pub trait Usable {
     fn is_usable(&self) -> Result<(), AppError>;

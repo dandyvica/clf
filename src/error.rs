@@ -26,4 +26,7 @@ pub enum AppExitCode {
 
     /// Error converting to an integer
     ERROR_CONV = 108,
+
+    /// IO error on config file
+    CONFIG_IO_ERROR = 109,
 }

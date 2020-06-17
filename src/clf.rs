@@ -15,9 +15,9 @@ use rclf::{
     callback::ChildData,
     config::{Config, LogSource},
     logfile::{Lookup, Wrapper},
-    nagios::{LogfileCounter, LogfileMatchCounter, MatchCounter, NagiosError, NagiosVersion},
+    nagios::{LogfileMatchCounter, MatchCounter, NagiosError, NagiosVersion},
     snapshot::Snapshot,
-    util::Usable,
+    util::{Usable, DEFAULT_CONTAINER_CAPACITY},
     variables::Variables,
 };
 
@@ -43,6 +43,9 @@ fn main() {
 
     // and this for each invididual file
     let mut logfile_counter = LogfileMatchCounter::new();
+
+    // this will keep the list of logfiles to manage. Use this external list due to immutable/mutable borrow checking
+    let mut logfile_list: Vec<PathBuf> = Vec::with_capacity(DEFAULT_CONTAINER_CAPACITY);
 
     // print out options if requested and exits
     if options.show_options {
@@ -97,19 +100,24 @@ fn main() {
             eprintln!("error reading stdin: {}", e);
             exit(AppExitCode::STDIN_ERROR as i32);
         }
-
         Config::<LogSource>::from_str(&buffer)
     } else {
         Config::<LogSource>::from_file(&options.config_file)
     };
 
     // check for loading errors
-    if let Err(e) = _config {
+    if let Err(error) = _config {
         eprintln!(
             "error loading config file: {:?}, error: {}",
-            &options.config_file, e
+            &options.config_file, error
         );
-        exit(AppExitCode::CONFIG_ERROR as i32);
+
+        // break down errors
+        match error.get_ioerror() {
+            Some(_) => exit(AppExitCode::CONFIG_IO_ERROR as i32),
+            None => exit(AppExitCode::CONFIG_ERROR as i32),
+        };
+        //exit(AppExitCode::CONFIG_ERROR as i32);
     }
 
     // replace, if any, "loglist" by "logfile"
@@ -127,8 +135,11 @@ fn main() {
     let mut vars = Variables::new();
     vars.insert_uservars(config.get_user_vars());
 
+    //---------------------------------------------------------------------------------------------------
+    // manage snapshot file
+    //---------------------------------------------------------------------------------------------------
     // get snapshot file file
-    let snapfile = config.get_snapshot_name();
+    let snapfile = config.get_snapshot_name().clone();
 
     // delete snapshot file if asked
     if options.delete_snapfile {
@@ -144,6 +155,7 @@ fn main() {
         };
         info!("deleting snapshot file {:?}", &snapfile);
     }
+    info!("using snapshot file:{}", &snapfile.display());
 
     //---------------------------------------------------------------------------------------------------
     // read snapshot data from file
@@ -168,23 +180,35 @@ fn main() {
     // loop through all searches
     //---------------------------------------------------------------------------------------------------
     for search in &config.searches {
+        //
+        if logfile_list.contains(&search.logfile) {
+            continue;
+        }
+
         // log some useful info
         info!(
             "------------ searching into logfile: {}",
-            &search.logfile.display()
+            search.logfile.display()
         );
 
+        // get matcher
+        let mut logfile_match = &mut logfile_counter.or_default(&search.logfile);
+
         // checks if logfile is accessible. If not, no need to move further
-        if let Err(err) = &search.logfile.is_usable() {
+        if let Err(err) = search.logfile.is_usable() {
             error!(
                 "logfile: {} is not a file or is not accessible, error: {}",
-                &search.logfile.display(),
+                search.logfile.display(),
                 err
             );
 
-            // report missing logfile
-            let error_msg = format!("{}", err);
-            logfile_counter.set_error(&search.logfile, &error_msg);
+            // this is a error for this logfile which boils down to a Nagios unknown error
+            logfile_match.unknown_count = 1;
+            logfile_match.logfile_error = Some(err);
+            global_counter.unknown_count += 1;
+
+            // add this file to the list we don't want to process (case of several tags for the same logfile)
+            logfile_list.push(search.logfile.clone());
 
             continue;
         }
@@ -219,7 +243,7 @@ fn main() {
                 tag: &tag,
                 vars: &mut vars,
                 global_counter: &mut global_counter,
-                logfile_counter: &mut logfile_counter,
+                logfile_counter: &mut logfile_match,
             };
 
             // now we can search for the pattern and save the child handle if a script was called
@@ -237,7 +261,7 @@ fn main() {
                     error!(
                         "error: {} when searching logfile: {} for tag: {}",
                         err,
-                        &search.logfile.display(),
+                        search.logfile.display(),
                         &tag.name
                     );
 
@@ -403,6 +427,8 @@ fn nagios_output(
     logfile_counter: &LogfileMatchCounter,
     nagios_version: &NagiosVersion,
 ) {
+    // if there's an unknown error, this means there was an error (probably not found or can't access).
+
     // // first, test if an I/O error has been detected for a logfile in any of the processed logfile.
     // // if so, the overall result will boil down to the first error detected
     // if let Some(logfile_in_error) = logfile_counter.iter().find(|io| io.1.app_error.1.is_some()) {
@@ -412,18 +438,20 @@ fn nagios_output(
     //     let global_exit_data = global_counter.output();
     //     println!("{}|", global_exit_data.0);
     // }
+    println!("{}", global_counter);
 
     // plugin output depends on the Nagios version
     match nagios_version {
         NagiosVersion::NagiosNrpe3 => {
-            for (path, counter) in logfile_counter.iter() {
-                match counter {
-                    LogfileCounter::Stats(stats) => {
-                        println!("{}: {}", path.display(), stats.output())
-                    }
-                    LogfileCounter::ErrorMsg(msg) => println!("{}: {}", path.display(), msg),
-                }
-            }
+            // for (path, counter) in logfile_counter.iter() {
+            //     match counter {
+            //         LogfileCounter::Stats(stats) => {
+            //             println!("{}: {}", path.display(), stats.output())
+            //         }
+            //         LogfileCounter::ErrorMsg(msg) => println!("{}: {}", path.display(), msg),
+            //     }
+            // }
+            println!("{}", logfile_counter);
         }
 
         NagiosVersion::NagiosNrpe2 => {}

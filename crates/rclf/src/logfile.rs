@@ -17,13 +17,10 @@ use crate::{
     callback::ChildData,
     config::{GlobalOptions, Tag},
     error::{AppCustomErrorKind, AppError},
-    nagios::{LogfileMatchCounter, MatchCounter},
+    nagios::MatchCounter,
     pattern::PatternType,
     variables::Variables,
 };
-
-/// Creates new buffer with this initial capacity.
-const BUFFER_SIZE: usize = 1024;
 
 /// A wrapper to store log file processing data.
 #[derive(Debug, Serialize, Deserialize, Default)]
@@ -98,17 +95,10 @@ impl LogFile {
         let directory = path.parent().map(|p| p.to_path_buf());
         let extension = path.extension().map(|x| x.to_string_lossy().to_string());
 
-        // if !path.is_usable() {
-        //     return Err(AppError::App {
-        //         err: AppCustomErrorKind::FileNotUsable,
-        //         msg: format!("file {:?} is not usable", path),
-        //     });
-        // }
-
-        const COMPRESSED_EXT: &[&str] = &["gz", "zip", "xz"];
+        //const COMPRESSED_EXT: &[&str] = &["gz", "zip", "xz"];
         let compressed = match &extension {
             None => false,
-            Some(s) => COMPRESSED_EXT.contains(&s.as_str()),
+            Some(ext) => ext == "gz",
         };
 
         // canonicalize path: absolute form of the path with all intermediate
@@ -218,7 +208,7 @@ pub struct Wrapper<'a> {
     pub tag: &'a Tag,
     pub vars: &'a mut Variables,
     pub global_counter: &'a mut MatchCounter,
-    pub logfile_counter: &'a mut LogfileMatchCounter,
+    pub logfile_counter: &'a mut MatchCounter,
 }
 
 /// Return type for all `Lookup` methods.
@@ -292,7 +282,7 @@ impl Lookup for LogFile {
         );
 
         // uses the same buffer
-        let mut buffer = Vec::with_capacity(BUFFER_SIZE);
+        let mut buffer = Vec::with_capacity(crate::util::DEFAULT_STRING_CAPACITY);
 
         // define a new child handle. This is an Option because the script couldn't be called if not requested so
         let mut children = Vec::new();
@@ -300,10 +290,6 @@ impl Lookup for LogFile {
         // initialize line & byte counters
         let mut bytes_count = 0;
         let mut line_number = 0;
-
-        trace!("global_counter: {:?}", &wrapper.global_counter);
-        trace!("logfile_counter: {:?}", &wrapper.logfile_counter);
-        let logfile_counter = &mut wrapper.logfile_counter.or_default(&self.path);
 
         //------------------------------------------------------------------------------------
         // 2. reset `RunData` fields depending on local options
@@ -362,32 +348,6 @@ impl Lookup for LogFile {
 
                     // is there a match, regarding also exceptions?
                     if let Some(re) = wrapper.tag.is_match(&line) {
-                        // increments thresholds and compare with possible defined limits and accumulate counters for plugin output
-                        match re.0 {
-                            PatternType::warning => {
-                                rundata.warning_threshold += 1;
-                                if rundata.warning_threshold < wrapper.tag.options.warningthreshold
-                                {
-                                    buffer.clear();
-                                    continue;
-                                }
-                                wrapper.global_counter.warning_count += 1;
-                                logfile_counter.inc_warning();
-                            }
-                            PatternType::critical => {
-                                rundata.critical_threshold += 1;
-                                if rundata.critical_threshold
-                                    < wrapper.tag.options.criticalthreshold
-                                {
-                                    buffer.clear();
-                                    continue;
-                                }
-                                wrapper.global_counter.critical_count += 1;
-                                logfile_counter.inc_critical();
-                            }
-                            _ => (),
-                        };
-
                         debug!(
                             "found a match tag={}, line={}, line#={}, re=({:?},{}), warning_threshold={}, critical_threshold={}",
                             wrapper.tag.name,
@@ -398,6 +358,40 @@ impl Lookup for LogFile {
                             rundata.warning_threshold,
                             rundata.critical_threshold
                         );
+
+                        // increments thresholds and compare with possible defined limits and accumulate counters for plugin output
+                        match re.0 {
+                            PatternType::warning => {
+                                rundata.warning_threshold += 1;
+                                if rundata.warning_threshold < wrapper.tag.options.warningthreshold
+                                {
+                                    buffer.clear();
+                                    continue;
+                                }
+                                wrapper.global_counter.warning_count += 1;
+                                wrapper.logfile_counter.warning_count += 1;
+                            }
+                            PatternType::critical => {
+                                rundata.critical_threshold += 1;
+                                if rundata.critical_threshold
+                                    < wrapper.tag.options.criticalthreshold
+                                {
+                                    buffer.clear();
+                                    continue;
+                                }
+                                wrapper.global_counter.critical_count += 1;
+                                wrapper.logfile_counter.critical_count += 1;
+                            }
+                            // this special Ok pattern resets counters
+                            PatternType::ok => {
+                                rundata.critical_threshold = 0;
+                                rundata.warning_threshold = 0;
+
+                                // no need to process further: don't call a script
+                                buffer.clear();
+                                continue;
+                            }
+                        };
 
                         // if we've been asked to trigger the script, first add relevant variables
                         if wrapper.tag.options.runscript {
@@ -452,7 +446,7 @@ impl Lookup for LogFile {
         let time = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH)?;
         rundata.last_run = time.as_secs();
 
-        trace!("logfile counter:{:?}", logfile_counter);
+        //trace!("logfile counter:{:?}", logfile_counter);
         trace!("global_counter: {:?}", &wrapper.global_counter);
         trace!("logfile_counter: {:?}", &wrapper.logfile_counter);
         trace!(
@@ -471,7 +465,7 @@ mod tests {
     use std::path::PathBuf;
 
     use super::*;
-    use crate::error::*;
+    //use crate::error::*;
 
     // useful set of data for our unit tests
     const JSON: &'static str = r#"

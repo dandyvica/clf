@@ -157,15 +157,21 @@ impl PatternSet {
         // try to match critical pattern first
         if let Some(critical) = &self.critical {
             if let Some(re) = critical.is_match(text) {
-                trace!("critical is trigerred");
+                trace!("critical pattern is trigerred");
                 return Some((PatternType::critical, re));
             }
         }
 
         // and then warning
         if let Some(warning) = &self.warning {
-            trace!("warning is trigerred");
+            trace!("warning pattern is trigerred");
             return warning.is_match(text).map(|re| (PatternType::warning, re));
+        }
+
+        // and finally ok
+        if let Some(ok) = &self.ok {
+            trace!("ok pattern is trigerred");
+            return ok.is_match(text).map(|re| (PatternType::ok, re));
         }
 
         None

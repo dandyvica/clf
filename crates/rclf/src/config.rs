@@ -255,6 +255,9 @@ pub struct Search<T: Clone> {
 
     /// a unique identifier for this search
     pub tags: Vec<Tag>,
+
+    #[serde(default = "Tag::process_default")]
+    pub process: bool,
 }
 
 /// This conversion utility is meant to convert to a 'regular' configuration file a configuration file
@@ -272,6 +275,7 @@ impl From<Search<LogSource>> for Search<PathBuf> {
             logfile: logfile.clone(),
             io_error: search_logsource.io_error.clone(),
             tags: search_logsource.tags.clone(),
+            process: search_logsource.process.clone(),
         }
     }
 }
@@ -460,6 +464,7 @@ impl From<Config<LogSource>> for Config<PathBuf> {
                             logfile: file.clone(),
                             io_error: search.io_error.clone(),
                             tags: search.tags.clone(),
+                            process: search.process.clone(),
                         };
 
                         // now use this structure and add it to config_pathbuf
@@ -480,7 +485,7 @@ mod tests {
 
     #[test]
     fn search_options() {
-        let opts = SearchOptions::from("runscript, keepoutput, rewind, criticalthreshold=10, warningthreshold=15, protocol, savethresholdcount, sticky=5, dontbreak".to_string());
+        let opts = SearchOptions::try_from("runscript, keepoutput, rewind, criticalthreshold=10, warningthreshold=15, protocol, savethresholdcount, sticky=5".to_string()).unwrap();
 
         assert!(opts.runscript);
         assert!(opts.keepoutput);

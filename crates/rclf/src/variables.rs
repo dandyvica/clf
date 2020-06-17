@@ -20,10 +20,8 @@ pub struct Variables {
 impl Variables {
     /// Creates a new structure for variables.
     pub fn new() -> Self {
-        const NB_VARS: usize = 30;
-
         Variables {
-            runtime_vars: HashMap::with_capacity(NB_VARS),
+            runtime_vars: HashMap::with_capacity(crate::util::DEFAULT_CONTAINER_CAPACITY),
             user_vars: None,
         }
     }
