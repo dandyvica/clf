@@ -43,6 +43,9 @@ pub struct RunData {
 
     /// warning threshold count
     warning_threshold: u16,
+
+    /// number of script execution so far
+    exec_count: u16,
 }
 
 impl RunData {
@@ -322,6 +325,9 @@ impl Lookup for LogFile {
             bytes_count, line_number
         );
 
+        // reset exec count
+        rundata.exec_count = 0;
+
         //------------------------------------------------------------------------------------
         // 3. loop to read each line of the file
         //------------------------------------------------------------------------------------
@@ -396,7 +402,6 @@ impl Lookup for LogFile {
                         // if we've been asked to trigger the script, first add relevant variables
                         if wrapper.tag.options.runscript {
                             // create variables which will be set as environment variables when script is called
-
                             wrapper
                                 .vars
                                 .insert("LINE_NUMBER", format!("{}", line_number));
@@ -409,12 +414,18 @@ impl Lookup for LogFile {
 
                             debug!("added variables: {:?}", wrapper.vars);
 
-                            // now call script
-                            if let Some(child) = wrapper
-                                .tag
-                                .call_script(Some(&wrapper.global.path), wrapper.vars)?
-                            {
-                                children.push(child);
+                            // now call script if limit is not reached yet
+                            if rundata.exec_count < wrapper.tag.options.runlimit {
+                                if let Some(child) = wrapper
+                                    .tag
+                                    .call_script(Some(&wrapper.global.path), wrapper.vars)?
+                                {
+                                    // save child structure
+                                    children.push(child);
+
+                                    // increment number of script executions
+                                    rundata.exec_count += 1;
+                                }
                             }
                         };
                     }
@@ -482,7 +493,8 @@ mod tests {
                         "last_line": 10,
                         "last_run": 1000000,
                         "critical_threshold": 10,
-                        "warning_threshold": 10
+                        "warning_threshold": 10,
+                        "exec_count": 10
                     },
                     "tag2": {
                         "name": "tag2",
@@ -490,7 +502,8 @@ mod tests {
                         "last_line": 10,
                         "last_run": 1000000,
                         "critical_threshold": 10,
-                        "warning_threshold": 10
+                        "warning_threshold": 10,
+                        "exec_count": 10
                     }
                 }
             },
@@ -506,7 +519,9 @@ mod tests {
                         "last_line": 10,
                         "last_run": 1000000,
                         "critical_threshold": 10,
-                        "warning_threshold": 10
+                        "warning_threshold": 10,
+                        "exec_count": 10
+
                     },
                     "tag4": {
                         "name": "tag4",
@@ -514,7 +529,8 @@ mod tests {
                         "last_line": 10,
                         "last_run": 1000000,
                         "critical_threshold": 10,
-                        "warning_threshold": 10
+                        "warning_threshold": 10,
+                        "exec_count": 10
                     }
                 }
             }

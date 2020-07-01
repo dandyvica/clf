@@ -200,6 +200,7 @@ rewind                   | if set, *clf* will read the considered logfile from t
 criticalthreshold=<u16>  | when set to a 2-byte positive integer value, it means that critical errors will not be triggered unless this threshold is reached
 warningthreshold=<u16>   | when set to a 2-byte positive integer value, it means that warning errors will not be triggered unless this threshold is reached
 savethresholdcount       | when set, either critical or warning threshold will be save in the *snapshot* file
+runlimit=<u16>           | when set, for each execution of *clf*, the defined script (if any) will only be called at most the value set by this option
 
 ## Patterns definition
 When *clf* fetches a line from a logfile, it compares this string with a list of *critical* regexes defined in the configuration file first, if any. Then it moves to comparing with a list of *warning* regexes if any. Ultimately, it compares with a list of *ok* patterns. This latter comparison makes *clf* to reset ongoing threshold to 0.
@@ -315,10 +316,13 @@ OPTIONS:
             Warn, Info, Debug, Trace]
     -m, --logsize <logsize>      
             When logger is enabled, set the maximum logger size (in Mb). If specified, logger file will be deleted if
-            current size is over this value. Defaults to 10 MB.
+            current size is over this value. Defaults to 50 MB.
     -n, --nagver <nagver>        
             Set the Nagios NRPE protocol version used for plugin output. Defaults to version 3. [possible values: 2, 3]
 
+    -p, --snapdir <snapdir>      
+            Name of the snapshot file directory. If not provided, will default to the platform-dependent temporary
+            directory.
 ```
 
 ## Plugin output

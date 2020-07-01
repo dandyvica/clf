@@ -1,6 +1,8 @@
 //! Utility traits or structs.
-use std::fs::File;
+use std::fs::{DirEntry, File};
 use std::path::PathBuf;
+
+use regex::Regex;
 
 use crate::error::{AppCustomErrorKind, AppError};
 
@@ -37,6 +39,53 @@ impl Usable for PathBuf {
     }
 }
 
+pub struct Util;
+
+impl Util {
+    // tests whether a `DirEntry` is matching the regex
+    fn is_match(entry: &DirEntry, re: &Regex) -> Result<bool, AppError> {
+        // converts file name to a string
+        let s = entry.path().into_os_string().into_string()?;
+
+        Ok(re.is_match(&s))
+    }
+
+    // gives the list of files from a directory, matching the given regex
+    fn read_dir(path: &PathBuf, regex: &str) -> Result<Vec<DirEntry>, AppError> {
+        // create an empty vector of direntries
+        let mut entries: Vec<DirEntry> = Vec::new();
+
+        // create compiled regex
+        let re = Regex::new(regex)?;
+
+        // get list of files
+        for entry in std::fs::read_dir(path)? {
+            if let Ok(entry) = entry {
+                if Util::is_match(&entry, &re)? {
+                    entries.push(entry);
+                }
+            }
+        }
+
+        Ok(entries)
+    }
+
+    // returns the match recent file in the directory `path` and matching the regex
+    pub fn most_recent_file(path: &PathBuf, regex: &str) -> Result<Option<PathBuf>, AppError> {
+        // get all entries
+        let entries = Util::read_dir(path, regex)?;
+
+        // get most recent file according to creation data
+        match entries
+            .iter()
+            .max_by_key(|x| x.metadata().unwrap().created().unwrap())
+        {
+            None => Ok(None),
+            Some(entry) => Ok(Some(entry.path())),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -48,6 +97,15 @@ mod tests {
         assert!(PathBuf::from("/var/log/foo.txt").is_usable().is_err());
         assert!(PathBuf::from("/var/log").is_usable().is_err());
         assert!(PathBuf::from("/var/log/syslog").is_usable().is_ok());
+    }
+
+    #[test]
+    #[cfg(target_os = "linux")]
+    fn read_dir() {
+        let entries = Util::read_dir(&PathBuf::from("/var/log"), "\\.log$");
+
+        assert!(entries.is_ok());
+        assert!(entries.unwrap().len() > 1);
     }
 
     #[test]

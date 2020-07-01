@@ -1,5 +1,6 @@
 //! A repository for all runtime logfile searches.
 use std::collections::HashMap;
+use std::ffi::OsStr;
 use std::fs::File;
 use std::io::{BufReader, ErrorKind};
 use std::path::{Path, PathBuf};
@@ -32,10 +33,29 @@ impl Snapshot {
     }
 
     /// Returns a default snapshot file name if not specified in the configuration file.
-    pub fn default_name() -> PathBuf {
-        let mut snapfile = std::env::temp_dir();
-        snapfile.push("clf_snapshot.json");
-        snapfile
+    // pub fn default_name() -> PathBuf {
+    //     let mut snapfile = std::env::temp_dir();
+    //     snapfile.push("clf_snapshot.json");
+    //     snapfile
+    // }
+
+    /// Builds a new snapshot file name from `path`.
+    pub fn from_path(path: &PathBuf, dir: Option<PathBuf>) -> PathBuf {
+        // get file name from path variable
+        let name = path.file_stem().unwrap_or(OsStr::new("clf_snapshot"));
+
+        // builds new name
+        let mut snapshot_file = PathBuf::new();
+
+        match dir {
+            Some(dir) => snapshot_file.push(dir),
+            None => snapshot_file.push(std::env::temp_dir()),
+        };
+
+        snapshot_file.push(name);
+        snapshot_file.set_extension("json");
+
+        snapshot_file
     }
 
     /// Deserialize a snapshot from a JSON file.
@@ -130,7 +150,8 @@ mod tests {
                         "last_line": 10,
                         "last_run": 1000000,
                         "critical_threshold": 10,
-                        "warning_threshold": 10 
+                        "warning_threshold": 10,
+                        "exec_count": 10
                     },                       
                     "tag2": {
                         "name": "tag2",
@@ -138,7 +159,8 @@ mod tests {
                         "last_line": 10,
                         "last_run": 1000000,
                         "critical_threshold": 10,
-                        "warning_threshold": 10                        
+                        "warning_threshold": 10,
+                        "exec_count": 10
                     }
                 }
             },
@@ -154,7 +176,8 @@ mod tests {
                         "last_line": 10,
                         "last_run": 1000000,
                         "critical_threshold": 10,
-                        "warning_threshold": 10
+                        "warning_threshold": 10,
+                        "exec_count": 10
                     },
                     "tag4": {
                         "name": "tag3",
@@ -162,7 +185,8 @@ mod tests {
                         "last_line": 10,
                         "last_run": 1000000,
                         "critical_threshold": 10,
-                        "warning_threshold": 10
+                        "warning_threshold": 10,
+                        "exec_count": 10
                     }
                 }
             }
@@ -199,5 +223,20 @@ mod tests {
 
         logfile = data.or_insert(&PathBuf::from("/usr/bin/zip"));
         assert_eq!(data.snapshot.len(), 3);
+    }
+
+    #[test]
+    #[cfg(target_family = "unix")]
+    fn from_path() {
+        let config = PathBuf::from("/home/johndoe/config.yml");
+
+        assert_eq!(
+            Snapshot::from_path(&config, None),
+            PathBuf::from("/tmp/config.json")
+        );
+        assert_eq!(
+            Snapshot::from_path(&config, Some(PathBuf::from("/home/foo"))),
+            PathBuf::from("/home/foo/config.json")
+        );
     }
 }

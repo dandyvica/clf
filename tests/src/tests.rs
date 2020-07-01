@@ -14,7 +14,7 @@ fn help() {
 #[test]
 fn conf_not_found() {
     let code = Util::exit_status(&["--config", "foo"]);
-    assert_eq!(code.unwrap(), 109);
+    assert_eq!(code.unwrap(), 111);
 }
 
 // list options
@@ -126,8 +126,6 @@ fn test_01() {
     // check snapshot file
     let snap = Snapshot::load("tests/tmp/snapshot.json").unwrap();
     let logfile = snap.get_logfile("tests/logfiles/small_access.log");
-
-
 }
 
 #[test]

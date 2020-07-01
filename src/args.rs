@@ -9,7 +9,7 @@ use crate::error::AppExitCode;
 use rclf::nagios::NagiosVersion;
 
 /// We define here the maximum size for the logger file (in Mb).
-const MAX_LOGGER_SIZE: u64 = 10 * 1024 * 1024;
+const MAX_LOGGER_SIZE: u64 = 50 * 1024 * 1024;
 
 /// This structure holds the command line arguments.
 #[derive(Debug)]
@@ -22,6 +22,7 @@ pub struct CliOptions {
     pub max_logger_size: u64,
     pub show_options: bool,
     pub nagios_version: NagiosVersion,
+    pub snap_dir: Option<PathBuf>,
 }
 
 /// Implements `Default` trait for `CliOptions`.
@@ -40,6 +41,7 @@ impl Default for CliOptions {
             max_logger_size: MAX_LOGGER_SIZE,
             show_options: false,
             nagios_version: NagiosVersion::NagiosNrpe3,
+            snap_dir: None,
         }
     }
 }
@@ -101,7 +103,7 @@ impl CliOptions {
                     .short("m")
                     .long("logsize")
                     .required(false)
-                    .help("When logger is enabled, set the maximum logger size (in Mb). If specified, logger file will be deleted if current size is over this value. Defaults to 10 MB.")
+                    .help("When logger is enabled, set the maximum logger size (in Mb). If specified, logger file will be deleted if current size is over this value. Defaults to 50 MB.")
                     .takes_value(true),
             )
             .arg(
@@ -121,17 +123,34 @@ impl CliOptions {
                     .possible_values(&["2", "3"])
                     .takes_value(true),
             )
+            .arg(
+                Arg::with_name("snapdir")
+                    .short("p")
+                    .long("snapdir")
+                    .required(false)
+                    .help("Name of the snapshot file directory. If not provided, will default to the platform-dependent temporary directory.")
+                    .takes_value(true),
+            )
             .get_matches();
 
         // save all cli options into a structure
         let mut options = CliOptions::default();
 
-        // config file is mandatory
-        options.config_file = PathBuf::from(matches.value_of("config").unwrap());
+        // config file is mandatory. Try to canonicalize() at the same time.
+        let config_file = PathBuf::from(matches.value_of("config").unwrap());
 
-        // options.clf_logger = matches
-        //     .value_of("clflog")
-        //     .and_then(|log| Some(PathBuf::from(log)));
+        options.config_file = match config_file.canonicalize() {
+            Ok(file) => PathBuf::from(file),
+            Err(e) => {
+                eprintln!(
+                    "error trying to canonicalize config file: {}, error: {}",
+                    config_file.display(),
+                    e
+                );
+                exit(AppExitCode::CANONICALIZE_IO_ERROR as i32);
+            }
+        };
+
         // optional logger file
         if matches.is_present("clflog") {
             options.clf_logger = PathBuf::from(matches.value_of("clflog").unwrap());
@@ -150,6 +169,10 @@ impl CliOptions {
         if matches.is_present("nagver") {
             options.nagios_version =
                 NagiosVersion::from_str(matches.value_of("nagver").unwrap()).unwrap();
+        }
+
+        if matches.is_present("snapdir") {
+            options.snap_dir = Some(PathBuf::from(matches.value_of("snapdir").unwrap()));
         }
 
         if matches.is_present("logsize") {

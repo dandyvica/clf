@@ -32,6 +32,9 @@ use crate::{
     variables::Variables,
 };
 
+/// A default value for the retention of data in the snapshot file.
+const DEFAULT_RETENTION: u64 = 86000 * 7;
+
 /// A list of options which are specific to a search. They might or might not be used. If an option is not present, it's deemed false.
 /// By default, all options are either false, or use the default corresponding type.
 #[derive(Debug, Deserialize, Default, Clone)]
@@ -67,6 +70,9 @@ pub struct SearchOptions {
 
     /// Moves to the end of the file for the first read, if the file has not been yet read.
     pub fastforward: bool,
+
+    /// The number of times a potential script will be called, at most.
+    pub runlimit: u16,
 }
 
 /// Convenient macro to add a boolean option
@@ -107,10 +113,14 @@ impl TryFrom<String> for SearchOptions {
             "savethresholdcount",
             "sticky",
             "fastforward",
+            "runlimit",
         ];
 
         // create a default options structure
         let mut opt = SearchOptions::default();
+
+        // runlimit is special
+        opt.runlimit = std::u16::MAX;
 
         // convert the input list to a vector
         let opt_list: Vec<_> = option_list.split(',').map(|x| x.trim()).collect();
@@ -155,6 +165,7 @@ impl TryFrom<String> for SearchOptions {
                 add_typed_option!(splitted_options, criticalthreshold, opt, u16);
                 add_typed_option!(splitted_options, sticky, opt, u16);
                 add_typed_option!(splitted_options, warningthreshold, opt, u16);
+                add_typed_option!(splitted_options, runlimit, opt, u16);
 
                 // special case for this
                 // if key == "logfilemissing" {
@@ -292,7 +303,7 @@ pub struct GlobalOptions {
     output_dir: PathBuf,
 
     /// The snapshot file name.
-    snapshot_file: PathBuf,
+    //snapshot_file: PathBuf,
 
     /// Retention time for tags.
     snapshot_retention: u64,
@@ -322,8 +333,8 @@ impl Default for GlobalOptions {
         GlobalOptions {
             path: path_var,
             output_dir: std::env::temp_dir(),
-            snapshot_file: crate::snapshot::Snapshot::default_name(),
-            snapshot_retention: 3600,
+            //snapshot_file: crate::snapshot::Snapshot::default_name(),
+            snapshot_retention: DEFAULT_RETENTION,
             user_vars: None,
         }
     }
@@ -357,10 +368,10 @@ impl<T: Clone> Config<T> {
     }
 
     /// Returns the name of the snapshot file
-    #[inline(always)]
-    pub fn get_snapshot_name(&self) -> &PathBuf {
-        &self.global.snapshot_file
-    }
+    // #[inline(always)]
+    // pub fn get_snapshot_name(&self) -> &PathBuf {
+    //     &self.global.snapshot_file
+    // }
 
     // Returns the user variables if any. Clone of the original HashMap.
     #[inline(always)]
@@ -485,7 +496,7 @@ mod tests {
 
     #[test]
     fn search_options() {
-        let opts = SearchOptions::try_from("runscript, keepoutput, rewind, criticalthreshold=10, warningthreshold=15, protocol, savethresholdcount, sticky=5".to_string()).unwrap();
+        let opts = SearchOptions::try_from("runscript, keepoutput, rewind, criticalthreshold=10, warningthreshold=15, protocol, savethresholdcount, sticky=5, runlimit=10".to_string()).unwrap();
 
         assert!(opts.runscript);
         assert!(opts.keepoutput);
@@ -497,6 +508,7 @@ mod tests {
         assert_eq!(opts.warningthreshold, 15);
         assert_eq!(opts.sticky, 5);
         assert_eq!(opts.criticalthreshold, 10);
+        assert_eq!(opts.runlimit, 10);
         //assert_eq!(&opts.logfilemissing.unwrap(), "foo");
     }
 
@@ -513,7 +525,7 @@ mod tests {
 
         assert_eq!(&opts.path, "/usr/foo1");
         assert_eq!(opts.output_dir, PathBuf::from("/usr/foo2"));
-        assert_eq!(opts.snapshot_file, PathBuf::from("/usr/foo3/snap.foo"));
+        //assert_eq!(opts.snapshot_file, PathBuf::from("/usr/foo3/snap.foo"));
         //assert_eq!(opts.logger, PathBuf::from("/usr/foo4/foo.log"));
     }
 

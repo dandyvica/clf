@@ -29,7 +29,7 @@ searches:
         # a list of comma-separated options to manage the search. Current supported options are:
         # runscript: if present, means the provided script will be called
         # rewind: restart the search from the beginning of the file
-        options: "runscript,"
+        options: "runscript"
 
         # a script or command to be called, every time a hit is found.
         script: { 

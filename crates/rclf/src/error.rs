@@ -12,6 +12,7 @@ pub enum AppCustomErrorKind {
     FileNotUsable,
     NotAFile,
     UnsupportedSearchOption,
+    OsStringConversionError,
 }
 
 /// A specific error type combining all possible error types in the app.
@@ -105,5 +106,14 @@ impl From<num::ParseIntError> for AppError {
 impl From<std::str::Utf8Error> for AppError {
     fn from(err: std::str::Utf8Error) -> AppError {
         AppError::Utf8Error(err)
+    }
+}
+
+impl From<std::ffi::OsString> for AppError {
+    fn from(err: std::ffi::OsString) -> AppError {
+        AppError::new(
+            AppCustomErrorKind::OsStringConversionError,
+            &format!("error converting: {:?}", err),
+        )
     }
 }

@@ -83,6 +83,27 @@ fn main() {
         }
     };
 
+    // check if we have to delete the log, because it's bigger than max logger size
+    let metadata = match std::fs::metadata(&logger) {
+        Ok(m) => m,
+        Err(e) => {
+            eprintln!("error on metadata() API: {}", e);
+            exit(AppExitCode::METADATA_IO_ERROR as i32);
+        }
+    };
+
+    debug!("current logger size is: {} bytes", metadata.len());
+    if metadata.len() > options.max_logger_size {
+        if let Err(e) = std::fs::remove_file(&logger) {
+            // 'not found' could be a viable error
+            if e.kind() != std::io::ErrorKind::NotFound {
+                eprintln!("unable to delete logger file: {:?}, error: {}", &logger, e);
+                exit(AppExitCode::LOGGER_ERROR as i32);
+            }
+        };
+        info!("deleting logger file {:?}", &logger);
+    }
+
     // useful traces
     info!("using configuration file: {:?}", &options.config_file);
     info!("options: {:?}", &options);
@@ -123,9 +144,14 @@ fn main() {
     // replace, if any, "loglist" by "logfile"
     let config = Config::<PathBuf>::from(_config.unwrap());
 
+    // get snapshot file file
+    //let snapfile = config.get_snapshot_name().clone();
+    let snapfile = Snapshot::from_path(&options.config_file, options.snap_dir);
+
     // print out config if requested and exit
     if options.check_conf {
         println!("{:#?}", config);
+        println!("snapshot file: {:?}", snapfile);
         exit(AppExitCode::CONFIG_CHECK as i32);
     }
 
@@ -139,7 +165,8 @@ fn main() {
     // manage snapshot file
     //---------------------------------------------------------------------------------------------------
     // get snapshot file file
-    let snapfile = config.get_snapshot_name().clone();
+    //let snapfile = config.get_snapshot_name().clone();
+    //let snapfile = Snapshot::from_path(&options.config_file, options.snap_dir);
 
     // delete snapshot file if asked
     if options.delete_snapfile {
@@ -150,7 +177,7 @@ fn main() {
                     "unable to delete snapshot file: {:?}, error: {}",
                     &snapfile, e
                 );
-                exit(AppExitCode::LOGGER_ERROR as i32);
+                exit(AppExitCode::SNAPSHOT_DELETE_ERROR as i32);
             }
         };
         info!("deleting snapshot file {:?}", &snapfile);

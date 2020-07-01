@@ -29,4 +29,10 @@ pub enum AppExitCode {
 
     /// IO error on config file
     CONFIG_IO_ERROR = 109,
+
+    /// IO metadata error on config file
+    METADATA_IO_ERROR = 110,
+
+    /// IO canonicalize() error on config file
+    CANONICALIZE_IO_ERROR = 111,
 }
