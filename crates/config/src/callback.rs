@@ -137,12 +137,12 @@ impl Callback {
                 // send JSON data through TCP socket
                 let mut stream = self.handle.tcp_socket.as_ref().unwrap();
 
-                // let json = json!({
-                //     "args": &self.args,
-                //     "vars": vars.to_json()
-                // });
+                // create a dedicated JSON structure
+                let json = json!({
+                    "args": &self.args,
+                    "vars": vars
+                }).to_string();
 
-                let json = vars.to_json();
                 debug!(
                     "sending JSON data to TCP socket: {}",
                     address.as_ref().unwrap()
@@ -161,7 +161,13 @@ impl Callback {
 
                 // send JSON data through UNIX socket
                 let mut stream = self.handle.domain_socket.as_ref().unwrap();
-                let json = vars.to_json();
+
+                // create a dedicated JSON structure
+                let json = json!({
+                    "args": &self.args,
+                    "vars": vars
+                }).to_string();
+                                
                 debug!(
                     "sending JSON data to UNIX socket: {:?}",
                     address.as_ref().unwrap()
@@ -191,8 +197,37 @@ mod tests {
     use regex::Regex;
     use std::io::prelude::*;
 
+    #[derive(Deserialize)]
+    struct JSON {
+        args: Vec<String>,
+        vars: Variables,
+    }
+
+    // helper fn to create a dummy Variables struct
+    fn dummy_vars() -> Variables {
+        // create dummy variables
+        let re = Regex::new(r"^([a-z\s]+) (\w+) (\w+) (?P<LASTNAME>\w+)").unwrap();
+        let text = "my name is john fitzgerald kennedy, president of the USA";
+
+        let mut vars = Variables::new();
+        vars.insert_captures(&re, text);
+        
+        vars
+    }
+
     //#[test]
     fn callback_script() {
+        let yaml = r#"
+            script: tests/script.py
+            args: ['one', 'two', 'three']
+        "#;
+
+        let mut cb: Callback = serde_yaml::from_str(yaml).expect("unable to read YAML");
+
+        // create dummy variables
+        let vars = super::tests::dummy_vars();
+        
+        
 
     }
 
@@ -222,14 +257,17 @@ mod tests {
                     let s = std::str::from_utf8(&buffer)
                         .unwrap()
                         .trim_end_matches(char::from(0));
+                    //println!("data={}", s);
                     //println!("data={:?}", buffer);
-                    //println!("data={:?}", s);
-                    let vars: Variables = serde_json::from_str(&s).unwrap();
+                    
+                    let json: JSON = serde_json::from_str(&s).unwrap();
 
-                    assert_eq!(vars.get_runtime_var("CLF_CAPTURE1").unwrap(), "my name is");
-                    assert_eq!(vars.get_runtime_var("CLF_CAPTURE2").unwrap(), "john");
-                    assert_eq!(vars.get_runtime_var("CLF_CAPTURE3").unwrap(), "fitzgerald");
-                    assert_eq!(vars.get_runtime_var("CLF_LASTNAME").unwrap(), "kennedy");
+                    assert_eq!(json.args, vec!["one", "two", "three"]);
+
+                    assert_eq!(json.vars.get_runtime_var("CLF_CAPTURE1").unwrap(), "my name is");
+                    assert_eq!(json.vars.get_runtime_var("CLF_CAPTURE2").unwrap(), "john");
+                    assert_eq!(json.vars.get_runtime_var("CLF_CAPTURE3").unwrap(), "fitzgerald");
+                    assert_eq!(json.vars.get_runtime_var("CLF_LASTNAME").unwrap(), "kennedy");
                 }
                 Err(e) => panic!("couldn't get client: {:?}", e),
             }
@@ -240,11 +278,7 @@ mod tests {
         std::thread::sleep(ten_millis);
 
         // create dummy variables
-        let re = Regex::new(r"^([a-z\s]+) (\w+) (\w+) (?P<LASTNAME>\w+)").unwrap();
-        let text = "my name is john fitzgerald kennedy, president of the USA";
-
-        let mut vars = Variables::new();
-        vars.insert_captures(&re, text);
+        let vars = super::tests::dummy_vars();
 
         // some work here
         cb.call(None, &vars).unwrap();
@@ -263,7 +297,7 @@ mod tests {
         let mut cb: Callback = serde_yaml::from_str(yaml).expect("unable to read YAML");
         let addr = "/tmp/callback.sock".to_string();
 
-        std::fs::remove_file(&addr).expect("unable to delete socket file");
+        let _ = std::fs::remove_file(&addr);
 
         assert!(matches!(&cb.id, CallbackType::Domain(Some(addr))));
 
@@ -280,13 +314,15 @@ mod tests {
                         .unwrap()
                         .trim_end_matches(char::from(0));
                     //println!("data={:?}", buffer);
-                    //println!("data={:?}", s);
-                    let vars: Variables = serde_json::from_str(&s).unwrap();
+                    //println!("data={}", s);
+                    let json: JSON = serde_json::from_str(&s).unwrap();
 
-                    assert_eq!(vars.get_runtime_var("CLF_CAPTURE1").unwrap(), "my name is");
-                    assert_eq!(vars.get_runtime_var("CLF_CAPTURE2").unwrap(), "john");
-                    assert_eq!(vars.get_runtime_var("CLF_CAPTURE3").unwrap(), "fitzgerald");
-                    assert_eq!(vars.get_runtime_var("CLF_LASTNAME").unwrap(), "kennedy");
+                    assert_eq!(json.args, vec!["one", "two", "three"]);
+
+                    assert_eq!(json.vars.get_runtime_var("CLF_CAPTURE1").unwrap(), "my name is");
+                    assert_eq!(json.vars.get_runtime_var("CLF_CAPTURE2").unwrap(), "john");
+                    assert_eq!(json.vars.get_runtime_var("CLF_CAPTURE3").unwrap(), "fitzgerald");
+                    assert_eq!(json.vars.get_runtime_var("CLF_LASTNAME").unwrap(), "kennedy");
                 }
                 Err(e) => panic!("couldn't get client: {:?}", e),
             }
@@ -297,11 +333,7 @@ mod tests {
         std::thread::sleep(ten_millis);
 
         // create dummy variables
-        let re = Regex::new(r"^([a-z\s]+) (\w+) (\w+) (?P<LASTNAME>\w+)").unwrap();
-        let text = "my name is john fitzgerald kennedy, president of the USA";
-
-        let mut vars = Variables::new();
-        vars.insert_captures(&re, text);
+        let vars = super::tests::dummy_vars();
 
         // some work here
         cb.call(None, &vars).unwrap();
