@@ -26,10 +26,14 @@ use serde::Deserialize;
 
 use crate::{
     callback::{Callback, ChildData},
-    error::{AppCustomErrorKind, AppError},
-    nagios::NagiosError,
     pattern::{PatternSet, PatternType},
     variables::Variables,
+};
+
+use misc::{
+    error::{AppCustomErrorKind, AppError},
+    nagios::NagiosError,
+    util::Util,
 };
 
 /// A default value for the retention of data in the snapshot file.
@@ -228,29 +232,29 @@ impl Tag {
         true
     }
 
-    /// Calls the external script, by providing arguments, environment variables and path which will be searched for the command.
-    pub fn call_script(
-        &self,
-        path: Option<&str>,
-        vars: &Variables,
-    ) -> Result<Option<ChildData>, AppError> {
-        // if the script tag has been defined...
-        if let Some(callback) = &self.script {
-            // if callback is a script to spawn, call it
-            if callback.path.is_some() {
-                let child = callback.spawn(path, vars)?;
-                Ok(Some(child))
-            // if a network script is defined, send it data through JSON
-            } else if callback.address.is_some() {
-                let _res = callback.send(vars)?;
-                return Ok(None);
-            } else {
-                Ok(None)
-            }
-        } else {
-            Ok(None)
-        }
-    }
+    // Calls the external script, by providing arguments, environment variables and path which will be searched for the command.
+    // pub fn call_script(
+    //     &self,
+    //     path: Option<&str>,
+    //     vars: &Variables,
+    // ) -> Result<Option<ChildData>, AppError> {
+    //     // if the script tag has been defined...
+    //     if let Some(callback) = &self.script {
+    //         // if callback is a script to spawn, call it
+    //         if callback.path.is_some() {
+    //             let child = callback.spawn(path, vars)?;
+    //             Ok(Some(child))
+    //         // if a network script is defined, send it data through JSON
+    //         } else if callback.address.is_some() {
+    //             let _res = callback.send(vars)?;
+    //             return Ok(None);
+    //         } else {
+    //             Ok(None)
+    //         }
+    //     } else {
+    //         Ok(None)
+    //     }
+    // }
 }
 
 /// This is the structure mapping exactly search data coming from the configuration YAML file. The 'flatten' serde field
@@ -448,7 +452,7 @@ impl From<Config<LogSource>> for Config<PathBuf> {
                     let script_args = _args.as_ref().map(|f| f.as_slice());
 
                     // get list of files from command or script
-                    let files = match Callback::get_list(_cmd, script_args) {
+                    let files = match Util::get_list(_cmd, script_args) {
                         Ok(file_list) => {
                             if file_list.is_empty() {
                                 info!(

@@ -6,7 +6,7 @@ use clap::{App, Arg};
 use simplelog::LevelFilter;
 
 use crate::error::AppExitCode;
-use rclf::nagios::NagiosVersion;
+use misc::nagios::NagiosVersion;
 
 /// We define here the maximum size for the logger file (in Mb).
 const MAX_LOGGER_SIZE: u64 = 50 * 1024 * 1024;

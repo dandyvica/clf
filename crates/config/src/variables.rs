@@ -5,25 +5,48 @@ use std::collections::HashMap;
 use std::fmt::Debug;
 
 use regex::Regex;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 /// Variable name prefix to be inserted for each variable.
 const VAR_PREFIX: &str = "CLF_";
 
 /// All variables, either runtime or user. These are provided to the callback.
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Variables {
-    pub runtime_vars: HashMap<String, String>,
-    pub user_vars: Option<HashMap<String, String>>,
+    // variables created during logfile analysis, like capture groups or line being read
+    runtime_vars: HashMap<String, String>,
+
+    // user-defined variables in hte config file
+    // this flag keeps the serializing ok when Option is None
+    #[serde(skip_serializing_if = "Option::is_none")]
+    user_vars: Option<HashMap<String, String>>,
 }
 
 impl Variables {
     /// Creates a new structure for variables.
     pub fn new() -> Self {
         Variables {
-            runtime_vars: HashMap::with_capacity(crate::util::DEFAULT_CONTAINER_CAPACITY),
+            runtime_vars: HashMap::with_capacity(misc::util::DEFAULT_CONTAINER_CAPACITY),
             user_vars: None,
         }
+    }
+
+    /// Returns the variable from runtime_vars
+    #[inline]
+    pub fn get_runtime_var(&self, var: &str) -> Option<&String> {
+        self.runtime_vars.get(var)
+    }
+
+    /// Returns all runtime_vars
+    #[inline]
+    pub fn get_runtime_vars(&self) -> &HashMap<String, String> {
+        &self.runtime_vars
+    }
+
+    /// Returns user_vars
+    #[inline]
+    pub fn get_user_vars(&self) -> &Option<HashMap<String, String>> {
+        &self.user_vars
     }
 
     /// Just adds a new variable and its value. The `Into` bound make it usable with `String` or `&str`.

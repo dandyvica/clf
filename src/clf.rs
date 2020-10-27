@@ -11,14 +11,20 @@ extern crate log;
 extern crate simplelog;
 use simplelog::*;
 
-use rclf::{
+use config::{
     callback::ChildData,
     config::{Config, LogSource},
-    logfile::{Lookup, Wrapper},
-    nagios::{LogfileMatchCounter, MatchCounter, NagiosError, NagiosVersion},
-    snapshot::Snapshot,
-    util::{Usable, DEFAULT_CONTAINER_CAPACITY},
     variables::Variables,
+};
+
+use logfile::{
+    logfile::{Lookup, Wrapper},
+    snapshot::Snapshot,
+};
+
+use misc::{
+    nagios::{LogfileMatchCounter, MatchCounter, NagiosError, NagiosVersion},
+    util::{Usable, DEFAULT_CONTAINER_CAPACITY},
 };
 
 mod args;

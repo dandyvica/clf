@@ -9,7 +9,9 @@ use std::time::SystemTime;
 use log::debug;
 use serde::{Deserialize, Serialize};
 
-use crate::{error::AppError, logfile::LogFile};
+use crate::logfile::LogFile;
+
+use misc::error::{AppCustomErrorKind, AppError};
 
 /// This structure will keep all run time information for each logfile searched. This is
 /// a kind of central repository for all searches.

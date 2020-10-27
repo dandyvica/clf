@@ -8,7 +8,7 @@ use serde::Deserialize;
 //use pcre2::Regex;
 use log::{debug, trace};
 
-use crate::error::{AppCustomErrorKind, AppError};
+use misc::error::{AppCustomErrorKind, AppError};
 
 /// A helper structure for deserializing into a `RegexVec` automatically from a `Vec<String>`.
 #[derive(Debug, Deserialize, Clone)]

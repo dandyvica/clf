@@ -1,5 +1,5 @@
 [package]
-name = "rclf"
+name = "misc"
 version = "0.1.0"
 description = "Reimplementation of the Nagios check_logfiles plugin in Rust"
 authors = ["Dan DiVica <dandyvica@gmail.com>"]

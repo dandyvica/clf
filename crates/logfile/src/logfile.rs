@@ -13,11 +13,14 @@ use std::os::unix::fs::MetadataExt;
 use flate2::read::GzDecoder;
 use serde::{Deserialize, Serialize};
 
-use crate::{
+use misc::{
+    error::{AppCustomErrorKind, AppError},
+    nagios::{MatchCounter, NagiosError},
+};
+
+use config::{
     callback::ChildData,
     config::{GlobalOptions, Tag},
-    error::{AppCustomErrorKind, AppError},
-    nagios::MatchCounter,
     pattern::PatternType,
     variables::Variables,
 };
@@ -285,7 +288,7 @@ impl Lookup for LogFile {
         );
 
         // uses the same buffer
-        let mut buffer = Vec::with_capacity(crate::util::DEFAULT_STRING_CAPACITY);
+        let mut buffer = Vec::with_capacity(misc::util::DEFAULT_STRING_CAPACITY);
 
         // define a new child handle. This is an Option because the script couldn't be called if not requested so
         let mut children = Vec::new();

@@ -10,7 +10,9 @@ edition = "2018"
 clap = "2.33.0"
 log = "0.4.8"
 simplelog = "^0.7.6"
-rclf = { version = "^0.1.0", path = "crates/rclf" }
+logfile = { version = "^0.1.0", path = "crates/logfile" }
+misc = { version = "^0.1.0", path = "crates/misc" }
+config = { version = "^0.1.0", path = "crates/config" }
 
 [[bin]]
 name = "clf"
@@ -18,7 +20,9 @@ path = "src/clf.rs"
 
 [workspace]
 members = [
-  "crates/rclf",
+  "crates/logfile",
+  "crates/misc",
+  "crates/config",
 ]
 
 # [build.'cfg(windows)']
