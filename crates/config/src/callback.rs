@@ -1,4 +1,5 @@
 //! Useful wrapper on the `Command` Rust standard library structure.
+use std::cell::RefCell;
 use std::io::Write;
 use std::net::TcpStream;
 use std::os::unix::net::UnixStream;
@@ -120,7 +121,7 @@ impl Callback {
                 info!("starting script {:?}, pid={}", path, child.id());
 
                 Ok(Some(ChildData {
-                    child: Some(child),
+                    child: Some(RefCell::new(child)),
                     path: path.as_ref().unwrap().clone(),
                     timeout: self.timeout,
                     start_time: Some(Instant::now()),
@@ -141,7 +142,8 @@ impl Callback {
                 let json = json!({
                     "args": &self.args,
                     "vars": vars
-                }).to_string();
+                })
+                .to_string();
 
                 debug!(
                     "sending JSON data to TCP socket: {}",
@@ -166,8 +168,9 @@ impl Callback {
                 let json = json!({
                     "args": &self.args,
                     "vars": vars
-                }).to_string();
-                                
+                })
+                .to_string();
+
                 debug!(
                     "sending JSON data to UNIX socket: {:?}",
                     address.as_ref().unwrap()
@@ -180,15 +183,33 @@ impl Callback {
     }
 }
 
-/// This structure will be
-
 /// Return structure from a call to a script. Gathers all relevant data, instead of a mere tuple.
 #[derive(Debug, Default)]
 pub struct ChildData {
-    pub child: Option<Child>,
+    pub child: Option<RefCell<Child>>,
     pub path: PathBuf,
     pub timeout: u64,
     pub start_time: Option<Instant>,
+}
+
+impl ChildData {
+    fn exit_code(&mut self) -> Result<Option<i32>, AppError> {
+        // do we have a Child ?
+        if self.child.is_none() {
+            return Ok(None);
+        }
+
+        // now it's safe to unwrap
+        let child = &mut self.child.as_ref().unwrap().borrow_mut();
+        match child.try_wait() {
+            Ok(Some(status)) => return Ok(status.code()),
+            Ok(None) => {
+                let res = child.wait();
+                return Ok(res.unwrap().code());
+            }
+            Err(e) => return Err(misc::error::AppError::Io(e)),
+        }
+    }
 }
 
 #[cfg(test)]
@@ -211,14 +232,15 @@ mod tests {
 
         let mut vars = Variables::new();
         vars.insert_captures(&re, text);
-        
+
         vars
     }
 
-    //#[test]
+    #[test]
+    #[cfg(target_family = "unix")]
     fn callback_script() {
         let yaml = r#"
-            script: tests/script.py
+            script: tests/check_ut.py
             args: ['one', 'two', 'three']
         "#;
 
@@ -226,9 +248,19 @@ mod tests {
 
         // create dummy variables
         let vars = super::tests::dummy_vars();
-        
-        
 
+        // call script
+        let data = cb.call(None, &vars).unwrap();
+
+        assert!(data.is_some());
+
+        // safe to unwrap
+        let mut child_data = data.unwrap();
+
+        // get exit code from script
+        let code = child_data.exit_code();
+        assert!(code.is_ok());
+        assert_eq!(code.unwrap(), Some(0));
     }
 
     #[test]
@@ -259,15 +291,24 @@ mod tests {
                         .trim_end_matches(char::from(0));
                     //println!("data={}", s);
                     //println!("data={:?}", buffer);
-                    
+
                     let json: JSON = serde_json::from_str(&s).unwrap();
 
                     assert_eq!(json.args, vec!["one", "two", "three"]);
 
-                    assert_eq!(json.vars.get_runtime_var("CLF_CAPTURE1").unwrap(), "my name is");
+                    assert_eq!(
+                        json.vars.get_runtime_var("CLF_CAPTURE1").unwrap(),
+                        "my name is"
+                    );
                     assert_eq!(json.vars.get_runtime_var("CLF_CAPTURE2").unwrap(), "john");
-                    assert_eq!(json.vars.get_runtime_var("CLF_CAPTURE3").unwrap(), "fitzgerald");
-                    assert_eq!(json.vars.get_runtime_var("CLF_LASTNAME").unwrap(), "kennedy");
+                    assert_eq!(
+                        json.vars.get_runtime_var("CLF_CAPTURE3").unwrap(),
+                        "fitzgerald"
+                    );
+                    assert_eq!(
+                        json.vars.get_runtime_var("CLF_LASTNAME").unwrap(),
+                        "kennedy"
+                    );
                 }
                 Err(e) => panic!("couldn't get client: {:?}", e),
             }
@@ -319,10 +360,19 @@ mod tests {
 
                     assert_eq!(json.args, vec!["one", "two", "three"]);
 
-                    assert_eq!(json.vars.get_runtime_var("CLF_CAPTURE1").unwrap(), "my name is");
+                    assert_eq!(
+                        json.vars.get_runtime_var("CLF_CAPTURE1").unwrap(),
+                        "my name is"
+                    );
                     assert_eq!(json.vars.get_runtime_var("CLF_CAPTURE2").unwrap(), "john");
-                    assert_eq!(json.vars.get_runtime_var("CLF_CAPTURE3").unwrap(), "fitzgerald");
-                    assert_eq!(json.vars.get_runtime_var("CLF_LASTNAME").unwrap(), "kennedy");
+                    assert_eq!(
+                        json.vars.get_runtime_var("CLF_CAPTURE3").unwrap(),
+                        "fitzgerald"
+                    );
+                    assert_eq!(
+                        json.vars.get_runtime_var("CLF_LASTNAME").unwrap(),
+                        "kennedy"
+                    );
                 }
                 Err(e) => panic!("couldn't get client: {:?}", e),
             }

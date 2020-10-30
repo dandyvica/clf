@@ -34,13 +34,6 @@ impl Snapshot {
         self.snapshot.get(&PathBuf::from(path))
     }
 
-    /// Returns a default snapshot file name if not specified in the configuration file.
-    // pub fn default_name() -> PathBuf {
-    //     let mut snapfile = std::env::temp_dir();
-    //     snapfile.push("clf_snapshot.json");
-    //     snapfile
-    // }
-
     /// Builds a new snapshot file name from `path`.
     pub fn from_path(path: &PathBuf, dir: Option<PathBuf>) -> PathBuf {
         // get file name from path variable

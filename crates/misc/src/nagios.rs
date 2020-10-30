@@ -228,7 +228,7 @@ impl fmt::Display for LogfileMatchCounter {
 
 mod tests {
     //use std::path::PathBuf;
-    use super::*;
+    //use super::*;
 
     #[test]
     fn display() {

@@ -25,9 +25,8 @@ use regex::Regex;
 use serde::Deserialize;
 
 use crate::{
-    callback::{Callback, ChildData},
+    callback::Callback,
     pattern::{PatternSet, PatternType},
-    variables::Variables,
 };
 
 use misc::{
@@ -39,13 +38,62 @@ use misc::{
 /// A default value for the retention of data in the snapshot file.
 const DEFAULT_RETENTION: u64 = 86000 * 7;
 
+#[derive(Debug, Deserialize, Clone)]
+/// A list of global options, which apply globally for all searches.
+#[serde(default)]
+pub struct GlobalOptions {
+    /// A list of paths, separated by either ':' for unix, or ';' for Windows. This is
+    /// where the script, if any, will be searched for. Default to PATH or Path depending on the platform.
+    path: String,
+
+    /// A directory where matched lines will be stored.
+    output_dir: PathBuf,
+
+    /// The snapshot file name. Option<> is used because if not specified here,
+    snapshot_file: PathBuf,
+
+    /// Retention time for tags.
+    snapshot_retention: u64,
+
+    /// A list of user variables if any.
+    user_vars: Option<HashMap<String, String>>,
+}
+
+/// Default implementation, rather than serde default field attribute.
+impl Default for GlobalOptions {
+    fn default() -> Self {
+        // default path
+        let path_var = if cfg!(target_family = "unix") {
+            std::env::var("PATH").unwrap_or_else(|_| "/usr/sbin:/usr/bin:/sbin:/bin".to_string())
+        } else if cfg!(target_family = "windows") {
+            std::env::var("Path").unwrap_or_else(|_| {
+                r"C:\Windows\system32;C:\Windows;C:\Windows\System32\Wbem;".to_string()
+            })
+        } else {
+            unimplemented!("unsupported OS, file: {}:{}", file!(), line!());
+        };
+
+        // default logger path
+        let mut logger_path = std::env::current_dir().unwrap_or_else(|_| std::env::temp_dir());
+        logger_path.push("clf.log");
+
+        GlobalOptions {
+            path: path_var,
+            output_dir: std::env::temp_dir(),
+            snapshot_file: Util::snapshot_default_name(),
+            snapshot_retention: DEFAULT_RETENTION,
+            user_vars: None,
+        }
+    }
+}
+
 /// A list of options which are specific to a search. They might or might not be used. If an option is not present, it's deemed false.
 /// By default, all options are either false, or use the default corresponding type.
 #[derive(Debug, Deserialize, Default, Clone)]
 #[serde(try_from = "String")]
 pub struct SearchOptions {
     /// If `true`, the defined script will be run a first match.
-    pub runscript: bool,
+    pub runcallback: bool,
 
     /// If `true`, the matching line will be saved in an output file.
     pub keepoutput: bool,
@@ -108,7 +156,7 @@ impl TryFrom<String> for SearchOptions {
     fn try_from(option_list: String) -> Result<Self, Self::Error> {
         // list of valid options
         const VALID_OPTIONS: &[&str] = &[
-            "runscript",
+            "runcallback",
             "keepoutput",
             "rewind",
             "criticalthreshold",
@@ -143,7 +191,7 @@ impl TryFrom<String> for SearchOptions {
         add_bool_option!(
             opt_list,
             opt,
-            runscript,
+            runcallback,
             rewind,
             keepoutput,
             savethresholdcount,
@@ -215,7 +263,7 @@ pub struct Tag {
     pub options: SearchOptions,
 
     /// Script details like path, name, parameters, delay etc to be possibly run for a match.
-    script: Option<Callback>,
+    callback: Option<Callback>,
 
     /// Patterns to be checked against. These include critical and warning (along with exceptions), ok list of regexes.
     patterns: PatternSet,
@@ -291,55 +339,6 @@ impl From<Search<LogSource>> for Search<PathBuf> {
             io_error: search_logsource.io_error.clone(),
             tags: search_logsource.tags.clone(),
             process: search_logsource.process.clone(),
-        }
-    }
-}
-
-#[derive(Debug, Deserialize, Clone)]
-/// A list of global options, which apply globally for all searches.
-#[serde(default)]
-pub struct GlobalOptions {
-    /// A list of paths, separated by either ':' for unix, or ';' for Windows. This is
-    /// where the script, if any, will be searched for. Default to PATH or Path depending on the platform.
-    pub path: String,
-
-    /// A directory where matches lines will be stored.
-    output_dir: PathBuf,
-
-    /// The snapshot file name.
-    //snapshot_file: PathBuf,
-
-    /// Retention time for tags.
-    snapshot_retention: u64,
-
-    /// A list of user variables if any.
-    user_vars: Option<HashMap<String, String>>,
-}
-
-/// Default implementation, rather than serde default field attribute.
-impl Default for GlobalOptions {
-    fn default() -> Self {
-        // default path
-        let path_var = if cfg!(target_family = "unix") {
-            std::env::var("PATH").unwrap_or_else(|_| "/usr/sbin:/usr/bin:/sbin:/bin".to_string())
-        } else if cfg!(target_family = "windows") {
-            std::env::var("Path").unwrap_or_else(|_| {
-                r"C:\Windows\system32;C:\Windows;C:\Windows\System32\Wbem;".to_string()
-            })
-        } else {
-            unimplemented!("unsupported OS, file: {}:{}", file!(), line!());
-        };
-
-        // default logger path
-        let mut logger_path = std::env::current_dir().unwrap_or_else(|_| std::env::temp_dir());
-        logger_path.push("clf.log");
-
-        GlobalOptions {
-            path: path_var,
-            output_dir: std::env::temp_dir(),
-            //snapshot_file: crate::snapshot::Snapshot::default_name(),
-            snapshot_retention: DEFAULT_RETENTION,
-            user_vars: None,
         }
     }
 }
@@ -500,9 +499,9 @@ mod tests {
 
     #[test]
     fn search_options() {
-        let opts = SearchOptions::try_from("runscript, keepoutput, rewind, criticalthreshold=10, warningthreshold=15, protocol, savethresholdcount, sticky=5, runlimit=10".to_string()).unwrap();
+        let opts = SearchOptions::try_from("runcallback, keepoutput, rewind, criticalthreshold=10, warningthreshold=15, protocol, savethresholdcount, sticky=5, runlimit=10".to_string()).unwrap();
 
-        assert!(opts.runscript);
+        assert!(opts.runcallback);
         assert!(opts.keepoutput);
         assert!(opts.rewind);
         assert!(opts.savethresholdcount);
@@ -517,30 +516,84 @@ mod tests {
     }
 
     #[test]
+    #[cfg(target_family = "unix")]
     fn global_options() {
-        let yaml = r#"
+        let mut yaml = r#"
             path: /usr/foo1
-            output_dir: /usr/foo2
             snapshot_file: /usr/foo3/snap.foo
-            logger: /usr/foo4/foo.log
+            output_dir: /usr/foo2
         "#;
 
-        let opts: GlobalOptions = serde_yaml::from_str(yaml).expect("unable to read YAML");
+        let mut opts: GlobalOptions = serde_yaml::from_str(yaml).expect("unable to read YAML");
+        //println!("opts={:?}", opts);
 
         assert_eq!(&opts.path, "/usr/foo1");
         assert_eq!(opts.output_dir, PathBuf::from("/usr/foo2"));
-        //assert_eq!(opts.snapshot_file, PathBuf::from("/usr/foo3/snap.foo"));
-        //assert_eq!(opts.logger, PathBuf::from("/usr/foo4/foo.log"));
+        assert_eq!(opts.snapshot_file, PathBuf::from("/usr/foo3/snap.foo"));
+
+        yaml = r#"
+            path: /usr/foo1
+
+            # a list of user variables, if any
+            user_vars:
+              first_name: Al
+              last_name: Pacino
+              city: 'Los Angeles'
+              profession: actor            
+        "#;
+
+        opts = serde_yaml::from_str(yaml).expect("unable to read YAML");
+        assert_eq!(&opts.path, "/usr/foo1");
+        assert_eq!(opts.output_dir, PathBuf::from("/tmp"));
+        assert_eq!(opts.snapshot_file, PathBuf::from("/tmp/clf_snapshot.json"));
+        assert!(opts.user_vars.is_some());
+
+        let vars = opts.user_vars.unwrap();
+        assert_eq!(vars.get("first_name").unwrap(), "Al");
+        assert_eq!(vars.get("last_name").unwrap(), "Pacino");
+        assert_eq!(vars.get("city").unwrap(), "Los Angeles");
+        assert_eq!(vars.get("profession").unwrap(), "actor");
+    }
+
+    #[test]
+    #[cfg(target_family = "unix")]
+    fn tag() {
+        let mut yaml = r#"
+            name: error
+            options: "runcallback"
+            process: false
+            callback: { 
+                script: "tests/scripts/echovars.py",
+                args: ['arg1', 'arg2', 'arg3']
+            }
+            patterns:
+                warning: {
+                    regexes: [
+                    'error',
+                    ],
+                    exceptions: [
+                    'STARTTLS'
+                    ]
+                }
+        "#;
+
+        let mut tag: Tag = serde_yaml::from_str(yaml).expect("unable to read YAML");
+        println!("opts={:?}", tag);
+        assert_eq!(tag.name, "error");
+        assert!(tag.options.runcallback);
+        assert!(!tag.options.keepoutput);
+        assert!(!tag.process);
+        //assert_eq!(tag.callback.unwrap().args.unwrap(), &["arg1", "arg2", "arg3"]);
+
     }
 
     //#[test]
     fn searches() {
         let yaml = r#"
     searches:
-        - logfile: tests/logfiles/large_access.log
           tags: 
             - name: http_access_get_or_post
-              options: "runscript,"
+              options: "runcallback,"
               script: { 
                 path: "tests/scripts/echovars.py",
                 args: ['arg1', 'arg2', 'arg3']
