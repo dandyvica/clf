@@ -226,9 +226,10 @@ impl fmt::Display for LogfileMatchCounter {
     }
 }
 
+#[cfg(test)]
 mod tests {
     //use std::path::PathBuf;
-    //use super::*;
+    use super::*;
 
     #[test]
     fn display() {
@@ -290,7 +291,7 @@ mod tests {
             crate::error::AppCustomErrorKind::UnsupportedPatternType,
             "foo",
         ));
-        let mut b = m.or_default(&PathBuf::from("/usr/bin/md5sum"));
+        let _b = m.or_default(&PathBuf::from("/usr/bin/md5sum"));
 
         assert_eq!(m.iter().count(), 2);
         assert!(m.is_error());

@@ -15,11 +15,11 @@ use serde::{Deserialize, Serialize};
 
 use misc::{
     error::{AppCustomErrorKind, AppError},
-    nagios::{MatchCounter, NagiosError},
+    nagios::MatchCounter,
 };
 
 use config::{
-    callback::ChildData,
+    callback::{CallbackHandle, ChildData},
     config::{GlobalOptions, Tag},
     pattern::PatternType,
     variables::Variables,
@@ -297,6 +297,9 @@ impl Lookup for LogFile {
         let mut bytes_count = 0;
         let mut line_number = 0;
 
+        // to keep handles: stream etc
+        let mut handle = CallbackHandle::default();
+
         //------------------------------------------------------------------------------------
         // 2. reset `RunData` fields depending on local options
         //------------------------------------------------------------------------------------
@@ -403,7 +406,7 @@ impl Lookup for LogFile {
                         };
 
                         // if we've been asked to trigger the script, first add relevant variables
-                        if wrapper.tag.options.runscript {
+                        if wrapper.tag.options.runcallback {
                             // create variables which will be set as environment variables when script is called
                             wrapper
                                 .vars
@@ -419,10 +422,11 @@ impl Lookup for LogFile {
 
                             // now call script if limit is not reached yet
                             if rundata.exec_count < wrapper.tag.options.runlimit {
-                                if let Some(child) = wrapper
-                                    .tag
-                                    .call_script(Some(&wrapper.global.path), wrapper.vars)?
-                                {
+                                if let Some(child) = wrapper.tag.callback_call(
+                                    Some(&wrapper.global.path),
+                                    wrapper.vars,
+                                    &mut handle,
+                                )? {
                                     // save child structure
                                     children.push(child);
 
@@ -555,7 +559,7 @@ mod tests {
         assert_eq!(lf_ok.path.to_str(), Some("/etc/hosts.allow"));
         assert_eq!(lf_ok.extension.unwrap(), "allow");
 
-        // // file not found
+        // file not found
         // let mut lf_err = LogFile::new("/usr/bin/foo");
         // assert!(lf_err.is_err());
         // match lf_err.unwrap_err() {

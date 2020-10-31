@@ -352,13 +352,13 @@ fn wait_children(children_list: Vec<ChildData>) {
     }
 
     // store thread handles to wait for their job to finish
-    let mut thread_handles = Vec::new();
+    //let mut thread_handles = Vec::new();
 
     for started_child in children_list {
         debug_assert!(started_child.child.is_some());
 
         // get a mutable reference
-        let mut child = started_child.child.unwrap();
+        let mut child = started_child.child.as_ref().unwrap().borrow_mut();
 
         // save pid & path
         let pid = child.id();
@@ -406,40 +406,40 @@ fn wait_children(children_list: Vec<ChildData>) {
                     }
                 } else {
                     // wait a little and spawn a new thread to kill the command
-                    let mutex = std::sync::Mutex::new(child);
-                    let arc = std::sync::Arc::new(mutex);
+                    // let mutex = std::sync::Mutex::new(child);
+                    // let arc = std::sync::Arc::new(mutex);
 
-                    // we'll wait at least the remaining seconds
-                    let secs_to_wait = started_child.timeout - elapsed;
+                    // // we'll wait at least the remaining seconds
+                    // let secs_to_wait = started_child.timeout - elapsed;
 
-                    debug!(
-                        "waiting for script: {}, pid: {} to finish",
-                        path.display(),
-                        pid
-                    );
+                    // debug!(
+                    //     "waiting for script: {}, pid: {} to finish",
+                    //     path.display(),
+                    //     pid
+                    // );
 
-                    let child_thread = thread::spawn(move || {
-                        thread::sleep(Duration::from_secs(secs_to_wait));
-                        let mut guard = arc.lock().unwrap();
+                    // let child_thread = thread::spawn(move || {
+                    //     thread::sleep(Duration::from_secs(secs_to_wait));
+                    //     let mut guard = arc.lock().unwrap();
 
-                        match guard.kill() {
-                            Ok(_) => info!("process {} killed", guard.id()),
-                            Err(e) => {
-                                if e.kind() == ErrorKind::InvalidInput {
-                                    info!("process {} already killed", guard.id());
-                                } else {
-                                    info!(
-                                        "error:{} trying to kill process pid:{}, path: {}",
-                                        e,
-                                        pid,
-                                        path.display()
-                                    );
-                                }
-                            }
-                        }
-                    });
+                    //     match guard.kill() {
+                    //         Ok(_) => info!("process {} killed", guard.id()),
+                    //         Err(e) => {
+                    //             if e.kind() == ErrorKind::InvalidInput {
+                    //                 info!("process {} already killed", guard.id());
+                    //             } else {
+                    //                 info!(
+                    //                     "error:{} trying to kill process pid:{}, path: {}",
+                    //                     e,
+                    //                     pid,
+                    //                     path.display()
+                    //                 );
+                    //             }
+                    //         }
+                    //     }
+                    // });
 
-                    thread_handles.push(child_thread);
+                    // thread_handles.push(child_thread);
                 }
             }
 
@@ -449,9 +449,9 @@ fn wait_children(children_list: Vec<ChildData>) {
     }
 
     // wait for thread to finish
-    for handle in thread_handles {
-        handle.join().expect("error waiting for thread");
-    }
+    // for handle in thread_handles {
+    //     handle.join().expect("error waiting for thread");
+    // }
 }
 
 /// Manage Nagios output, depending on the NRPE version.

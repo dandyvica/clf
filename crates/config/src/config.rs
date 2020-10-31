@@ -25,8 +25,9 @@ use regex::Regex;
 use serde::Deserialize;
 
 use crate::{
-    callback::Callback,
+    callback::{Callback, CallbackHandle, ChildData},
     pattern::{PatternSet, PatternType},
+    variables::Variables,
 };
 
 use misc::{
@@ -44,7 +45,7 @@ const DEFAULT_RETENTION: u64 = 86000 * 7;
 pub struct GlobalOptions {
     /// A list of paths, separated by either ':' for unix, or ';' for Windows. This is
     /// where the script, if any, will be searched for. Default to PATH or Path depending on the platform.
-    path: String,
+    pub path: String,
 
     /// A directory where matched lines will be stored.
     output_dir: PathBuf,
@@ -303,6 +304,19 @@ impl Tag {
     //         Ok(None)
     //     }
     // }
+    // Calls the external callback, by providing arguments, environment variables and path which will be searched for the command.
+    pub fn callback_call(
+        &self,
+        path: Option<&str>,
+        vars: &mut Variables,
+        handle: &mut CallbackHandle
+    ) -> Result<Option<ChildData>, AppError> {
+        if self.callback.is_some() {
+            self.callback.as_ref().unwrap().call(path, vars, handle)
+        } else {
+            Ok(None)
+        }
+    }
 }
 
 /// This is the structure mapping exactly search data coming from the configuration YAML file. The 'flatten' serde field
@@ -318,9 +332,8 @@ pub struct Search<T: Clone> {
 
     /// a unique identifier for this search
     pub tags: Vec<Tag>,
-
-    #[serde(default = "Tag::process_default")]
-    pub process: bool,
+    //#[serde(default = "Tag::process_default")]
+    //pub process: bool,
 }
 
 /// This conversion utility is meant to convert to a 'regular' configuration file a configuration file
@@ -338,7 +351,7 @@ impl From<Search<LogSource>> for Search<PathBuf> {
             logfile: logfile.clone(),
             io_error: search_logsource.io_error.clone(),
             tags: search_logsource.tags.clone(),
-            process: search_logsource.process.clone(),
+            //process: search_logsource.process.clone(),
         }
     }
 }
@@ -478,7 +491,7 @@ impl From<Config<LogSource>> for Config<PathBuf> {
                             logfile: file.clone(),
                             io_error: search.io_error.clone(),
                             tags: search.tags.clone(),
-                            process: search.process.clone(),
+                            //process: search.process.clone(),
                         };
 
                         // now use this structure and add it to config_pathbuf
@@ -519,9 +532,9 @@ mod tests {
     #[cfg(target_family = "unix")]
     fn global_options() {
         let mut yaml = r#"
-            path: /usr/foo1
-            snapshot_file: /usr/foo3/snap.foo
-            output_dir: /usr/foo2
+path: /usr/foo1
+snapshot_file: /usr/foo3/snap.foo
+output_dir: /usr/foo2
         "#;
 
         let mut opts: GlobalOptions = serde_yaml::from_str(yaml).expect("unable to read YAML");
@@ -532,14 +545,14 @@ mod tests {
         assert_eq!(opts.snapshot_file, PathBuf::from("/usr/foo3/snap.foo"));
 
         yaml = r#"
-            path: /usr/foo1
+path: /usr/foo1
 
-            # a list of user variables, if any
-            user_vars:
-              first_name: Al
-              last_name: Pacino
-              city: 'Los Angeles'
-              profession: actor            
+# a list of user variables, if any
+user_vars:
+    first_name: Al
+    last_name: Pacino
+    city: 'Los Angeles'
+    profession: actor            
         "#;
 
         opts = serde_yaml::from_str(yaml).expect("unable to read YAML");
@@ -558,59 +571,121 @@ mod tests {
     #[test]
     #[cfg(target_family = "unix")]
     fn tag() {
-        let mut yaml = r#"
-            name: error
-            options: "runcallback"
-            process: false
-            callback: { 
-                script: "tests/scripts/echovars.py",
-                args: ['arg1', 'arg2', 'arg3']
-            }
-            patterns:
-                warning: {
-                    regexes: [
-                    'error',
-                    ],
-                    exceptions: [
-                    'STARTTLS'
-                    ]
-                }
+        let yaml = r#"
+name: error
+options: "runcallback"
+process: false
+callback: { 
+    script: "tests/scripts/echovars.py",
+    args: ['arg1', 'arg2', 'arg3']
+}
+patterns:
+    warning: {
+        regexes: [
+            'error',
+        ],
+        exceptions: [
+            'STARTTLS'
+        ]
+    }
         "#;
 
-        let mut tag: Tag = serde_yaml::from_str(yaml).expect("unable to read YAML");
-        println!("opts={:?}", tag);
+        let tag: Tag = serde_yaml::from_str(yaml).expect("unable to read YAML");
         assert_eq!(tag.name, "error");
         assert!(tag.options.runcallback);
         assert!(!tag.options.keepoutput);
         assert!(!tag.process);
-        //assert_eq!(tag.callback.unwrap().args.unwrap(), &["arg1", "arg2", "arg3"]);
-
+        let script = PathBuf::from("tests/scripts/echovars.py");
+        assert!(
+            matches!(&tag.callback.as_ref().unwrap().id, crate::callback::CallbackType::Script(Some(x)) if x == &script)
+        );
+        assert_eq!(
+            tag.callback.unwrap().args.unwrap(),
+            &["arg1", "arg2", "arg3"]
+        );
     }
 
-    //#[test]
-    fn searches() {
-        let yaml = r#"
-    searches:
-          tags: 
-            - name: http_access_get_or_post
-              options: "runcallback,"
-              script: { 
-                path: "tests/scripts/echovars.py",
-                args: ['arg1', 'arg2', 'arg3']
-              }
-              patterns:
-                warning: {
-                  regexes: [
-                    'GET\s+([/\w]+_logo\.jpg)',
-                  ],
-                  exceptions: [
-                    'Firefox/63.0'
-                  ]
-                }
-        "#;
+    #[test]
+    fn config() {
+        let yaml = include_str!("../tests/config1.yml");
+        let _config = Config::<LogSource>::from_str(yaml).expect("unable to read YAML");
+        let config = Config::<PathBuf>::from(_config);
 
-        let cfg: Config<PathBuf> = serde_yaml::from_str(yaml).expect("unable to read YAML");
+        assert_eq!(
+            &config.global.path,
+            "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+        );
+        assert_eq!(config.global.output_dir, PathBuf::from("/tmp/foo"));
+        assert_eq!(
+            config.global.snapshot_file,
+            PathBuf::from("/tmp/my_snapshot.json")
+        );
+        assert_eq!(config.global.snapshot_retention, 5);
+        assert_eq!(
+            &config
+                .global
+                .user_vars
+                .as_ref()
+                .unwrap()
+                .get("first_name")
+                .unwrap(),
+            &"Al"
+        );
+        assert_eq!(
+            &config
+                .global
+                .user_vars
+                .as_ref()
+                .unwrap()
+                .get("last_name")
+                .unwrap(),
+            &"Pacino"
+        );
+        assert_eq!(
+            &config
+                .global
+                .user_vars
+                .as_ref()
+                .unwrap()
+                .get("city")
+                .unwrap(),
+            &"Los Angeles"
+        );
+        assert_eq!(
+            &config
+                .global
+                .user_vars
+                .as_ref()
+                .unwrap()
+                .get("profession")
+                .unwrap(),
+            &"actor"
+        );
+        assert_eq!(config.searches.len(), 1);
 
-        assert_eq!(cfg.searches.len(), 1);
+        let search = config.searches.first().unwrap();
+        assert_eq!(
+            search.logfile,
+            PathBuf::from("tests/logfiles/small_access.log")
+        );
+        assert_eq!(search.tags.len(), 1);
+
+        let tag = search.tags.first().unwrap();
+        assert_eq!(&tag.name, "http_access_get_or_post");
+        assert!(tag.process);
+        assert_eq!(tag.options.warningthreshold, 0);
+        assert!(tag.callback.is_some());
+        let script = PathBuf::from("tests/scripts/echovars.py");
+        assert!(
+            matches!(&tag.callback.as_ref().unwrap().id, crate::callback::CallbackType::Script(Some(x)) if x == &script)
+        );
+        assert_eq!(
+            tag.callback.as_ref().unwrap().args.as_ref().unwrap(),
+            &["arg1", "arg2", "arg3"]
+        );
+        assert!(tag.patterns.ok.is_none());
+        assert!(tag.patterns.critical.is_some());
+        assert!(tag.patterns.warning.is_some());
+
     }
 }

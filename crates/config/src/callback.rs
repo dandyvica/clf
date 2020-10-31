@@ -35,7 +35,7 @@ pub enum CallbackType {
 
 /// Represent a TCP or UNIX socket
 #[derive(Debug, Default)]
-struct CallbackHandle {
+pub struct CallbackHandle {
     tcp_socket: Option<TcpStream>,
     domain_socket: Option<UnixStream>,
 }
@@ -55,15 +55,10 @@ impl Clone for CallbackHandle {
 pub struct Callback {
     /// A callback identifier is either a script path, a TCP socket or a UNIX domain socket
     #[serde(flatten)]
-    id: CallbackType,
-
-    /// A handle on a TCP or UNIX socket.
-    /// Need this because it's better to reuse a socket
-    #[serde(skip)]
-    handle: CallbackHandle,
+    pub(in crate) id: CallbackType,
 
     /// Option arguments of the previous.
-    args: Option<Vec<String>>,
+    pub(in crate) args: Option<Vec<String>>,
 
     /// A timeout in seconds to for wait command completion.
     #[serde(default = "self::default_timeout")]
@@ -73,9 +68,10 @@ pub struct Callback {
 impl Callback {
     /// Calls the relevant callback with arguments
     pub fn call(
-        &mut self,
+        &self,
         env_path: Option<&str>,
         vars: &Variables,
+        handle: &mut CallbackHandle,
     ) -> Result<Option<ChildData>, AppError> {
         // the callback is called depending of its type
         match &self.id {
@@ -99,10 +95,10 @@ impl Callback {
                 );
 
                 // runtime variables are always there.
-                cmd.envs(vars.get_runtime_vars());
+                cmd.envs(&vars.runtime_vars);
 
                 // user variables, maybe
-                if let Some(uservars) = vars.get_user_vars() {
+                if let Some(uservars) = vars.user_vars() {
                     cmd.envs(uservars);
                 }
 
@@ -129,14 +125,14 @@ impl Callback {
             }
             CallbackType::Tcp(address) => {
                 // test whether a TCP socket is already created
-                if self.handle.tcp_socket.is_none() {
+                if handle.tcp_socket.is_none() {
                     let stream = TcpStream::connect(address.as_ref().unwrap())?;
-                    self.handle.tcp_socket = Some(stream);
+                    handle.tcp_socket = Some(stream);
                     debug!("creating TCP socket for: {}", address.as_ref().unwrap());
                 }
 
                 // send JSON data through TCP socket
-                let mut stream = self.handle.tcp_socket.as_ref().unwrap();
+                let mut stream = handle.tcp_socket.as_ref().unwrap();
 
                 // create a dedicated JSON structure
                 let json = json!({
@@ -155,14 +151,14 @@ impl Callback {
             }
             CallbackType::Domain(address) => {
                 // test whether a UNIX socket is already created
-                if self.handle.domain_socket.is_none() {
+                if handle.domain_socket.is_none() {
                     let stream = UnixStream::connect(address.as_ref().unwrap())?;
-                    self.handle.domain_socket = Some(stream);
+                    handle.domain_socket = Some(stream);
                     debug!("creating UNIX socket for: {:?}", address.as_ref().unwrap());
                 }
 
                 // send JSON data through UNIX socket
-                let mut stream = self.handle.domain_socket.as_ref().unwrap();
+                let mut stream = handle.domain_socket.as_ref().unwrap();
 
                 // create a dedicated JSON structure
                 let json = json!({
@@ -240,18 +236,21 @@ mod tests {
     #[cfg(target_family = "unix")]
     fn callback_script() {
         let yaml = r#"
-            script: tests/check_ut.py
+            script: "tests/check_ut.py"
             args: ['one', 'two', 'three']
         "#;
 
-        let mut cb: Callback = serde_yaml::from_str(yaml).expect("unable to read YAML");
+        let cb: Callback = serde_yaml::from_str(yaml).expect("unable to read YAML");
+        let script = PathBuf::from("tests/check_ut.py");
+        assert!(matches!(&cb.id, CallbackType::Script(Some(x)) if x == &script));
+        assert_eq!(cb.args.as_ref().unwrap().len(), 3);
 
         // create dummy variables
         let vars = super::tests::dummy_vars();
 
         // call script
-        let data = cb.call(None, &vars).unwrap();
-
+        let mut handle = CallbackHandle::default();
+        let data = cb.call(None, &vars, &mut handle).unwrap();
         assert!(data.is_some());
 
         // safe to unwrap
@@ -270,10 +269,9 @@ mod tests {
             args: ['one', 'two', 'three']
         "#;
 
-        let mut cb: Callback = serde_yaml::from_str(yaml).expect("unable to read YAML");
+        let cb: Callback = serde_yaml::from_str(yaml).expect("unable to read YAML");
         let addr = "127.0.0.1:8900".to_string();
-
-        assert!(matches!(&cb.id, CallbackType::Tcp(Some(addr))));
+        assert!(matches!(&cb.id, CallbackType::Tcp(Some(x)) if x == &addr));
 
         // create a very simple TCP server: wait for data and test them
         let child = std::thread::spawn(move || {
@@ -322,7 +320,9 @@ mod tests {
         let vars = super::tests::dummy_vars();
 
         // some work here
-        cb.call(None, &vars).unwrap();
+        let mut handle = CallbackHandle::default();
+        let data = cb.call(None, &vars, &mut handle).unwrap();
+        assert!(data.is_none());
 
         let _res = child.join();
     }
@@ -335,12 +335,12 @@ mod tests {
             args: ['one', 'two', 'three']
         "#;
 
-        let mut cb: Callback = serde_yaml::from_str(yaml).expect("unable to read YAML");
-        let addr = "/tmp/callback.sock".to_string();
+        let cb: Callback = serde_yaml::from_str(yaml).expect("unable to read YAML");
+        let addr = PathBuf::from("/tmp/callback.sock");
 
         let _ = std::fs::remove_file(&addr);
 
-        assert!(matches!(&cb.id, CallbackType::Domain(Some(addr))));
+        assert!(matches!(&cb.id, CallbackType::Domain(Some(x)) if x == &addr));
 
         // create a very simple UNIX socket server: wait for data and test them
         let child = std::thread::spawn(move || {
@@ -383,10 +383,14 @@ mod tests {
         std::thread::sleep(ten_millis);
 
         // create dummy variables
-        let vars = super::tests::dummy_vars();
+        let mut vars = super::tests::dummy_vars();
 
         // some work here
-        cb.call(None, &vars).unwrap();
+        let mut handle = CallbackHandle::default();
+        let data = cb.call(None, &mut vars, &mut handle).unwrap();
+        assert!(data.is_none());
+
+        //cb.call(None, &vars).unwrap();
 
         let _res = child.join();
     }

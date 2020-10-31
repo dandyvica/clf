@@ -14,7 +14,7 @@ const VAR_PREFIX: &str = "CLF_";
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Variables {
     // variables created during logfile analysis, like capture groups or line being read
-    runtime_vars: HashMap<String, String>,
+    pub runtime_vars: HashMap<String, String>,
 
     // user-defined variables in hte config file
     // this flag keeps the serializing ok when Option is None
@@ -39,13 +39,13 @@ impl Variables {
 
     /// Returns all runtime_vars
     #[inline]
-    pub fn get_runtime_vars(&self) -> &HashMap<String, String> {
+    pub fn runtime_vars(&mut self) -> &HashMap<String, String> {
         &self.runtime_vars
     }
 
     /// Returns user_vars
     #[inline]
-    pub fn get_user_vars(&self) -> &Option<HashMap<String, String>> {
+    pub fn user_vars(&self) -> &Option<HashMap<String, String>> {
         &self.user_vars
     }
 

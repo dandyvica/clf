@@ -146,9 +146,9 @@ impl From<PatternType> for String {
 /// A structure combining patterns into 3 categories: *critical*, *warning* and *ok*.
 #[derive(Debug, Deserialize, Clone)]
 pub struct PatternSet {
-    critical: Option<Pattern>,
-    warning: Option<Pattern>,
-    ok: Option<Pattern>,
+    pub(in crate) critical: Option<Pattern>,
+    pub(in crate) warning: Option<Pattern>,
+    pub(in crate) ok: Option<Pattern>,
 }
 
 impl PatternSet {
