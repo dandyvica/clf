@@ -36,6 +36,7 @@ pub enum CallbackType {
 /// Represent a TCP or UNIX socket
 #[derive(Debug, Default)]
 pub struct CallbackHandle {
+    cmd: Option<Command>,
     tcp_socket: Option<TcpStream>,
     domain_socket: Option<UnixStream>,
 }
@@ -44,6 +45,7 @@ pub struct CallbackHandle {
 impl Clone for CallbackHandle {
     fn clone(&self) -> Self {
         CallbackHandle {
+            cmd: None,
             tcp_socket: None,
             domain_socket: None,
         }
@@ -73,26 +75,32 @@ impl Callback {
         vars: &Variables,
         handle: &mut CallbackHandle,
     ) -> Result<Option<ChildData>, AppError> {
+
+        debug!(
+            "ready to start callback {:?} with args={:?}, path={:?}, envs={:?}, current_dir={:?}",
+            &self.id,
+            self.args,
+            env_path,
+            vars,
+            std::env::current_dir()
+                .map_err(|e| format!("unable to fetch current directory, error={}", e))
+        );        
+
+
         // the callback is called depending of its type
         match &self.id {
             CallbackType::Script(path) => {
-                debug!(
-                    "ready to start {:?} with args={:?}, path={:?}, envs={:?}, current_dir={:?}",
-                    path,
-                    self.args,
-                    env_path,
-                    vars,
-                    std::env::current_dir()
-                        .map_err(|e| format!("unable to fetch current directory, error={}", e))
-                );
-
                 // build Command struct before execution.
                 debug_assert!(path.is_some());
-                let mut cmd = Command::new(path.as_ref().unwrap());
-                debug!(
-                    "creating Command structure for: {:?}",
-                    path.as_ref().unwrap()
-                );
+
+                // test whether a Command struct is already created
+                if handle.cmd.is_none() {
+                    let cmd = Command::new(path.as_ref().unwrap());
+                    handle.cmd = Some(cmd);
+                    debug!("creating Command for: {:?}", path.as_ref().unwrap());
+                }
+
+                let cmd = handle.cmd.as_mut().unwrap();
 
                 // runtime variables are always there.
                 cmd.envs(&vars.runtime_vars);
