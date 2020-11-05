@@ -75,7 +75,6 @@ impl Callback {
         vars: &Variables,
         handle: &mut CallbackHandle,
     ) -> Result<Option<ChildData>, AppError> {
-
         debug!(
             "ready to start callback {:?} with args={:?}, path={:?}, envs={:?}, current_dir={:?}",
             &self.id,
@@ -84,8 +83,7 @@ impl Callback {
             vars,
             std::env::current_dir()
                 .map_err(|e| format!("unable to fetch current directory, error={}", e))
-        );        
-
+        );
 
         // the callback is called depending of its type
         match &self.id {

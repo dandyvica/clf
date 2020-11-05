@@ -309,7 +309,7 @@ impl Tag {
         &self,
         path: Option<&str>,
         vars: &mut Variables,
-        handle: &mut CallbackHandle
+        handle: &mut CallbackHandle,
     ) -> Result<Option<ChildData>, AppError> {
         if self.callback.is_some() {
             self.callback.as_ref().unwrap().call(path, vars, handle)
@@ -686,6 +686,5 @@ patterns:
         assert!(tag.patterns.ok.is_none());
         assert!(tag.patterns.critical.is_some());
         assert!(tag.patterns.warning.is_some());
-
     }
 }

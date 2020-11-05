@@ -11,6 +11,8 @@ extern crate log;
 extern crate simplelog;
 use simplelog::*;
 
+use wait_timeout::ChildExt;
+
 use config::{
     callback::ChildData,
     config::{Config, LogSource},
@@ -351,18 +353,14 @@ fn wait_children(children_list: Vec<ChildData>) {
         thread::sleep(wait_timeout);
     }
 
-    // store thread handles to wait for their job to finish
-    //let mut thread_handles = Vec::new();
-
-    for started_child in children_list {
-        debug_assert!(started_child.child.is_some());
-
+    // as child can be None in case of Tcp or Domain socket, need to get rid of these
+    for started_child in children_list.iter().filter(|x| x.child.is_some()) {
         // get a mutable reference
         let mut child = started_child.child.as_ref().unwrap().borrow_mut();
 
         // save pid & path
         let pid = child.id();
-        let path = started_child.path;
+        let path = &started_child.path;
 
         debug!(
             "managing end of process, pid:{}, path:{}",
@@ -382,7 +380,7 @@ fn wait_children(children_list: Vec<ChildData>) {
 
             // child has not exited. Spawn a new thread to wait at most the timeout defined
             Ok(None) => {
-                debug!("========> None");
+                debug!("command has not exited yet, try to wait a little!");
 
                 // now if timeout has not yet occured, start a new thread to wait and kill process ??
                 let elapsed = started_child.start_time.unwrap().elapsed().as_secs();
@@ -405,53 +403,24 @@ fn wait_children(children_list: Vec<ChildData>) {
                         }
                     }
                 } else {
-                    // wait a little and spawn a new thread to kill the command
-                    // let mutex = std::sync::Mutex::new(child);
-                    // let arc = std::sync::Arc::new(mutex);
+                    // we'll wait at least the remaining seconds
+                    let secs_to_wait = Duration::from_secs(started_child.timeout - elapsed);
 
-                    // // we'll wait at least the remaining seconds
-                    // let secs_to_wait = started_child.timeout - elapsed;
-
-                    // debug!(
-                    //     "waiting for script: {}, pid: {} to finish",
-                    //     path.display(),
-                    //     pid
-                    // );
-
-                    // let child_thread = thread::spawn(move || {
-                    //     thread::sleep(Duration::from_secs(secs_to_wait));
-                    //     let mut guard = arc.lock().unwrap();
-
-                    //     match guard.kill() {
-                    //         Ok(_) => info!("process {} killed", guard.id()),
-                    //         Err(e) => {
-                    //             if e.kind() == ErrorKind::InvalidInput {
-                    //                 info!("process {} already killed", guard.id());
-                    //             } else {
-                    //                 info!(
-                    //                     "error:{} trying to kill process pid:{}, path: {}",
-                    //                     e,
-                    //                     pid,
-                    //                     path.display()
-                    //                 );
-                    //             }
-                    //         }
-                    //     }
-                    // });
-
-                    // thread_handles.push(child_thread);
+                    let _status_code = match child.wait_timeout(secs_to_wait).unwrap() {
+                        Some(status) => status.code(),
+                        None => {
+                            // child hasn't exited yet
+                            child.kill().unwrap();
+                            child.wait().unwrap().code()
+                        }
+                    };
                 }
             }
 
             // unlikely error
-            Err(e) => eprintln!("error attempting to wait: {} for pid:{}", e, pid),
+            Err(e) => eprintln!("error attempting to try_wait: {} for pid:{}", e, pid),
         };
     }
-
-    // wait for thread to finish
-    // for handle in thread_handles {
-    //     handle.join().expect("error waiting for thread");
-    // }
 }
 
 /// Manage Nagios output, depending on the NRPE version.

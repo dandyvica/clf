@@ -10,6 +10,7 @@ edition = "2018"
 clap = "2.33.0"
 log = "0.4.8"
 simplelog = "^0.7.6"
+wait-timeout = "0.2.0"
 logfile = { version = "^0.1.0", path = "crates/logfile" }
 misc = { version = "^0.1.0", path = "crates/misc" }
 config = { version = "^0.1.0", path = "crates/config" }
