@@ -10,6 +10,7 @@ macro_rules! config_file {
     ($file:literal, $yaml:literal) => {{
         let yaml = $yaml;
 
+        let _ = std::fs::create_dir("tests/tmp/");
         let config_file = concat!("tests/tmp/", $file, ".yml");
         //config_file.push("config_test.yml");
 

@@ -31,20 +31,30 @@ impl Variables {
         }
     }
 
+    #[inline(always)]
+    fn retain_one(&mut self, one: &str) {
+        self.runtime_vars.retain(|k, _| k == one);
+    }
+
+    pub fn retain_logfile(&mut self) {
+        self.retain_one("CLF_LOGFILE");
+        debug_assert!(self.runtime_vars.len() == 1);
+    }
+
     /// Returns the variable from runtime_vars
-    #[inline]
+    #[inline(always)]
     pub fn get_runtime_var(&self, var: &str) -> Option<&String> {
         self.runtime_vars.get(var)
     }
 
     /// Returns all runtime_vars
-    #[inline]
+    #[inline(always)]
     pub fn runtime_vars(&mut self) -> &HashMap<String, String> {
         &self.runtime_vars
     }
 
     /// Returns user_vars
-    #[inline]
+    #[inline(always)]
     pub fn user_vars(&self) -> &Option<HashMap<String, String>> {
         &self.user_vars
     }

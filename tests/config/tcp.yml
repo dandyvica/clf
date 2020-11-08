@@ -17,11 +17,11 @@ searches:
         # a list of comma-separated options to manage the search. Current supported options are:
         # runcallback: if present, means the provided script will be called
         # rewind: restart the search from the beginning of the file
-        #options: "warningthreshold=0"
+        options: "runcallback"
 
         # a script or command to be called, every time a hit is found.
         callback: { 
-          path: "tests/scripts/echovars.py",
+          address: "127.0.0.1:8999",
           args: ['arg1', 'arg2', 'arg3']
         }
 
@@ -31,6 +31,9 @@ searches:
             regexes: [
               'GET\s+([/\w]+)\s+HTTP/1\.1"\s+(?P<code>\d+)\s+(?P<length>\d+)',
             ],
+            exceptions: [
+              'AppleWebKit/537\.36',
+            ]
           }
           warning: {
             regexes: [
@@ -40,4 +43,3 @@ searches:
               '^\d{2,3}\.'
             ]
           }
-

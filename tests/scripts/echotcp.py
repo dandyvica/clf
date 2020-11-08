@@ -2,15 +2,16 @@
 import socket
 import sys
 import json
+import struct
 
 # Create a TCP/IP socket
 sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
 # use this to made the socket immediatly available
-sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+#sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 
 # Bind the socket to the port
-server_address = ('localhost', 10000)
+server_address = ('localhost', 8999)
 print('starting up on %s port %s' % server_address)
 sock.bind(server_address)
 
@@ -27,11 +28,25 @@ while True:
 
         # Receive the data in small chunks and retransmit it
         while True:
-            data = connection.recv(1024)
-            if not data:
-                break            
-            #json = json.loads(data.decode("utf-8"))
-            print('received "%s"' % data)
+            data = connection.recv(2)
+            size = int.from_bytes(data, byteorder='big')
+            print("size==", size)
+
+            data = connection.recv(size)
+            print(data)
+
+
+
+
+
+            # print('data "%s"' % data)
+            # print('data length=%s' % len(data))
+            # if not data:
+            #     break   
+            # decode = data.decode("ascii", errors="ignore")
+            # parsed = json.loads(decode)
+            # pretty = json.dumps(parsed, indent=4, sort_keys=False)
+            # print('received "%s"' % pretty)
             
     finally:
         # Clean up the connection

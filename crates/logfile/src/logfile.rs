@@ -183,6 +183,7 @@ pub trait Seeker {
 }
 
 impl Seeker for BufReader<File> {
+    #[inline(always)]
     fn set_offset(&mut self, offset: u64) -> Result<u64, AppError> {
         self.seek(SeekFrom::Start(offset)).map_err(AppError::Io)
     }
@@ -338,6 +339,10 @@ impl Lookup for LogFile {
         // 3. loop to read each line of the file
         //------------------------------------------------------------------------------------
         loop {
+            // reset runtime variables because they change for every line read, apart from CLF_LOGFILE
+            // which is the same for each log
+            wrapper.vars.retain_logfile();
+
             // read until \n (which is included in the buffer)
             let ret = reader.read_until(b'\n', &mut buffer);
 
@@ -355,6 +360,11 @@ impl Lookup for LogFile {
                     // we've been reading a new line successfully
                     line_number += 1;
                     bytes_count += bytes_read as u64;
+
+                    // do we just need to go to EOF ?
+                    if wrapper.tag.options.fastforward {
+                        continue;
+                    }
 
                     trace!("====> line#={}, line={}", line_number, line);
 

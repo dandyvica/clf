@@ -1,7 +1,7 @@
 mod util;
 
 use crate::util::Util;
-use rclf::snapshot::Snapshot;
+use logfile::snapshot::Snapshot;
 
 // check exit status
 #[test]
@@ -82,7 +82,7 @@ fn config_error_02() {
 }
 
 #[test]
-fn test_01() {
+fn conf_01() {
     let conf = config_file!(
         "test01",
         r#"---
@@ -129,7 +129,7 @@ fn test_01() {
 }
 
 #[test]
-fn test_02() {
+fn conf_02() {
     let conf = config_file!(
         "test02",
         r#"---

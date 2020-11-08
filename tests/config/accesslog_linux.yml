@@ -38,12 +38,12 @@ searches:
         process: true
 
         # a list of comma-separated options to manage the search. Current supported options are:
-        # runscript: if present, means the provided script will be called
+        # runcallback: if present, means the provided script will be called
         # rewind: restart the search from the beginning of the file
         #options: "warningthreshold=0"
 
         # a script or command to be called, every time a hit is found.
-        script: { 
+        callback: { 
           path: "tests/scripts/echovars.py",
           args: ['arg1', 'arg2', 'arg3']
         }
@@ -68,12 +68,12 @@ searches:
       - name: http_access_images
 
         # a list of comma-separated options to manage the search. Current supported options are:
-        # runscript: if present, means the provided script will be called
+        # runcallback: if present, means the provided script will be called
         # rewind: restart the search from the beginning of the file
         options: "criticalthreshold=0"
 
         # a script or command to be called, every time a hit is found.
-        script: { 
+        callback: { 
           address: 127.0.0.1:10000,
           args: ['arg1', 'arg2', 'arg3']
         }
@@ -96,8 +96,8 @@ searches:
   - logfile: tests/logfiles/small_access.log.gz
     tags: 
       - name: http_access_gzipped
-        #options: "runscript,"
-        script: { 
+        #options: "runcallback,"
+        callback: { 
           path: "tests/scripts/echovars.py", 
           args: ['arg1', 'arg2', 'arg3']
         }
@@ -119,8 +119,8 @@ searches:
     }
     tags: 
       - name: all_logs
-        #options: "runscript,"
-        script: { 
+        #options: "runcallback,"
+        callback: { 
           path: "tests/scripts/echovars.py", 
           args: ['arg1', 'arg2', 'arg3']
         }

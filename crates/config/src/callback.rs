@@ -1,5 +1,6 @@
 //! Useful wrapper on the `Command` Rust standard library structure.
 use std::cell::RefCell;
+use std::convert::TryFrom;
 use std::io::Write;
 use std::net::TcpStream;
 use std::os::unix::net::UnixStream;
@@ -57,7 +58,7 @@ impl Clone for CallbackHandle {
 pub struct Callback {
     /// A callback identifier is either a script path, a TCP socket or a UNIX domain socket
     #[serde(flatten)]
-    pub(in crate) id: CallbackType,
+    pub(in crate) callback: CallbackType,
 
     /// Option arguments of the previous.
     pub(in crate) args: Option<Vec<String>>,
@@ -77,7 +78,7 @@ impl Callback {
     ) -> Result<Option<ChildData>, AppError> {
         debug!(
             "ready to start callback {:?} with args={:?}, path={:?}, envs={:?}, current_dir={:?}",
-            &self.id,
+            &self.callback,
             self.args,
             env_path,
             vars,
@@ -86,7 +87,7 @@ impl Callback {
         );
 
         // the callback is called depending of its type
-        match &self.id {
+        match &self.callback {
             CallbackType::Script(path) => {
                 // build Command struct before execution.
                 debug_assert!(path.is_some());
@@ -141,16 +142,25 @@ impl Callback {
                 let mut stream = handle.tcp_socket.as_ref().unwrap();
 
                 // create a dedicated JSON structure
-                let json = json!({
+                let mut json = json!({
                     "args": &self.args,
                     "vars": vars
                 })
                 .to_string();
 
-                debug!(
-                    "sending JSON data to TCP socket: {}",
-                    address.as_ref().unwrap()
-                );
+                // 64KB a payload is more than enough
+                json.truncate(u16::MAX as usize);
+                let json_raw = json.as_bytes();
+
+                // send data length first in network order, and then send payload
+                let size = u16::try_from(json_raw.len()).expect(&format!(
+                    "unexpected conversion error at {}-{}",
+                    file!(),
+                    line!()
+                ));
+                println!("size={}, to_be_bytes={:x?}", size, size.to_be_bytes());
+                stream.write(&size.to_be_bytes())?;
+                //println!("size={:?}", &json_raw.len().to_be_bytes());
                 stream.write(&json.as_bytes())?;
 
                 Ok(None)
@@ -167,17 +177,25 @@ impl Callback {
                 let mut stream = handle.domain_socket.as_ref().unwrap();
 
                 // create a dedicated JSON structure
-                let json = json!({
+                let mut json = json!({
                     "args": &self.args,
                     "vars": vars
                 })
                 .to_string();
 
-                debug!(
-                    "sending JSON data to UNIX socket: {:?}",
-                    address.as_ref().unwrap()
-                );
-                stream.write_all(&json.as_bytes())?;
+                // 64KB a payload is more than enough
+                json.truncate(u16::MAX as usize);
+                let json_raw = json.as_bytes();
+
+                // send data length first in network order, and then send payload
+                let size = u16::try_from(json_raw.len()).expect(&format!(
+                    "unexpected conversion error at {}-{}",
+                    file!(),
+                    line!()
+                ));
+                stream.write(&size.to_be_bytes())?;
+                //println!("size={:?}", &json_raw.len().to_be_bytes());
+                stream.write(&json.as_bytes())?;
 
                 Ok(None)
             }
@@ -248,7 +266,7 @@ mod tests {
 
         let cb: Callback = serde_yaml::from_str(yaml).expect("unable to read YAML");
         let script = PathBuf::from("tests/check_ut.py");
-        assert!(matches!(&cb.id, CallbackType::Script(Some(x)) if x == &script));
+        assert!(matches!(&cb.callback, CallbackType::Script(Some(x)) if x == &script));
         assert_eq!(cb.args.as_ref().unwrap().len(), 3);
 
         // create dummy variables
@@ -277,7 +295,7 @@ mod tests {
 
         let cb: Callback = serde_yaml::from_str(yaml).expect("unable to read YAML");
         let addr = "127.0.0.1:8900".to_string();
-        assert!(matches!(&cb.id, CallbackType::Tcp(Some(x)) if x == &addr));
+        assert!(matches!(&cb.callback, CallbackType::Tcp(Some(x)) if x == &addr));
 
         // create a very simple TCP server: wait for data and test them
         let child = std::thread::spawn(move || {
@@ -285,16 +303,20 @@ mod tests {
             let listener = std::net::TcpListener::bind(&addr).unwrap();
             match listener.accept() {
                 Ok((mut socket, _addr)) => {
-                    //println!("new client: {:?}", addr);
+                    // read size first
+                    let mut size_buffer = [0; std::mem::size_of::<u16>()];
+                    socket.read(&mut size_buffer).unwrap();
+                    let json_size = u16::from_be_bytes(size_buffer);
+                    assert_eq!(json_size, 211);
 
-                    let mut buffer = vec![0; 1024];
-                    socket.read(&mut buffer).unwrap();
+                    // read JSON data
+                    let mut json_buffer = vec![0; json_size as usize];
+                    socket.read(&mut json_buffer).unwrap();
 
-                    let s = std::str::from_utf8(&buffer)
+                    // get JSON size as first 8 bytes
+                    let s = std::str::from_utf8(&json_buffer)
                         .unwrap()
                         .trim_end_matches(char::from(0));
-                    //println!("data={}", s);
-                    //println!("data={:?}", buffer);
 
                     let json: JSON = serde_json::from_str(&s).unwrap();
 
@@ -346,7 +368,7 @@ mod tests {
 
         let _ = std::fs::remove_file(&addr);
 
-        assert!(matches!(&cb.id, CallbackType::Domain(Some(x)) if x == &addr));
+        assert!(matches!(&cb.callback, CallbackType::Domain(Some(x)) if x == &addr));
 
         // create a very simple UNIX socket server: wait for data and test them
         let child = std::thread::spawn(move || {
@@ -354,10 +376,17 @@ mod tests {
             let listener = std::os::unix::net::UnixListener::bind(addr).unwrap();
             match listener.accept() {
                 Ok((mut socket, _addr)) => {
-                    let mut buffer = vec![0; 1024];
-                    socket.read(&mut buffer).unwrap();
+                    // read size first
+                    let mut size_buffer = [0; std::mem::size_of::<u16>()];
+                    socket.read(&mut size_buffer).unwrap();
+                    let json_size = u16::from_be_bytes(size_buffer);
+                    assert_eq!(json_size, 211);
 
-                    let s = std::str::from_utf8(&buffer)
+                    // read JSON data
+                    let mut json_buffer = vec![0; json_size as usize];
+                    socket.read(&mut json_buffer).unwrap();
+
+                    let s = std::str::from_utf8(&json_buffer)
                         .unwrap()
                         .trim_end_matches(char::from(0));
                     //println!("data={:?}", buffer);

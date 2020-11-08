@@ -186,7 +186,7 @@ impl fmt::Display for MatchCounter {
 
 /// This will hold error counters for each logfile processed.
 #[derive(Debug)]
-pub struct LogfileMatchCounter(pub HashMap<PathBuf, MatchCounter>);
+pub struct LogfileMatchCounter(HashMap<PathBuf, MatchCounter>);
 
 impl LogfileMatchCounter {
     /// Just defines a new empty counter structure.

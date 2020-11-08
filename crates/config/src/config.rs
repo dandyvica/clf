@@ -597,7 +597,7 @@ patterns:
         assert!(!tag.process);
         let script = PathBuf::from("tests/scripts/echovars.py");
         assert!(
-            matches!(&tag.callback.as_ref().unwrap().id, crate::callback::CallbackType::Script(Some(x)) if x == &script)
+            matches!(&tag.callback.as_ref().unwrap().callback, crate::callback::CallbackType::Script(Some(x)) if x == &script)
         );
         assert_eq!(
             tag.callback.unwrap().args.unwrap(),
@@ -677,7 +677,7 @@ patterns:
         assert!(tag.callback.is_some());
         let script = PathBuf::from("tests/scripts/echovars.py");
         assert!(
-            matches!(&tag.callback.as_ref().unwrap().id, crate::callback::CallbackType::Script(Some(x)) if x == &script)
+            matches!(&tag.callback.as_ref().unwrap().callback, crate::callback::CallbackType::Script(Some(x)) if x == &script)
         );
         assert_eq!(
             tag.callback.as_ref().unwrap().args.as_ref().unwrap(),

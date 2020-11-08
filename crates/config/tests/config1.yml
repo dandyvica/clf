@@ -40,7 +40,7 @@ searches:
         process: true
 
         # a list of comma-separated options to manage the search. Current supported options are:
-        # runscript: if present, means the provided script will be called
+        # runcallback: if present, means the provided script will be called
         # rewind: restart the search from the beginning of the file
         options: "warningthreshold=0"
 
