@@ -28,25 +28,23 @@ while True:
 
         # Receive the data in small chunks and retransmit it
         while True:
+            # receive JSON size in network order (big endian)
             data = connection.recv(2)
+            if not data:
+                break
             size = int.from_bytes(data, byteorder='big')
             print("size==", size)
 
+            # receive JSON payload
             data = connection.recv(size)
-            print(data)
+            if not data:
+                break
 
-
-
-
-
-            # print('data "%s"' % data)
-            # print('data length=%s' % len(data))
-            # if not data:
-            #     break   
-            # decode = data.decode("ascii", errors="ignore")
-            # parsed = json.loads(decode)
-            # pretty = json.dumps(parsed, indent=4, sort_keys=False)
-            # print('received "%s"' % pretty)
+            # decode and display JSON
+            decode = data.decode("ascii", errors="ignore")
+            parsed = json.loads(decode)
+            pretty = json.dumps(parsed, indent=4, sort_keys=False)
+            print('received "%s"' % pretty)
             
     finally:
         # Clean up the connection

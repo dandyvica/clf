@@ -13,17 +13,20 @@ use std::os::unix::fs::MetadataExt;
 use flate2::read::GzDecoder;
 use serde::{Deserialize, Serialize};
 
-use misc::{
+use crate::misc::{
     error::{AppCustomErrorKind, AppError},
     nagios::MatchCounter,
+    util::Cons,
 };
 
-use config::{
+use crate::config::{
     callback::{CallbackHandle, ChildData},
     config::{GlobalOptions, Tag},
     pattern::PatternType,
     variables::Variables,
 };
+
+use crate::var;
 
 /// A wrapper to store log file processing data.
 #[derive(Debug, Serialize, Deserialize, Default)]
@@ -41,11 +44,11 @@ pub struct RunData {
     /// last time logfile is processed
     last_run: u64,
 
-    /// critical threshold count
-    critical_threshold: u16,
+    /// ongoing critical count
+    critical_count: u64,
 
-    /// warning threshold count
-    warning_threshold: u16,
+    /// ongoing warning count
+    warning_count: u64,
 
     /// number of script execution so far
     exec_count: u16,
@@ -53,10 +56,10 @@ pub struct RunData {
 
 impl RunData {
     /// Returns the `tag_name` field value.
-    #[inline(always)]
-    pub fn get_tagname(&self) -> &str {
-        &self.tag_name
-    }
+    // #[inline(always)]
+    // pub fn get_tagname(&self) -> &str {
+    //     &self.tag_name
+    // }
 
     /// Returns the `last_run` field value.
     #[inline(always)]
@@ -129,6 +132,7 @@ impl LogFile {
     }
 
     /// Returns the list of tags of this `LogFile`.
+    #[cfg(test)]
     pub fn tags(&self) -> Vec<&str> {
         self.rundata
             .keys()
@@ -137,6 +141,7 @@ impl LogFile {
     }
 
     /// Returns `true` if `name` is found in this `LogFile`.
+    #[cfg(test)]
     pub fn contains_key(&self, name: &str) -> bool {
         self.rundata.contains_key(name)
     }
@@ -166,6 +171,12 @@ impl LogFile {
     pub fn get_ids(metadata: &Metadata) -> (u64, u64) {
         (0, 0)
     }
+
+    /// True is file is compressed.
+    #[inline(always)]
+    fn is_gzipped(&self) -> bool {
+        self.compressed
+    }
 }
 
 /// Two log files are considered equal if they have the same name, inode & dev.
@@ -189,7 +200,11 @@ impl Seeker for BufReader<File> {
     }
 }
 
-impl Seeker for BufReader<GzDecoder<File>> {
+/// Implementing for T: Read helps testing wuth `Cursor` type.
+impl<T> Seeker for BufReader<GzDecoder<T>>
+where
+    T: Read,
+{
     fn set_offset(&mut self, offset: u64) -> Result<u64, AppError> {
         // if 0, nothing to do
         if offset == 0 {
@@ -209,13 +224,33 @@ impl Seeker for BufReader<GzDecoder<File>> {
     }
 }
 
-/// Utility wrapper to pass all necessrary reference to the lookup methods.
+/// Utility wrapper to pass all necessary references to the lookup methods.
+#[derive(Debug)]
 pub struct Wrapper<'a> {
     pub global: &'a GlobalOptions,
     pub tag: &'a Tag,
     pub vars: &'a mut Variables,
     pub global_counter: &'a mut MatchCounter,
     pub logfile_counter: &'a mut MatchCounter,
+}
+
+impl<'a> Wrapper<'a> {
+    /// Simple helper for creating a new wrapper
+    pub fn new(
+        global: &'a GlobalOptions,
+        tag: &'a Tag,
+        vars: &'a mut Variables,
+        global_counter: &'a mut MatchCounter,
+        logfile_counter: &'a mut MatchCounter,
+    ) -> Self {
+        Wrapper {
+            global,
+            tag,
+            vars,
+            global_counter,
+            logfile_counter,
+        }
+    }
 }
 
 /// Return type for all `Lookup` methods.
@@ -238,16 +273,13 @@ impl Lookup for LogFile {
         let file = File::open(&self.path)?;
 
         // if file is compressed, we need to call a specific reader
-        match self.extension.as_deref() {
-            Some("gz") => {
-                let decoder = GzDecoder::new(file);
-                let reader = BufReader::new(decoder);
-                self.lookup_from_reader(reader, wrapper)
-            }
-            Some(&_) | None => {
-                let reader = BufReader::new(file);
-                self.lookup_from_reader(reader, wrapper)
-            }
+        if self.is_gzipped() {
+            let decoder = GzDecoder::new(file);
+            let reader = BufReader::new(decoder);
+            self.lookup_from_reader(reader, wrapper)
+        } else {
+            let reader = BufReader::new(file);
+            self.lookup_from_reader(reader, wrapper)
         }
     }
 
@@ -285,11 +317,11 @@ impl Lookup for LogFile {
         trace!(
             "#######################> start processing logfile:{} for tag:{}",
             self.path.display(),
-            wrapper.tag.name
+            wrapper.tag.name()
         );
 
         // uses the same buffer
-        let mut buffer = Vec::with_capacity(misc::util::DEFAULT_STRING_CAPACITY);
+        let mut buffer = Vec::with_capacity(Cons::DEFAULT_STRING_CAPACITY);
 
         // define a new child handle. This is an Option because the script couldn't be called if not requested so
         let mut children = Vec::new();
@@ -306,17 +338,18 @@ impl Lookup for LogFile {
         //------------------------------------------------------------------------------------
 
         // anyway, reset only runtime variables
-        wrapper.vars.runtime_vars.clear();
+        wrapper.vars.clear();
         wrapper.vars.insert(
             "LOGFILE",
             self.path.to_str().unwrap_or("error converting PathBuf"),
         );
+        wrapper.vars.insert("TAG", wrapper.tag.name());
 
         // get rundata corresponding to tag name, or insert that new one if not yet in the snapshot file
-        let mut rundata = self.or_insert(&wrapper.tag.name);
+        let mut rundata = self.or_insert(&wrapper.tag.name());
         trace!(
             "tagname: {:?}, rundata:{:?}\n\n",
-            &wrapper.tag.name,
+            &wrapper.tag.name(),
             rundata
         );
 
@@ -341,7 +374,8 @@ impl Lookup for LogFile {
         loop {
             // reset runtime variables because they change for every line read, apart from CLF_LOGFILE
             // which is the same for each log
-            wrapper.vars.retain_logfile();
+            //wrapper.vars.retain_logfile();
+            wrapper.vars.retain(&[&var!("LOGFILE"), &var!("TAG")]);
 
             // read until \n (which is included in the buffer)
             let ret = reader.read_until(b'\n', &mut buffer);
@@ -363,6 +397,7 @@ impl Lookup for LogFile {
 
                     // do we just need to go to EOF ?
                     if wrapper.tag.options.fastforward {
+                        buffer.clear();
                         continue;
                     }
 
@@ -371,43 +406,40 @@ impl Lookup for LogFile {
                     // is there a match, regarding also exceptions?
                     if let Some(re) = wrapper.tag.is_match(&line) {
                         debug!(
-                            "found a match tag={}, line={}, line#={}, re=({:?},{}), warning_threshold={}, critical_threshold={}",
-                            wrapper.tag.name,
+                            "found a match tag={}, line={}, line#={}, re=({:?},{}), warning_count={}, critical_count={}",
+                            wrapper.tag.name(),
                             line.clone(),
                             line_number,
                             re.0,
                             re.1.as_str(),
-                            rundata.warning_threshold,
-                            rundata.critical_threshold
+                            rundata.warning_count,
+                            rundata.critical_count
                         );
 
                         // increments thresholds and compare with possible defined limits and accumulate counters for plugin output
                         match re.0 {
-                            PatternType::warning => {
-                                rundata.warning_threshold += 1;
-                                if rundata.warning_threshold < wrapper.tag.options.warningthreshold
-                                {
-                                    buffer.clear();
-                                    continue;
-                                }
-                                wrapper.global_counter.warning_count += 1;
-                                wrapper.logfile_counter.warning_count += 1;
-                            }
                             PatternType::critical => {
-                                rundata.critical_threshold += 1;
-                                if rundata.critical_threshold
-                                    < wrapper.tag.options.criticalthreshold
-                                {
+                                rundata.critical_count += 1;
+                                if rundata.critical_count < wrapper.tag.options.criticalthreshold {
                                     buffer.clear();
                                     continue;
                                 }
                                 wrapper.global_counter.critical_count += 1;
                                 wrapper.logfile_counter.critical_count += 1;
                             }
+                            PatternType::warning => {
+                                rundata.warning_count += 1;
+                                if rundata.warning_count < wrapper.tag.options.warningthreshold {
+                                    buffer.clear();
+                                    continue;
+                                }
+                                wrapper.global_counter.warning_count += 1;
+                                wrapper.logfile_counter.warning_count += 1;
+                            }
                             // this special Ok pattern resets counters
                             PatternType::ok => {
-                                rundata.critical_threshold = 0;
-                                rundata.warning_threshold = 0;
+                                rundata.critical_count = 0;
+                                rundata.warning_count = 0;
 
                                 // no need to process further: don't call a script
                                 buffer.clear();
@@ -424,7 +456,7 @@ impl Lookup for LogFile {
                             wrapper.vars.insert("LINE", line.clone());
                             wrapper.vars.insert("MATCHED_RE", re.1.as_str());
                             wrapper.vars.insert("MATCHED_RE_TYPE", re.0);
-                            wrapper.vars.insert("TAG", &wrapper.tag.name);
+                            //wrapper.vars.insert("TAG", &wrapper.tag.name);
 
                             wrapper.vars.insert_captures(re.1, &line);
 
@@ -433,7 +465,7 @@ impl Lookup for LogFile {
                             // now call script if limit is not reached yet
                             if rundata.exec_count < wrapper.tag.options.runlimit {
                                 if let Some(child) = wrapper.tag.callback_call(
-                                    Some(&wrapper.global.path),
+                                    Some(&wrapper.global.path()),
                                     wrapper.vars,
                                     &mut handle,
                                 )? {
@@ -466,8 +498,8 @@ impl Lookup for LogFile {
         // this will count number of matches for warning & critical, to see if this matches the thresholds
         // first is warning, second is critical
         if !wrapper.tag.options.savethresholdcount {
-            rundata.critical_threshold = 0;
-            rundata.warning_threshold = 0;
+            rundata.critical_count = 0;
+            rundata.warning_count = 0;
         }
 
         // and last run
@@ -480,7 +512,7 @@ impl Lookup for LogFile {
         trace!(
             "========================> end processing logfile:{} for tag:{}",
             self.path.display(),
-            wrapper.tag.name
+            wrapper.tag.name()
         );
 
         Ok(children)
@@ -491,9 +523,35 @@ impl Lookup for LogFile {
 mod tests {
     use std::collections::HashMap;
     use std::path::PathBuf;
+    use std::str::FromStr;
 
     use super::*;
-    //use crate::error::*;
+    //use std::io::{Error, ErrorKind};
+
+    use crate::testing::setup::*;
+
+    // // utility fn to receive JSON from a stream
+    // fn get_json<T: Read>(socket: &mut T) -> Result<JSONStream, std::io::Error> {
+    //     // try to read size first
+    //     let mut size_buffer = [0; std::mem::size_of::<u16>()];
+    //     let bytes_read = socket.read(&mut size_buffer)?;
+    //     dbg!(bytes_read);
+    //     if bytes_read == 0 {
+    //         return Err(Error::new(ErrorKind::Interrupted, "socket closed"));
+    //     }
+
+    //     let json_size = u16::from_be_bytes(size_buffer);
+
+    //     // read JSON raw data
+    //     let mut json_buffer = vec![0; json_size as usize];
+    //     socket.read_exact(&mut json_buffer).unwrap();
+
+    //     // get JSON
+    //     let s = std::str::from_utf8(&json_buffer).unwrap();
+
+    //     let json: JSONStream = serde_json::from_str(&s).unwrap();
+    //     Ok(json)
+    // }
 
     // useful set of data for our unit tests
     const JSON: &'static str = r#"
@@ -509,8 +567,8 @@ mod tests {
                         "last_offset": 1000,
                         "last_line": 10,
                         "last_run": 1000000,
-                        "critical_threshold": 10,
-                        "warning_threshold": 10,
+                        "critical_count": 10,
+                        "warning_count": 10,
                         "exec_count": 10
                     },
                     "tag2": {
@@ -518,8 +576,8 @@ mod tests {
                         "last_offset": 1000,
                         "last_line": 10,
                         "last_run": 1000000,
-                        "critical_threshold": 10,
-                        "warning_threshold": 10,
+                        "critical_count": 10,
+                        "warning_count": 10,
                         "exec_count": 10
                     }
                 }
@@ -535,8 +593,8 @@ mod tests {
                         "last_offset": 1000,
                         "last_line": 10,
                         "last_run": 1000000,
-                        "critical_threshold": 10,
-                        "warning_threshold": 10,
+                        "critical_count": 10,
+                        "warning_count": 10,
                         "exec_count": 10
 
                     },
@@ -545,8 +603,8 @@ mod tests {
                         "last_offset": 1000,
                         "last_line": 10,
                         "last_run": 1000000,
-                        "critical_threshold": 10,
-                        "warning_threshold": 10,
+                        "critical_count": 10,
+                        "warning_count": 10,
                         "exec_count": 10
                     }
                 }
@@ -554,9 +612,9 @@ mod tests {
         }
     "#;
 
-    fn load_json() -> HashMap<PathBuf, LogFile> {
-        serde_json::from_str(JSON).unwrap()
-    }
+    // fn load_json() -> HashMap<PathBuf, LogFile> {
+    //     serde_json::from_str(JSON).unwrap()
+    // }
 
     #[test]
     #[cfg(target_os = "linux")]
@@ -594,59 +652,6 @@ mod tests {
     }
 
     #[test]
-    fn deserialize() {
-        let mut json = crate::logfile::tests::load_json();
-
-        assert!(json.contains_key(&PathBuf::from("/usr/bin/zip")));
-        assert!(json.contains_key(&PathBuf::from("/etc/hosts.allow")));
-
-        {
-            let logfile1 = json.get_mut(&PathBuf::from("/usr/bin/zip")).unwrap();
-            assert_eq!(logfile1.rundata.len(), 2);
-            assert!(logfile1.contains_key("tag1"));
-            assert!(logfile1.contains_key("tag2"));
-        }
-
-        {
-            let logfile2 = json.get_mut(&PathBuf::from("/etc/hosts.allow")).unwrap();
-            assert_eq!(logfile2.rundata.len(), 2);
-            assert!(logfile2.contains_key("tag3"));
-            assert!(logfile2.contains_key("tag4"));
-        }
-    }
-
-    #[test]
-    fn or_insert() {
-        let mut json = crate::logfile::tests::load_json();
-
-        {
-            let rundata1 = json
-                .get_mut(&PathBuf::from("/usr/bin/zip"))
-                .unwrap()
-                .or_insert("another_tag");
-
-            assert_eq!(rundata1.tag_name, "another_tag");
-        }
-
-        let logfile1 = json.get_mut(&PathBuf::from("/usr/bin/zip")).unwrap();
-        let mut tags = logfile1.tags();
-        tags.sort();
-        assert_eq!(tags, vec!["another_tag", "tag1", "tag2"]);
-
-        assert!(logfile1.contains_key("tag1"));
-        assert!(!logfile1.contains_key("tag3"));
-
-        // // tag4 is not part of LogFile
-        // let mut rundata = json[1].or_insert("tag4");
-
-        // // but tag3 is and even is duplicated
-        // rundata = json[1].or_insert("tag3");
-        // rundata.last_line = 999;
-
-        // assert_eq!(json[1].rundata.get("tag3").unwrap().last_line, 999);
-    }
-
-    #[test]
     #[cfg(target_os = "windows")]
     fn new() {
         let mut lf_ok = LogFile::new(r"C:\Windows\System32\cmd.exe").unwrap();
@@ -679,5 +684,220 @@ mod tests {
         //     AppError::App { err: e, msg: _ } => assert_eq!(e, AppCustomErrorKind::FileNotUsable),
         //     _ => panic!("error not expected here!"),
         // };
+    }
+    #[test]
+    fn deserialize() {
+        let mut json: HashMap<PathBuf, LogFile> = load_json(&JSON);
+
+        assert!(json.contains_key(&PathBuf::from("/usr/bin/zip")));
+        assert!(json.contains_key(&PathBuf::from("/etc/hosts.allow")));
+
+        {
+            let logfile1 = json.get_mut(&PathBuf::from("/usr/bin/zip")).unwrap();
+            assert_eq!(logfile1.rundata.len(), 2);
+            assert!(logfile1.contains_key("tag1"));
+            assert!(logfile1.contains_key("tag2"));
+        }
+
+        {
+            let logfile2 = json.get_mut(&PathBuf::from("/etc/hosts.allow")).unwrap();
+            assert_eq!(logfile2.rundata.len(), 2);
+            assert!(logfile2.contains_key("tag3"));
+            assert!(logfile2.contains_key("tag4"));
+        }
+    }
+
+    #[test]
+    fn or_insert() {
+        let mut json: HashMap<PathBuf, LogFile> = load_json(&JSON);
+
+        {
+            let rundata1 = json
+                .get_mut(&PathBuf::from("/usr/bin/zip"))
+                .unwrap()
+                .or_insert("another_tag");
+
+            assert_eq!(rundata1.tag_name, "another_tag");
+        }
+
+        let logfile1 = json.get_mut(&PathBuf::from("/usr/bin/zip")).unwrap();
+        let mut tags = logfile1.tags();
+        tags.sort();
+        assert_eq!(tags, vec!["another_tag", "tag1", "tag2"]);
+
+        assert!(logfile1.contains_key("tag1"));
+        assert!(!logfile1.contains_key("tag3"));
+
+        // // tag4 is not part of LogFile
+        // let mut rundata = json[1].or_insert("tag4");
+
+        // // but tag3 is and even is duplicated
+        // rundata = json[1].or_insert("tag3");
+        // rundata.last_line = 999;
+
+        // assert_eq!(json[1].rundata.get("tag3").unwrap().last_line, 999);
+    }
+
+    fn get_compressed_reader() -> BufReader<GzDecoder<File>> {
+        let file = File::open("tests/logfiles/clftest.txt.gz")
+            .expect("unable to open compressed test file");
+        let decoder = GzDecoder::new(file);
+        let reader = BufReader::new(decoder);
+
+        reader
+    }
+
+    #[test]
+    fn set_offset() {
+        let mut buffer = [0; 1];
+
+        let mut reader = get_compressed_reader();
+        let mut offset = reader.set_offset(1);
+        assert!(offset.is_ok());
+        reader.read_exact(&mut buffer).unwrap();
+        assert_eq!(buffer[0], 'B' as u8);
+
+        reader = get_compressed_reader();
+        offset = reader.set_offset(0);
+        assert!(offset.is_ok());
+        reader.read_exact(&mut buffer).unwrap();
+        assert_eq!(buffer[0], 'A' as u8);
+
+        reader = get_compressed_reader();
+        offset = reader.set_offset(26);
+        assert!(offset.is_ok());
+        reader.read_exact(&mut buffer).unwrap();
+        assert_eq!(buffer[0], '\n' as u8);
+
+        reader = get_compressed_reader();
+        offset = reader.set_offset(25);
+        assert!(offset.is_ok());
+        reader.read_exact(&mut buffer).unwrap();
+        assert_eq!(buffer[0], 'Z' as u8);
+
+        reader = get_compressed_reader();
+        offset = reader.set_offset(10000);
+        assert!(offset.is_err());
+    }
+
+    #[test]
+    fn from_reader() {
+        let opts = GlobalOptions::from_str("path: /usr/bin").expect("unable to read YAML");
+
+        let yaml = r#"
+            name: test
+            options: "runcallback"
+            process: true
+            callback: { 
+                address: "127.0.0.1:8999",
+                args: ['arg1', 'arg2', 'arg3']
+            }
+            patterns:
+                critical: {
+                    regexes: [
+                        '^ERROR: opening file "([a-z0-9/]*)" from node ([\w\.]+), error = (\d)',
+                    ],
+                    exceptions: [
+                        'error = 5'
+                    ]
+                }
+                warning: {
+                    regexes: [
+                        '^WARNING: opening file "([a-z0-9/]*)" from node ([\w\.]+), error = (\d)',
+                    ],
+                    exceptions: [
+                        'error = 5'
+                    ]
+                }
+        "#;
+
+        let tag = Tag::from_str(yaml).expect("unable to read YAML");
+        let mut vars = Variables::default();
+        let mut global_counter = MatchCounter::default();
+        let mut logfile_counter = MatchCounter::default();
+
+        let mut w = Wrapper::new(
+            &opts,
+            &tag,
+            &mut vars,
+            &mut global_counter,
+            &mut logfile_counter,
+        );
+
+        let mut logfile = LogFile::new("tests/logfiles/adhoc.txt").unwrap();
+
+        // create a very simple TCP server: wait for data and test them
+        let child = std::thread::spawn(move || {
+            // create a listener
+            let listener = std::net::TcpListener::bind("127.0.0.1:8999").unwrap();
+            match listener.accept() {
+                Ok((mut socket, _addr)) => loop {
+                    let json = get_json_from_stream(&mut socket);
+
+                    if json.is_err() {
+                        break;
+                    }
+
+                    let json_data = json.unwrap();
+                    //dbg!(&json_data);
+
+                    match json_data
+                        .vars
+                        .get_runtime_var("CLF_MATCHED_RE_TYPE")
+                        .unwrap()
+                        .as_str()
+                    {
+                        "critical" => {
+                            assert_eq!(json_data.args, vec!["arg1", "arg2", "arg3"]);
+                            assert_eq!(
+                                json_data.vars.get_runtime_var("CLF_CAPTURE1").unwrap(),
+                                &format!(
+                                    "{}{}",
+                                    "/var/log/messages",
+                                    json_data.vars.get_runtime_var("CLF_LINE_NUMBER").unwrap()
+                                )
+                            );
+                            assert_eq!(
+                                json_data.vars.get_runtime_var("CLF_CAPTURE2").unwrap(),
+                                "server01.domain.com"
+                            );
+                            assert_ne!(
+                                json_data.vars.get_runtime_var("CLF_CAPTURE3").unwrap(),
+                                "5"
+                            );
+                        }
+                        "warning" => {
+                            assert_eq!(json_data.args, vec!["arg1", "arg2", "arg3"]);
+                            assert_eq!(
+                                json_data.vars.get_runtime_var("CLF_CAPTURE1").unwrap(),
+                                &format!(
+                                    "{}{}",
+                                    "/var/log/syslog",
+                                    json_data.vars.get_runtime_var("CLF_LINE_NUMBER").unwrap()
+                                )
+                            );
+                            assert_eq!(
+                                json_data.vars.get_runtime_var("CLF_CAPTURE2").unwrap(),
+                                "server01.domain.com"
+                            );
+                            assert_ne!(
+                                json_data.vars.get_runtime_var("CLF_CAPTURE3").unwrap(),
+                                "5"
+                            );
+                        }
+                        "ok" => (),
+                        &_ => panic!("unexpected case"),
+                    }
+                },
+                Err(e) => panic!("couldn't get client: {:?}", e),
+            }
+        });
+
+        // wait a little
+        let ten_millis = std::time::Duration::from_millis(10);
+        std::thread::sleep(ten_millis);
+
+        let ret = logfile.lookup(&mut w);
+        let _res = child.join();
     }
 }

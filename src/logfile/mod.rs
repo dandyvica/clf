@@ -3,6 +3,3 @@
 #[macro_use]
 pub mod logfile;
 pub mod snapshot;
-
-extern crate config;
-extern crate misc;

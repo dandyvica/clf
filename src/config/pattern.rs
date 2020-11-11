@@ -8,7 +8,8 @@ use serde::Deserialize;
 //use pcre2::Regex;
 use log::{debug, trace};
 
-use misc::error::{AppCustomErrorKind, AppError};
+use crate::fromstr;
+use crate::misc::error::{AppCustomErrorKind, AppError};
 
 /// A helper structure for deserializing into a `RegexVec` automatically from a `Vec<String>`.
 #[derive(Debug, Deserialize, Clone)]
@@ -75,13 +76,14 @@ impl Pattern {
     /// Builds a `Pattern` set form a YAML string. Useful for unit tests, because this structure
     /// is used by the `Config` structure, directly loading the whole configuration from a YAML
     /// file.
-    pub fn from_str(yaml: &str) -> Result<Pattern, AppError> {
-        let p: Pattern = serde_yaml::from_str(yaml)?;
-        Ok(p)
-    }
+    // #[cfg(test)]
+    // fn from_str(yaml: &str) -> Result<Pattern, AppError> {
+    //     let p: Pattern = Pattern::from_str(yaml)?;
+    //     Ok(p)
+    // }
 
     /// Tests if `text` matches any of the regexes in the set.
-    pub fn is_exception(&self, text: &str) -> bool {
+    fn is_exception(&self, text: &str) -> bool {
         self.exceptions
             .as_ref()
             .map_or(false, |x| x.0.is_match(text))
@@ -89,7 +91,7 @@ impl Pattern {
 
     /// Try to find a match in the string `s` corresponding to the `regexes` list struct field,
     /// provided any regex in the exception list is not matched.
-    pub fn is_match(&self, text: &str) -> Option<&Regex> {
+    fn is_match(&self, text: &str) -> Option<&Regex> {
         // dismiss exceptions at first
         if self.is_exception(text) {
             debug!("pattern exception occured for text: {}", text);
@@ -104,6 +106,9 @@ impl Pattern {
             .map(|re| re)
     }
 }
+
+// Auto-implement FromStr
+fromstr!(Pattern);
 
 #[derive(Debug, Deserialize, PartialEq, Hash, Eq)]
 #[allow(non_camel_case_types)]
@@ -154,88 +159,74 @@ pub struct PatternSet {
 impl PatternSet {
     /// Returns whether a critical or warning regex is involved in the match, provided no exception is matched.
     pub fn is_match(&self, text: &str) -> Option<(PatternType, &Regex)> {
+        //dbg!(text);
+
         // try to match critical pattern first
         if let Some(critical) = &self.critical {
-            if let Some(re) = critical.is_match(text) {
-                trace!("critical pattern is trigerred");
-                return Some((PatternType::critical, re));
+            trace!("critical pattern is tried");
+            let ret = critical
+                .is_match(text)
+                .map(|re| (PatternType::critical, re));
+            if ret.is_some() {
+                return ret;
             }
         }
 
         // and then warning
         if let Some(warning) = &self.warning {
-            trace!("warning pattern is trigerred");
-            return warning.is_match(text).map(|re| (PatternType::warning, re));
+            trace!("warning pattern is tried");
+            let ret = warning.is_match(text).map(|re| (PatternType::warning, re));
+            if ret.is_some() {
+                return ret;
+            }
         }
 
         // and finally ok
         if let Some(ok) = &self.ok {
-            trace!("ok pattern is trigerred");
-            return ok.is_match(text).map(|re| (PatternType::ok, re));
+            trace!("ok pattern is tried");
+            let ret = ok.is_match(text).map(|re| (PatternType::ok, re));
+            if ret.is_some() {
+                return ret;
+            }
         }
 
         None
     }
 }
 
+// Auto-implement FromStr
+fromstr!(PatternSet);
+
 #[cfg(test)]
 mod tests {
     use std::convert::TryFrom;
+    use std::str::FromStr;
 
     use super::*;
 
     #[test]
-    fn from_str() {
-        let yaml = r#"
-    {
-        regexes: [
-            "^ERROR",
-            "FATAL",
-            "PANIC"
-        ],
-        exceptions: [
-            "^SLIGHT_ERROR",
-            "WARNING",
-            "NOT IMPORTANT$"
-        ]
-    }"#;
-        let p = Pattern::from_str(yaml).unwrap();
-        assert_eq!(p.regexes.0.len(), 3);
-        assert_eq!(p.exceptions.unwrap().0.len(), 3);
-    }
-
-    #[test]
-    fn is_exception() {
+    fn pattern() {
         let yaml = r#"
         {
             regexes: [
                 "^ERROR",
                 "FATAL",
-                "PANIC",
+                "PANIC"
             ],
             exceptions: [
                 "^SLIGHT_ERROR",
                 "WARNING",
-                "NOT IMPORTANT$",
+                "NOT IMPORTANT$"
             ]
         }"#;
-
         let p = Pattern::from_str(yaml).unwrap();
+
+        assert_eq!(p.regexes.0.len(), 3);
+        assert_eq!(p.exceptions.as_ref().unwrap().0.len(), 3);
+
         assert!(p.is_exception("this is NOT IMPORTANT"));
-    }
 
-    #[test]
-    fn is_match() {
-        let yaml = r#"
-     {
-         regexes: [
-             '^\+?([0-9]{1,3})-([0-9]{3})-[0-9]{3}-[0-9]{4}$',
-             '^([0-9]{3})-[0-9]{3}-[0-9]{4}$',
-         ],
-     }"#;
-
-        let p = Pattern::from_str(yaml).unwrap();
-        let re = p.is_match("541-754-3010");
+        let re = p.is_match("ERROR: core dump");
         assert!(re.is_some());
     }
 
@@ -268,43 +259,33 @@ mod tests {
     #[test]
     fn pattern_set() {
         let yaml = r#"
-    critical:
-        regexes: ["^ERROR", "GnuPG", "PANIC", "WARNING"]
-        exceptions: ["^SLIGHT_ERROR", "WARNING", "NOT IMPORTANT$"]
-    warning:
-        regexes: ["^ERROR", "FATAL", "PANIC"]
-        exceptions: ["^SLIGHT_ERROR", "WARNING", "NOT IMPORTANT$"]
-    ok: 
-        regexes: ["^ERROR", "FATAL", "PANIC"]
-    "#;
+            critical:
+                regexes: ["^ERROR", "GnuPG", "PANIC", "WARNING"]
+                exceptions: ["^SLIGHT_ERROR", "WARNING", "NOT IMPORTANT$"]
+            warning:
+                regexes: ["ERROR$", "FATAL", "ABEND"]
+                exceptions: ["^MINOR_ERROR", "WARNING", "NOT IMPORTANT$"]
+            ok: 
+                regexes: ["^RESET_ERROR", "RESET_FATAL", "RESET_FATAL"]
+            "#;
 
         let p: PatternSet = serde_yaml::from_str(yaml).unwrap();
 
+        // critical
         let match_text = p.is_match("ERROR: core dump ").unwrap();
         assert_eq!(match_text.0, PatternType::critical);
+        assert_eq!(match_text.1.as_str(), "^ERROR");
+        assert!(p.is_match("SLIGHT_ERROR: core dump ").is_none());
 
-        assert!(p.is_match("WARNING: error dump ").is_none());
+        // warning
+        let match_text = p.is_match("this is an ERROR").unwrap();
+        assert_eq!(match_text.0, PatternType::warning);
+        assert_eq!(match_text.1.as_str(), "ERROR$");
+        assert!(p.is_match("MINOR_ERROR: not a core dump ").is_none());
+
+        // ok
+        let match_text = p.is_match("RESET_ERROR: error is reset").unwrap();
+        assert_eq!(match_text.0, PatternType::ok);
+        assert_eq!(match_text.1.as_str(), "^RESET_ERROR");
     }
 }
-
-// let mut yaml = r#"
-// {
-//     regexes: [
-//         '^\+?([0-9]{1,3})-([0-9]{3})-[0-9]{3}-[0-9]{4}$',
-//         '^([0-9]{3})-[0-9]{3}-[0-9]{4}$',
-//     ],
-// }"#;
-//
-// let p = Pattern::from_str(yaml).unwrap();
-// let mut caps = p.captures("541-754-3010").unwrap();
-// assert_eq!(caps.get(1).unwrap().as_str(), "541");
-//
-// caps = p.captures("1-541-754-3010").unwrap();
-// assert_eq!(caps.get(1).unwrap().as_str(), "1");
-// assert_eq!(caps.get(2).unwrap().as_str(), "541");
-//
-// caps = p.captures("+1-541-754-3010").unwrap();
-// assert_eq!(caps.get(1).unwrap().as_str(), "1");
-// assert_eq!(caps.get(2).unwrap().as_str(), "541");
-//
-// assert!(p.captures("foo").is_none());

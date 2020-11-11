@@ -13,31 +13,40 @@
 
 //!
 
-//use std::convert::TryFrom;
 use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::fs::File;
-use std::io::Read;
 use std::path::{Path, PathBuf};
 
 use log::{debug, error, info};
 use regex::Regex;
 use serde::Deserialize;
 
-use crate::{
+use crate::config::{
     callback::{Callback, CallbackHandle, ChildData},
     pattern::{PatternSet, PatternType},
     variables::Variables,
 };
 
-use misc::{
+use crate::misc::{
     error::{AppCustomErrorKind, AppError},
     nagios::NagiosError,
-    util::Util,
+    util::{Cons, Util},
 };
 
-/// A default value for the retention of data in the snapshot file.
-const DEFAULT_RETENTION: u64 = 86000 * 7;
+/// Auto-implement the FromStr trait for a struct
+#[macro_export]
+macro_rules! fromstr {
+    ($t:ty) => {
+        impl std::str::FromStr for $t {
+            type Err = serde_yaml::Error;
+
+            fn from_str(s: &str) -> Result<Self, Self::Err> {
+                serde_yaml::from_str(s)
+            }
+        }
+    };
+}
 
 #[derive(Debug, Deserialize, Clone)]
 /// A list of global options, which apply globally for all searches.
@@ -45,7 +54,7 @@ const DEFAULT_RETENTION: u64 = 86000 * 7;
 pub struct GlobalOptions {
     /// A list of paths, separated by either ':' for unix, or ';' for Windows. This is
     /// where the script, if any, will be searched for. Default to PATH or Path depending on the platform.
-    pub path: String,
+    path: String,
 
     /// A directory where matched lines will be stored.
     output_dir: PathBuf,
@@ -59,6 +68,16 @@ pub struct GlobalOptions {
     /// A list of user variables if any.
     user_vars: Option<HashMap<String, String>>,
 }
+
+impl GlobalOptions {
+    #[inline(always)]
+    pub fn path(&self) -> &str {
+        &self.path
+    }
+}
+
+// Auto-implement FromStr
+fromstr!(GlobalOptions);
 
 /// Default implementation, rather than serde default field attribute.
 impl Default for GlobalOptions {
@@ -82,7 +101,7 @@ impl Default for GlobalOptions {
             path: path_var,
             output_dir: std::env::temp_dir(),
             snapshot_file: Util::snapshot_default_name(),
-            snapshot_retention: DEFAULT_RETENTION,
+            snapshot_retention: Cons::DEFAULT_RETENTION,
             user_vars: None,
         }
     }
@@ -103,10 +122,10 @@ pub struct SearchOptions {
     pub rewind: bool,
 
     /// a number which denotes how many lines have to match a pattern until they are considered a critical error
-    pub criticalthreshold: u16,
+    pub criticalthreshold: u64,
 
     /// a number which denotes how many lines have to match a pattern until they are considered a warning
-    pub warningthreshold: u16,
+    pub warningthreshold: u64,
 
     // controls whether the matching lines are written to a protocol file for later investigation
     pub protocol: bool,
@@ -215,9 +234,9 @@ impl TryFrom<String> for SearchOptions {
                 let _value = splitted_options[1];
 
                 // add additional non-boolean options if any
-                add_typed_option!(splitted_options, criticalthreshold, opt, u16);
+                add_typed_option!(splitted_options, criticalthreshold, opt, u64);
+                add_typed_option!(splitted_options, warningthreshold, opt, u64);
                 add_typed_option!(splitted_options, sticky, opt, u16);
-                add_typed_option!(splitted_options, warningthreshold, opt, u16);
                 add_typed_option!(splitted_options, runlimit, opt, u16);
 
                 // special case for this
@@ -252,11 +271,11 @@ pub enum LogSource {
 #[derive(Debug, Deserialize, Clone)]
 pub struct Tag {
     /// A name to identify the tag.
-    pub name: String,
+    name: String,
 
     /// Tells whether we process this tag or not. Useful for testing purposes.
     #[serde(default = "Tag::process_default")]
-    pub process: bool,
+    process: bool,
 
     /// A list of options specific to this search. As such options are optional, add a default `serde`
     /// directive.
@@ -271,40 +290,29 @@ pub struct Tag {
 }
 
 impl Tag {
+    /// Returns the tag name
+    #[inline(always)]
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    /// Returns the process value
+    #[inline(always)]
+    pub fn process(&self) -> bool {
+        self.process
+    }
+
     /// Returns the regex involved in a match, if any, along with associated the pattern type.
     pub fn is_match(&self, text: &str) -> Option<(PatternType, &Regex)> {
         self.patterns.is_match(text)
     }
 
-    ///
+    /// Default value for processing a tag
     pub fn process_default() -> bool {
         true
     }
 
-    // Calls the external script, by providing arguments, environment variables and path which will be searched for the command.
-    // pub fn call_script(
-    //     &self,
-    //     path: Option<&str>,
-    //     vars: &Variables,
-    // ) -> Result<Option<ChildData>, AppError> {
-    //     // if the script tag has been defined...
-    //     if let Some(callback) = &self.script {
-    //         // if callback is a script to spawn, call it
-    //         if callback.path.is_some() {
-    //             let child = callback.spawn(path, vars)?;
-    //             Ok(Some(child))
-    //         // if a network script is defined, send it data through JSON
-    //         } else if callback.address.is_some() {
-    //             let _res = callback.send(vars)?;
-    //             return Ok(None);
-    //         } else {
-    //             Ok(None)
-    //         }
-    //     } else {
-    //         Ok(None)
-    //     }
-    // }
-    // Calls the external callback, by providing arguments, environment variables and path which will be searched for the command.
+    /// Calls the external callback, by providing arguments, environment variables and path which will be searched for the command.
     pub fn callback_call(
         &self,
         path: Option<&str>,
@@ -319,6 +327,9 @@ impl Tag {
     }
 }
 
+// Auto-implement FromStr
+fromstr!(Tag);
+
 /// This is the structure mapping exactly search data coming from the configuration YAML file. The 'flatten' serde field
 /// attribute allows to either use a logfile name or a command.
 #[derive(Debug, Deserialize, Clone)]
@@ -332,8 +343,6 @@ pub struct Search<T: Clone> {
 
     /// a unique identifier for this search
     pub tags: Vec<Tag>,
-    //#[serde(default = "Tag::process_default")]
-    //pub process: bool,
 }
 
 /// This conversion utility is meant to convert to a 'regular' configuration file a configuration file
@@ -355,13 +364,6 @@ impl From<Search<LogSource>> for Search<PathBuf> {
         }
     }
 }
-
-/// Builds a default logger file.
-// pub fn default_logger() -> PathBuf {
-//     let mut logger_path = std::env::current_dir().unwrap_or_else(|_| std::env::temp_dir());
-//     logger_path.push("clf.log");
-//     logger_path
-// }
 
 /// The main search configuration used to search patterns in a logfile. This is loaded from
 /// the YAML file found in the command line argument (or from stdin). This configuration can include a list
@@ -402,20 +404,23 @@ impl<T: Clone> Config<T> {
     }
 }
 
+// Auto-implement FromStr
+fromstr!(Config<LogSource>);
+
 impl Config<LogSource> {
     /// Loads a YAML configuration string as a `Config` struct.
-    pub fn from_str(s: &str) -> Result<Config<LogSource>, AppError> {
-        // load YAML data from a string
-        let yaml = serde_yaml::from_str(s)?;
-        Ok(yaml)
-    }
+    // pub fn from_str(s: &str) -> Result<Config<LogSource>, AppError> {
+    //     // load YAML data from a string
+    //     let yaml = serde_yaml::from_str(s)?;
+    //     Ok(yaml)
+    // }
 
     /// Loads a YAML configuration from a reader as a `Config` struct.
-    pub fn from_reader<R: Read>(rdr: R) -> Result<Config<LogSource>, AppError> {
-        // load YAML data from a reader
-        let yaml = serde_yaml::from_reader(rdr)?;
-        Ok(yaml)
-    }
+    // pub fn from_reader<R: Read>(rdr: R) -> Result<Config<LogSource>, AppError> {
+    //     // load YAML data from a reader
+    //     let yaml = serde_yaml::from_reader(rdr)?;
+    //     Ok(yaml)
+    // }
 
     /// Loads a YAML configuration file as a `Config` struct.
     pub fn from_file<P: AsRef<Path>>(file_name: P) -> Result<Config<LogSource>, AppError> {
@@ -508,7 +513,7 @@ impl From<Config<LogSource>> for Config<PathBuf> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    //use std::path::PathBuf;
+    use std::str::FromStr;
 
     #[test]
     fn search_options() {
@@ -537,7 +542,7 @@ snapshot_file: /usr/foo3/snap.foo
 output_dir: /usr/foo2
         "#;
 
-        let mut opts: GlobalOptions = serde_yaml::from_str(yaml).expect("unable to read YAML");
+        let mut opts = GlobalOptions::from_str(yaml).expect("unable to read YAML");
         //println!("opts={:?}", opts);
 
         assert_eq!(&opts.path, "/usr/foo1");
@@ -555,7 +560,7 @@ user_vars:
     profession: actor            
         "#;
 
-        opts = serde_yaml::from_str(yaml).expect("unable to read YAML");
+        opts = GlobalOptions::from_str(yaml).expect("unable to read YAML");
         assert_eq!(&opts.path, "/usr/foo1");
         assert_eq!(opts.output_dir, PathBuf::from("/tmp"));
         assert_eq!(opts.snapshot_file, PathBuf::from("/tmp/clf_snapshot.json"));
@@ -590,14 +595,14 @@ patterns:
     }
         "#;
 
-        let tag: Tag = serde_yaml::from_str(yaml).expect("unable to read YAML");
+        let tag: Tag = Tag::from_str(yaml).expect("unable to read YAML");
         assert_eq!(tag.name, "error");
         assert!(tag.options.runcallback);
         assert!(!tag.options.keepoutput);
         assert!(!tag.process);
         let script = PathBuf::from("tests/scripts/echovars.py");
         assert!(
-            matches!(&tag.callback.as_ref().unwrap().callback, crate::callback::CallbackType::Script(Some(x)) if x == &script)
+            matches!(&tag.callback.as_ref().unwrap().callback, crate::config::callback::CallbackType::Script(Some(x)) if x == &script)
         );
         assert_eq!(
             tag.callback.unwrap().args.unwrap(),
@@ -607,7 +612,44 @@ patterns:
 
     #[test]
     fn config() {
-        let yaml = include_str!("../tests/config1.yml");
+        dbg!(std::env::current_dir().unwrap());
+        let yaml = r#"
+        global:
+          path: "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+          output_dir: /tmp/foo
+          snapshot_file: /tmp/my_snapshot.json
+          snapshot_retention: 5
+          user_vars:
+            first_name: Al
+            last_name: Pacino
+            city: 'Los Angeles'
+            profession: actor
+        
+        searches:
+          - logfile: tests/logfiles/small_access.log
+            tags: 
+              - name: http_access_get_or_post
+                process: true
+                options: "warningthreshold=0"
+                callback: { 
+                  script: "tests/scripts/echovars.py",
+                  args: ['arg1', 'arg2', 'arg3']
+                }
+                patterns:
+                  critical: {
+                    regexes: [
+                      'GET\s+([/\w]+)\s+HTTP/1\.1"\s+(?P<code>\d+)\s+(?P<length>\d+)',
+                    ],
+                  }
+                  warning: {
+                    regexes: [
+                      'POST\s+([/\w\.]+)\s+HTTP/1\.1"\s+(?P<code>\d+)\s+(?P<length>\d+)'
+                    ],
+                    exceptions: [
+                      '^\d{2,3}\.'
+                    ]
+                  }        
+        "#;
         let _config = Config::<LogSource>::from_str(yaml).expect("unable to read YAML");
         let config = Config::<PathBuf>::from(_config);
 
@@ -677,7 +719,7 @@ patterns:
         assert!(tag.callback.is_some());
         let script = PathBuf::from("tests/scripts/echovars.py");
         assert!(
-            matches!(&tag.callback.as_ref().unwrap().callback, crate::callback::CallbackType::Script(Some(x)) if x == &script)
+            matches!(&tag.callback.as_ref().unwrap().callback, crate::config::callback::CallbackType::Script(Some(x)) if x == &script)
         );
         assert_eq!(
             tag.callback.as_ref().unwrap().args.as_ref().unwrap(),

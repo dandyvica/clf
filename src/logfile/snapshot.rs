@@ -9,9 +9,8 @@ use std::time::SystemTime;
 use log::debug;
 use serde::{Deserialize, Serialize};
 
-use crate::logfile::LogFile;
-
-use misc::error::{AppCustomErrorKind, AppError};
+use crate::logfile::logfile::LogFile;
+use crate::misc::error::AppError;
 
 /// This structure will keep all run time information for each logfile searched. This is
 /// a kind of central repository for all searches.
@@ -115,10 +114,10 @@ impl Snapshot {
         Ok(self.snapshot.get_mut(path).unwrap())
     }
 
-    /// Removes an entry in the snapshot.
-    pub fn remove(&mut self, key: &PathBuf) -> Option<LogFile> {
-        self.snapshot.remove(key)
-    }
+    // Removes an entry in the snapshot.
+    // pub fn remove(&mut self, key: &PathBuf) -> Option<LogFile> {
+    //     self.snapshot.remove(key)
+    // }
 }
 
 #[cfg(test)]
@@ -144,8 +143,8 @@ mod tests {
                         "last_offset": 1000,
                         "last_line": 10,
                         "last_run": 1000000,
-                        "critical_threshold": 10,
-                        "warning_threshold": 10,
+                        "critical_count": 10,
+                        "warning_count": 10,
                         "exec_count": 10
                     },                       
                     "tag2": {
@@ -153,8 +152,8 @@ mod tests {
                         "last_offset": 1000,
                         "last_line": 10,
                         "last_run": 1000000,
-                        "critical_threshold": 10,
-                        "warning_threshold": 10,
+                        "critical_count": 10,
+                        "warning_count": 10,
                         "exec_count": 10
                     }
                 }
@@ -170,8 +169,8 @@ mod tests {
                         "last_offset": 1000,
                         "last_line": 10,
                         "last_run": 1000000,
-                        "critical_threshold": 10,
-                        "warning_threshold": 10,
+                        "critical_count": 10,
+                        "warning_count": 10,
                         "exec_count": 10
                     },
                     "tag4": {
@@ -179,8 +178,8 @@ mod tests {
                         "last_offset": 1500,
                         "last_line": 10,
                         "last_run": 1000000,
-                        "critical_threshold": 10,
-                        "warning_threshold": 10,
+                        "critical_count": 10,
+                        "warning_count": 10,
                         "exec_count": 10
                     }
                 }
@@ -210,13 +209,13 @@ mod tests {
         assert_eq!(data.snapshot.len(), 2);
         // assert!(keys.contains(&&std::path::PathBuf::from("/etc/hosts.allow")));
 
-        let mut logfile = data.or_insert(&PathBuf::from("/bin/gzip"));
+        let _ = data.or_insert(&PathBuf::from("/bin/gzip"));
 
         // snapshot has now 3 logfiles
         assert!(data.snapshot.contains_key(&PathBuf::from("/bin/gzip")));
         assert_eq!(data.snapshot.len(), 3);
 
-        logfile = data.or_insert(&PathBuf::from("/usr/bin/zip"));
+        let _ = data.or_insert(&PathBuf::from("/usr/bin/zip"));
         assert_eq!(data.snapshot.len(), 3);
     }
 

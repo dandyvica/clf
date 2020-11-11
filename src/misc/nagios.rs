@@ -6,7 +6,7 @@ use std::str::FromStr;
 
 use serde::Deserialize;
 
-use crate::{error::AppError, util::DEFAULT_CONTAINER_CAPACITY};
+use crate::misc::{error::AppError, util::Cons};
 
 /// enum list of Nagios error codes.
 #[derive(Debug, Deserialize, Clone, PartialEq)]
@@ -191,7 +191,7 @@ pub struct LogfileMatchCounter(HashMap<PathBuf, MatchCounter>);
 impl LogfileMatchCounter {
     /// Just defines a new empty counter structure.
     pub fn new() -> Self {
-        LogfileMatchCounter(HashMap::with_capacity(DEFAULT_CONTAINER_CAPACITY))
+        LogfileMatchCounter(HashMap::with_capacity(Cons::DEFAULT_CONTAINER_CAPACITY))
     }
 
     /// If calling this method, we know we're using only the enum `Stats` branch.
@@ -200,11 +200,13 @@ impl LogfileMatchCounter {
     }
 
     /// A fast way to iterate through internal field.
+    #[cfg(test)]
     pub fn iter(&self) -> std::collections::hash_map::Iter<PathBuf, MatchCounter> {
         self.0.iter()
     }
 
     /// Checks whether the underlying hashmap contains an error
+    #[cfg(test)]
     pub fn is_error(&self) -> bool {
         self.0.iter().any(|(_, v)| v.logfile_error.is_some())
     }
@@ -213,7 +215,7 @@ impl LogfileMatchCounter {
 /// Formatted string used for plugin output
 impl fmt::Display for LogfileMatchCounter {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let mut s = String::with_capacity(crate::util::DEFAULT_STRING_CAPACITY);
+        let mut s = String::with_capacity(Cons::DEFAULT_STRING_CAPACITY);
 
         for (path, counter) in self.0.iter() {
             match &counter.logfile_error {
@@ -230,6 +232,7 @@ impl fmt::Display for LogfileMatchCounter {
 mod tests {
     //use std::path::PathBuf;
     use super::*;
+    use crate::misc::error::AppError;
 
     #[test]
     fn display() {
@@ -288,7 +291,7 @@ mod tests {
         let mut m = LogfileMatchCounter::new();
         let mut a = m.or_default(&PathBuf::from("/usr/bin/gzip"));
         a.logfile_error = Some(AppError::new(
-            crate::error::AppCustomErrorKind::UnsupportedPatternType,
+            crate::misc::error::AppCustomErrorKind::UnsupportedPatternType,
             "foo",
         ));
         let _b = m.or_default(&PathBuf::from("/usr/bin/md5sum"));

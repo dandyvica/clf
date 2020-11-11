@@ -1,4 +1,0 @@
----
-path: tests/assets/echo.sh
-args: ['arg1', 'arg2', 'arg3']
-...

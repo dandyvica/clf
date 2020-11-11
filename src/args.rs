@@ -6,10 +6,7 @@ use clap::{App, Arg};
 use simplelog::LevelFilter;
 
 use crate::error::AppExitCode;
-use misc::nagios::NagiosVersion;
-
-/// We define here the maximum size for the logger file (in Mb).
-const MAX_LOGGER_SIZE: u64 = 50 * 1024 * 1024;
+use crate::misc::{nagios::NagiosVersion, util::Cons};
 
 /// This structure holds the command line arguments.
 #[derive(Debug)]
@@ -38,7 +35,7 @@ impl Default for CliOptions {
             delete_snapfile: false,
             check_conf: false,
             logger_level: LevelFilter::Info,
-            max_logger_size: MAX_LOGGER_SIZE,
+            max_logger_size: Cons::MAX_LOGGER_SIZE,
             show_options: false,
             nagios_version: NagiosVersion::NagiosNrpe3,
             snap_dir: None,

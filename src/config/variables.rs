@@ -7,41 +7,60 @@ use std::fmt::Debug;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 
-/// Variable name prefix to be inserted for each variable.
-const VAR_PREFIX: &str = "CLF_";
+use crate::misc::util::Cons;
+
+/// Macro to build a variable name prepended with its prefix
+#[macro_export]
+macro_rules! var {
+    ($v:literal) => {
+        format!("{}{}", Cons::VAR_PREFIX, $v)
+    };
+}
 
 /// All variables, either runtime or user. These are provided to the callback.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Variables {
     // variables created during logfile analysis, like capture groups or line being read
-    pub runtime_vars: HashMap<String, String>,
+    runtime_vars: HashMap<String, String>,
 
-    // user-defined variables in hte config file
-    // this flag keeps the serializing ok when Option is None
+    // user-defined variables in the config file
+    // this serde attribute keeps the serializing ok when Option is None
     #[serde(skip_serializing_if = "Option::is_none")]
     user_vars: Option<HashMap<String, String>>,
 }
 
-impl Variables {
-    /// Creates a new structure for variables.
-    pub fn new() -> Self {
+impl Default for Variables {
+    fn default() -> Self {
         Variables {
-            runtime_vars: HashMap::with_capacity(misc::util::DEFAULT_CONTAINER_CAPACITY),
+            runtime_vars: HashMap::with_capacity(Cons::DEFAULT_CONTAINER_CAPACITY),
             user_vars: None,
         }
     }
+}
 
+impl Variables {
+    /// Clear runtime variables.
     #[inline(always)]
-    fn retain_one(&mut self, one: &str) {
-        self.runtime_vars.retain(|k, _| k == one);
+    pub fn clear(&mut self) {
+        self.runtime_vars.clear();
     }
 
-    pub fn retain_logfile(&mut self) {
-        self.retain_one("CLF_LOGFILE");
-        debug_assert!(self.runtime_vars.len() == 1);
+    /// Tests whether a runtime var is present.
+    #[cfg(test)]
+    #[inline(always)]
+    pub fn contains_key(&self, key: &str) -> bool {
+        self.runtime_vars.contains_key(key)
+    }
+
+    /// Only keeps variables matching the values passed in `vars` slice.
+    #[inline(always)]
+    pub fn retain(&mut self, vars: &[&str]) {
+        self.runtime_vars.retain(|k, _| vars.contains(&k.as_str()));
+        debug_assert!(self.runtime_vars.len() == vars.len());
     }
 
     /// Returns the variable from runtime_vars
+    #[cfg(test)]
     #[inline(always)]
     pub fn get_runtime_var(&self, var: &str) -> Option<&String> {
         self.runtime_vars.get(var)
@@ -49,7 +68,7 @@ impl Variables {
 
     /// Returns all runtime_vars
     #[inline(always)]
-    pub fn runtime_vars(&mut self) -> &HashMap<String, String> {
+    pub fn runtime_vars(&self) -> &HashMap<String, String> {
         &self.runtime_vars
     }
 
@@ -63,7 +82,7 @@ impl Variables {
     pub fn insert<S: Into<String>>(&mut self, var: &str, value: S) {
         debug_assert!(!self.runtime_vars.contains_key(var));
         self.runtime_vars
-            .insert(format!("{}{}", VAR_PREFIX, var), value.into());
+            .insert(format!("{}{}", Cons::VAR_PREFIX, var), value.into());
     }
 
     /// Add variables taken from the capture group names or ids.
@@ -86,6 +105,7 @@ impl Variables {
     }
 
     /// Replaces variables in the argument list and returns a new list where each arg is replaced, if any, by a variable's value.
+    #[cfg(test)]
     pub fn substitute(&self, old_args: &[&str]) -> Vec<String> {
         old_args
             .iter()
@@ -94,6 +114,7 @@ impl Variables {
     }
 
     /// Replaces any occurence of a variable in the given string.
+    #[cfg(test)]
     fn replace(&self, s: &str) -> String {
         let mut new_s = String::from(s);
 
@@ -114,49 +135,48 @@ impl Variables {
                 self.user_vars
                     .as_mut()
                     .unwrap()
-                    .insert(format!("{}{}", VAR_PREFIX, var), value.into());
+                    .insert(format!("{}{}", Cons::VAR_PREFIX, var), value.into());
             }
         };
     }
 
-    /// Converts runtime & user variables into a JSON string.
-    pub fn to_json(&self) -> String {
-        serde_json::to_string(&self).unwrap()
-    }
+    // Converts runtime & user variables into a JSON string.
+    // pub fn to_json(&self) -> String {
+    //     serde_json::to_string(&self).unwrap()
+    // }
 }
 
 #[cfg(test)]
 mod tests {
-    use regex::Regex;
-
     use super::*;
+    use crate::testing::data::sample_vars;
 
     #[test]
     fn variables() {
-        let re = Regex::new(r"^([a-z\s]+) (\w+) (\w+) (?P<LASTNAME>\w+)").unwrap();
-        let text = "my name is john fitzgerald kennedy, president of the USA";
-
-        let mut v = Variables::new();
-        v.insert_captures(&re, text);
+        let mut v = sample_vars();
 
         assert_eq!(
-            v.runtime_vars.get("CLF_CAPTURE0").unwrap(),
+            v.runtime_vars().get("CLF_CAPTURE0").unwrap(),
             "my name is john fitzgerald kennedy"
         );
-        assert_eq!(v.runtime_vars.get("CLF_CAPTURE1").unwrap(), "my name is");
-        assert_eq!(v.runtime_vars.get("CLF_CAPTURE2").unwrap(), "john");
-        assert_eq!(v.runtime_vars.get("CLF_CAPTURE3").unwrap(), "fitzgerald");
-        assert_eq!(v.runtime_vars.get("CLF_LASTNAME").unwrap(), "kennedy");
+        assert_eq!(v.get_runtime_var("CLF_CAPTURE1").unwrap(), "my name is");
+        assert_eq!(v.get_runtime_var("CLF_CAPTURE2").unwrap(), "john");
+        assert_eq!(v.get_runtime_var("CLF_CAPTURE3").unwrap(), "fitzgerald");
+        assert_eq!(v.get_runtime_var("CLF_LASTNAME").unwrap(), "kennedy");
 
-        println!("{:#?}", v.runtime_vars);
+        v.insert("LOGFILE", "/var/log/foo");
+        v.insert("TAG", "tag1");
+
+        v.retain(&[&var!("LOGFILE"), &var!("TAG")]);
+        //println!("{:#?}", v.runtime_vars);
+        assert!(v.contains_key("CLF_LOGFILE"));
+        assert!(v.contains_key("CLF_TAG"));
+        assert!(!v.contains_key("CLF_CAPTURE2"));
     }
 
     #[test]
     fn replace() {
-        let re = Regex::new(r"^([a-z\s]+) (\w+) (\w+) (?P<LASTNAME>\w+)").unwrap();
-        let text = "my name is john fitzgerald kennedy, president of the USA";
-        let mut v = Variables::new();
-        v.insert_captures(&re, text);
+        let v = sample_vars();
 
         let args = &[
             "Hi, CLF_CAPTURE1",

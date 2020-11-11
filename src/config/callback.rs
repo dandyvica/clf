@@ -18,8 +18,9 @@ const fn default_timeout() -> u64 {
     2 * 3600
 }
 
-use crate::variables::Variables;
-use misc::error::AppError;
+use crate::config::variables::Variables;
+use crate::fromstr;
+use crate::misc::error::AppError;
 
 /// A callback is either a script, or a TCP socket or a UNIX domain socket
 #[derive(Debug, Deserialize, PartialEq, Hash, Eq, Clone)]
@@ -102,7 +103,7 @@ impl Callback {
                 let cmd = handle.cmd.as_mut().unwrap();
 
                 // runtime variables are always there.
-                cmd.envs(&vars.runtime_vars);
+                cmd.envs(vars.runtime_vars());
 
                 // user variables, maybe
                 if let Some(uservars) = vars.user_vars() {
@@ -158,9 +159,7 @@ impl Callback {
                     file!(),
                     line!()
                 ));
-                println!("size={}, to_be_bytes={:x?}", size, size.to_be_bytes());
                 stream.write(&size.to_be_bytes())?;
-                //println!("size={:?}", &json_raw.len().to_be_bytes());
                 stream.write(&json.as_bytes())?;
 
                 Ok(None)
@@ -203,6 +202,9 @@ impl Callback {
     }
 }
 
+// Auto-implement FromStr
+fromstr!(Callback);
+
 /// Return structure from a call to a script. Gathers all relevant data, instead of a mere tuple.
 #[derive(Debug, Default)]
 pub struct ChildData {
@@ -213,6 +215,7 @@ pub struct ChildData {
 }
 
 impl ChildData {
+    #[cfg(test)]
     fn exit_code(&mut self) -> Result<Option<i32>, AppError> {
         // do we have a Child ?
         if self.child.is_none() {
@@ -227,16 +230,21 @@ impl ChildData {
                 let res = child.wait();
                 return Ok(res.unwrap().code());
             }
-            Err(e) => return Err(misc::error::AppError::Io(e)),
+            Err(e) => return Err(crate::misc::error::AppError::Io(e)),
         }
     }
 }
 
 #[cfg(test)]
-mod tests {
+pub mod tests {
     use super::*;
-    use regex::Regex;
+    //use regex::Regex;
     use std::io::prelude::*;
+    use std::str::FromStr;
+
+    use crate::config::variables::Variables;
+    //use crate::misc::error::AppError;
+    use crate::testing::data::sample_vars;
 
     #[derive(Deserialize)]
     struct JSON {
@@ -244,33 +252,52 @@ mod tests {
         vars: Variables,
     }
 
-    // helper fn to create a dummy Variables struct
-    fn dummy_vars() -> Variables {
-        // create dummy variables
-        let re = Regex::new(r"^([a-z\s]+) (\w+) (\w+) (?P<LASTNAME>\w+)").unwrap();
-        let text = "my name is john fitzgerald kennedy, president of the USA";
+    // utility fn to receive JSON from a stream
+    fn get_json<T: Read>(socket: &mut T) -> JSON {
+        // read size first
+        let mut size_buffer = [0; std::mem::size_of::<u16>()];
+        socket.read_exact(&mut size_buffer).unwrap();
+        let json_size = u16::from_be_bytes(size_buffer);
+        //assert_eq!(json_size, 211);
 
-        let mut vars = Variables::new();
-        vars.insert_captures(&re, text);
+        // read JSON raw data
+        let mut json_buffer = vec![0; json_size as usize];
+        socket.read_exact(&mut json_buffer).unwrap();
 
-        vars
+        // get JSON
+        let s = std::str::from_utf8(&json_buffer).unwrap();
+
+        let json: JSON = serde_json::from_str(&s).unwrap();
+        json
     }
+
+    // helper fn to create a dummy Variables struct
+    // fn dummy_vars() -> Variables {
+    //     // create dummy variables
+    //     let re = Regex::new(r"^([a-z\s]+) (\w+) (\w+) (?P<LASTNAME>\w+)").unwrap();
+    //     let text = "my name is john fitzgerald kennedy, president of the USA";
+
+    //     let mut vars = Variables::default();
+    //     vars.insert_captures(&re, text);
+
+    //     vars
+    // }
 
     #[test]
     #[cfg(target_family = "unix")]
     fn callback_script() {
         let yaml = r#"
-            script: "tests/check_ut.py"
+            script: "tests/scripts/check_ut.py"
             args: ['one', 'two', 'three']
         "#;
 
-        let cb: Callback = serde_yaml::from_str(yaml).expect("unable to read YAML");
-        let script = PathBuf::from("tests/check_ut.py");
+        let cb: Callback = Callback::from_str(yaml).expect("unable to read YAML");
+        let script = PathBuf::from("tests/scripts/check_ut.py");
         assert!(matches!(&cb.callback, CallbackType::Script(Some(x)) if x == &script));
         assert_eq!(cb.args.as_ref().unwrap().len(), 3);
 
         // create dummy variables
-        let vars = super::tests::dummy_vars();
+        let vars = sample_vars();
 
         // call script
         let mut handle = CallbackHandle::default();
@@ -293,7 +320,7 @@ mod tests {
             args: ['one', 'two', 'three']
         "#;
 
-        let cb: Callback = serde_yaml::from_str(yaml).expect("unable to read YAML");
+        let cb = Callback::from_str(yaml).expect("unable to read YAML");
         let addr = "127.0.0.1:8900".to_string();
         assert!(matches!(&cb.callback, CallbackType::Tcp(Some(x)) if x == &addr));
 
@@ -303,22 +330,7 @@ mod tests {
             let listener = std::net::TcpListener::bind(&addr).unwrap();
             match listener.accept() {
                 Ok((mut socket, _addr)) => {
-                    // read size first
-                    let mut size_buffer = [0; std::mem::size_of::<u16>()];
-                    socket.read(&mut size_buffer).unwrap();
-                    let json_size = u16::from_be_bytes(size_buffer);
-                    assert_eq!(json_size, 211);
-
-                    // read JSON data
-                    let mut json_buffer = vec![0; json_size as usize];
-                    socket.read(&mut json_buffer).unwrap();
-
-                    // get JSON size as first 8 bytes
-                    let s = std::str::from_utf8(&json_buffer)
-                        .unwrap()
-                        .trim_end_matches(char::from(0));
-
-                    let json: JSON = serde_json::from_str(&s).unwrap();
+                    let json = get_json(&mut socket);
 
                     assert_eq!(json.args, vec!["one", "two", "three"]);
 
@@ -345,7 +357,7 @@ mod tests {
         std::thread::sleep(ten_millis);
 
         // create dummy variables
-        let vars = super::tests::dummy_vars();
+        let vars = sample_vars();
 
         // some work here
         let mut handle = CallbackHandle::default();
@@ -363,7 +375,7 @@ mod tests {
             args: ['one', 'two', 'three']
         "#;
 
-        let cb: Callback = serde_yaml::from_str(yaml).expect("unable to read YAML");
+        let cb = Callback::from_str(yaml).expect("unable to read YAML");
         let addr = PathBuf::from("/tmp/callback.sock");
 
         let _ = std::fs::remove_file(&addr);
@@ -376,22 +388,7 @@ mod tests {
             let listener = std::os::unix::net::UnixListener::bind(addr).unwrap();
             match listener.accept() {
                 Ok((mut socket, _addr)) => {
-                    // read size first
-                    let mut size_buffer = [0; std::mem::size_of::<u16>()];
-                    socket.read(&mut size_buffer).unwrap();
-                    let json_size = u16::from_be_bytes(size_buffer);
-                    assert_eq!(json_size, 211);
-
-                    // read JSON data
-                    let mut json_buffer = vec![0; json_size as usize];
-                    socket.read(&mut json_buffer).unwrap();
-
-                    let s = std::str::from_utf8(&json_buffer)
-                        .unwrap()
-                        .trim_end_matches(char::from(0));
-                    //println!("data={:?}", buffer);
-                    //println!("data={}", s);
-                    let json: JSON = serde_json::from_str(&s).unwrap();
+                    let json = get_json(&mut socket);
 
                     assert_eq!(json.args, vec!["one", "two", "three"]);
 
@@ -418,7 +415,7 @@ mod tests {
         std::thread::sleep(ten_millis);
 
         // create dummy variables
-        let mut vars = super::tests::dummy_vars();
+        let mut vars = sample_vars();
 
         // some work here
         let mut handle = CallbackHandle::default();

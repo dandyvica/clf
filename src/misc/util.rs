@@ -1,17 +1,31 @@
 //! Utility traits or structs.
-use std::fs::{DirEntry, File};
+use std::fs::File;
 use std::path::PathBuf;
 use std::process::Command;
 
-use regex::Regex;
+//use regex::Regex;
 
-use crate::error::{AppCustomErrorKind, AppError};
+use crate::misc::error::{AppCustomErrorKind, AppError};
 
-/// Default capacity for all `Vec` or `HashMap` pre-allocations
-pub const DEFAULT_CONTAINER_CAPACITY: usize = 30;
+/// Gather all constants in a single struct
+pub struct Cons;
 
-/// Default capacity for all strings pre-allocations
-pub const DEFAULT_STRING_CAPACITY: usize = 1024;
+impl Cons {
+    /// A default value for the retention of data in the snapshot file.
+    pub const DEFAULT_RETENTION: u64 = 86000 * 7;
+
+    /// Variable name prefix to be inserted for each variable.
+    pub const VAR_PREFIX: &'static str = "CLF_";
+
+    /// Default capacity for all `Vec` or `HashMap` pre-allocations
+    pub const DEFAULT_CONTAINER_CAPACITY: usize = 30;
+
+    /// Default capacity for all strings pre-allocations
+    pub const DEFAULT_STRING_CAPACITY: usize = 1024;
+
+    /// We define here the maximum size for the logger file (in Mb).
+    pub const MAX_LOGGER_SIZE: u64 = 50 * 1024 * 1024;
+}
 
 /// Tells whether a `PathBuf` is accessible.
 pub trait Usable {
@@ -40,24 +54,27 @@ impl Usable for PathBuf {
     }
 }
 
+/// Gather all utility methods into a single struct
 pub struct Util;
 
 impl Util {
-    // tests whether a `DirEntry` is matching the regex
-    fn is_match(entry: &DirEntry, re: &Regex) -> Result<bool, AppError> {
+    /// Tests whether a `DirEntry` is matching the regex.
+    #[cfg(test)]
+    fn is_match(entry: &std::fs::DirEntry, re: &regex::Regex) -> Result<bool, AppError> {
         // converts file name to a string
         let s = entry.path().into_os_string().into_string()?;
 
         Ok(re.is_match(&s))
     }
 
-    // gives the list of files from a directory, matching the given regex
-    fn read_dir(path: &PathBuf, regex: &str) -> Result<Vec<DirEntry>, AppError> {
+    // Gives the list of files from a directory, matching the given regex.
+    #[cfg(test)]
+    fn read_dir(path: &PathBuf, regex: &str) -> Result<Vec<std::fs::DirEntry>, AppError> {
         // create an empty vector of direntries
-        let mut entries: Vec<DirEntry> = Vec::new();
+        let mut entries: Vec<std::fs::DirEntry> = Vec::new();
 
         // create compiled regex
-        let re = Regex::new(regex)?;
+        let re = regex::Regex::new(regex)?;
 
         // get list of files
         for entry in std::fs::read_dir(path)? {
@@ -71,22 +88,22 @@ impl Util {
         Ok(entries)
     }
 
-    // returns the match recent file in the directory `path` and matching the regex
-    pub fn most_recent_file(path: &PathBuf, regex: &str) -> Result<Option<PathBuf>, AppError> {
-        // get all entries
-        let entries = Util::read_dir(path, regex)?;
+    /// Returns the match recent file in the directory `path` and matching the regex.
+    // pub fn most_recent_file(path: &PathBuf, regex: &str) -> Result<Option<PathBuf>, AppError> {
+    //     // get all entries
+    //     let entries = Util::read_dir(path, regex)?;
 
-        // get most recent file according to creation data
-        match entries
-            .iter()
-            .max_by_key(|x| x.metadata().unwrap().created().unwrap())
-        {
-            None => Ok(None),
-            Some(entry) => Ok(Some(entry.path())),
-        }
-    }
+    //     // get most recent file according to creation data
+    //     match entries
+    //         .iter()
+    //         .max_by_key(|x| x.metadata().unwrap().created().unwrap())
+    //     {
+    //         None => Ok(None),
+    //         Some(entry) => Ok(Some(entry.path())),
+    //     }
+    // }
 
-    /// This spawns a command and returns a list of file names correspondinf to the command
+    /// Spawns a command and returns a list of file names corresponding to the command.
     pub fn get_list(cmd: &str, args: Option<&[String]>) -> Result<Vec<PathBuf>, AppError> {
         let output = match args {
             None => Command::new(&cmd).output()?,
@@ -102,7 +119,7 @@ impl Util {
             .collect::<Vec<PathBuf>>())
     }
 
-    /// Build a default snapshot file name
+    /// Builds a default snapshot file name.
     pub fn snapshot_default_name() -> PathBuf {
         let mut snapfile = std::env::temp_dir();
         snapfile.push("clf_snapshot.json");

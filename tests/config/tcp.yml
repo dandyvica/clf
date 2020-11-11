@@ -3,7 +3,7 @@
 # files to search for.
 searches:
   # name & path of the logfile to search
-  - logfile: tests/logfiles/small_access.log
+  - logfile: tests/logfiles/huge/large_access.log
 
     # list of tags to refer to
     tags: 
@@ -17,7 +17,7 @@ searches:
         # a list of comma-separated options to manage the search. Current supported options are:
         # runcallback: if present, means the provided script will be called
         # rewind: restart the search from the beginning of the file
-        options: "runcallback"
+        #options: "runcallback"
 
         # a script or command to be called, every time a hit is found.
         callback: { 

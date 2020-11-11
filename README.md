@@ -16,9 +16,10 @@ Rust is a relatively new system's programming language, providing speed, and sec
 
 This reimplementation in Rust aims at solving original *check_logfiles* drawbacks:
 
-* straightforward distribution: a single executable is needed.
+* straightforward distribution: a single executable is needed. Using the *musl* static binary, no need for a specific verison of *libc*.
 * enhanced portability: same behaviour between Windows, Linux or BSD-like operating systems.
 * lightning speed: with an execution speed comparable to C or C++, execution time is not a hurdle. Multi-threaded is a future target.
+* ability to either call an external script or send JSON data coming from logfile to a TCP stream or a UNIX domain stream.
 * standard configuration file format: opposite to the original *check_logfiles* with uses non-standard files (regular *Perl* files containing *Perl* variables), this implementation uses YAML format for its configuration files. YAML is best suited comparing to JSON or XML because there's no need to escape chars for regexes expressions.
 * versatility: coupled with *Jinja2*-like well-known templates, you can imagine lots of possibilities to manage configuration files in a professionnal environment.
 * power: it will take into account not only regular log files, but also list of files command from a shell command or a script.
@@ -28,10 +29,10 @@ This reimplementation in Rust aims at solving original *check_logfiles* drawback
 *Caveat*: Even though the current ```regex``` Rust crate is providing fast regexes checks, it doesn't currently support _lookahead or lookbehind_ patterns.
 
 ## Releases
-Current release is 0.1 and currently in development. It should be considered as bleeding edge or pre-α stage.
+Current release is 0.1 and currently in development. It should be considered as bleeding edge or α-stage.
 
 ## Principle of operation
-The *clf* executable processing is simple. After reading the YAML configuration file passed to the command line, it reads each logfile (or a list of logfiles provided by an external command or script) and tests each line against the defined regexes. If a match is found, it triggers an external script, either by spawning a new process and providing a set of environment variables to this process (and optionnally updating the *PATH* or *Path* variable, depending on the OS). Or by establishing a new socket connection to a remote address and port configured in the configuration file, and sending a JSON data structure with a set of variables coming from the search.
+The *clf* executable processing is simple. After reading the YAML configuration file passed to the command line, it reads each logfile (or a list of logfiles provided by an external command or script) and tests each line against the defined regexes. If a match is found, it triggers an external script, either by spawning a new process and providing a set of environment variables to this process (and optionnally updating the *PATH* or *Path* variable, depending on the OS). Or by establishing a new socket connection to a remote address and port configured in the configuration file, and sending a JSON data structure with a set of variables coming from the search. Or even to a UNIX domain socket
 
 The plugin output and exit code is depending on what is found in the provided logfiles.
 
@@ -85,8 +86,8 @@ searches:
         options: "runscript,"
 
         # a script or command to be called, every time a hit is found.
-        script: { 
-          path: "tests/scripts/echovars.py",
+        callback: { 
+          script: "tests/scripts/echovars.py",
           args: ['arg1', 'arg2', 'arg3']
         }
 
@@ -110,8 +111,8 @@ searches:
         options: "runscript,"
 
         # a script or command to be called, every time a hit is found.
-        script: { 
-          path: "tests/scripts/echovars.py", 
+        callback: { 
+          script: "tests/scripts/echovars.py", 
           args: ['arg1', 'arg2', 'arg3']
         }
 
@@ -133,8 +134,8 @@ searches:
     tags: 
       - name: http_access_gzipped
         options: "runscript,"
-        script: { 
-          path: "tests/scripts/echovars.py", 
+        callback: { 
+          address: "127.0.0.1:8999", 
           args: ['arg1', 'arg2', 'arg3']
         }
         patterns:
@@ -156,8 +157,8 @@ searches:
     tags: 
       - name: all_logs
         options: "runscript,"
-        script: { 
-          path: "tests/scripts/echovars.py", 
+        callback: { 
+          domain: "/var/tmp/clf.sock", 
           args: ['arg1', 'arg2', 'arg3']
         }
         patterns:
@@ -207,7 +208,7 @@ When *clf* fetches a line from a logfile, it compares this string with a list of
 
 For *critical* or *warning* patterns, a list of exceptions can be defined, which invalidate any previous triggered match.
 
-It is manadatory to use single quotes when using regexes, because it doesn't incur escaping characters. 
+It is mandatory to use single quotes when using regexes, because it doesn't incur escaping characters. 
 
 > Note: the current Rust *regex* crate doesn't support lookahead/lookbehind patterns. This can be alleviated using the *execptions* list, specially for negation regexes.
 
@@ -250,7 +251,9 @@ You could easily gain access to those variables in scripting languages:
 * Python: using the ```os.environ``` object, like this:
 
 ```python
-[(v,os.environ.get(v)) for v in os.environ if v.startswith("CLF_")]
+import os
+{ v:os.environ.get(v) for v in os.environ if v.startswith("P") }
+
 ```
 
 * Ruby: 
@@ -357,7 +360,6 @@ Still missing in the short run:
 
 * write dev()/inode() Linux-equivalent for Windows
 * manage log rotations
-* keep Tcp connection by using a *keepalive* kind-of option
 
 Missing in the long run:
 

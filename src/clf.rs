@@ -13,20 +13,23 @@ use simplelog::*;
 
 use wait_timeout::ChildExt;
 
+mod config;
 use config::{
     callback::ChildData,
     config::{Config, LogSource},
     variables::Variables,
 };
 
+mod logfile;
 use logfile::{
     logfile::{Lookup, Wrapper},
     snapshot::Snapshot,
 };
 
+mod misc;
 use misc::{
     nagios::{LogfileMatchCounter, MatchCounter, NagiosError, NagiosVersion},
-    util::{Usable, DEFAULT_CONTAINER_CAPACITY},
+    util::{Cons, Usable},
 };
 
 mod args;
@@ -34,6 +37,8 @@ use args::CliOptions;
 
 mod error;
 use error::*;
+
+mod testing;
 
 fn main() {
     // tick time
@@ -53,7 +58,7 @@ fn main() {
     let mut logfile_counter = LogfileMatchCounter::new();
 
     // this will keep the list of logfiles to manage. Use this external list due to immutable/mutable borrow checking
-    let mut logfile_list: Vec<PathBuf> = Vec::with_capacity(DEFAULT_CONTAINER_CAPACITY);
+    let mut logfile_list: Vec<PathBuf> = Vec::with_capacity(Cons::DEFAULT_CONTAINER_CAPACITY);
 
     // print out options if requested and exits
     if options.show_options {
@@ -120,19 +125,20 @@ fn main() {
     // load configuration file as specified from the command line
     // handle case of stdin input
     //---------------------------------------------------------------------------------------------------
-    let _config = if options.config_file == PathBuf::from("-") {
-        let mut buffer = String::with_capacity(1024);
-        let stdin = stdin();
-        let mut handle = stdin.lock();
+    // let _config = if options.config_file == PathBuf::from("-") {
+    //     let mut buffer = String::with_capacity(Cons::DEFAULT_STRING_CAPACITY);
+    //     let stdin = stdin();
+    //     let mut handle = stdin.lock();
 
-        if let Err(e) = handle.read_to_string(&mut buffer) {
-            eprintln!("error reading stdin: {}", e);
-            exit(AppExitCode::STDIN_ERROR as i32);
-        }
-        Config::<LogSource>::from_str(&buffer)
-    } else {
-        Config::<LogSource>::from_file(&options.config_file)
-    };
+    //     if let Err(e) = handle.read_to_string(&mut buffer) {
+    //         eprintln!("error reading stdin: {}", e);
+    //         exit(AppExitCode::STDIN_ERROR as i32);
+    //     }
+    //     Config::<LogSource>::from_str(&buffer)
+    // } else {
+    //     Config::<LogSource>::from_file(&options.config_file)
+    // };
+    let _config = Config::<LogSource>::from_file(&options.config_file);
 
     // check for loading errors
     if let Err(error) = _config {
@@ -166,7 +172,7 @@ fn main() {
     //---------------------------------------------------------------------------------------------------
     // create initial variables, both user & runtime
     //---------------------------------------------------------------------------------------------------
-    let mut vars = Variables::new();
+    let mut vars = Variables::default();
     vars.insert_uservars(config.get_user_vars());
 
     //---------------------------------------------------------------------------------------------------
@@ -176,7 +182,7 @@ fn main() {
     //let snapfile = config.get_snapshot_name().clone();
     //let snapfile = Snapshot::from_path(&options.config_file, options.snap_dir);
 
-    // delete snapshot file if asked
+    // delete snapshot file if requested
     if options.delete_snapfile {
         if let Err(e) = std::fs::remove_file(&snapfile) {
             // 'not found' could be a viable error
@@ -265,10 +271,10 @@ fn main() {
 
         // for each tag, search inside logfile
         for tag in &search.tags {
-            debug!("searching for tag: {}", &tag.name);
+            debug!("searching for tag: {}", &tag.name());
 
             // if we've been explicitely asked to not process this logfile, just loop
-            if !&tag.process {
+            if !&tag.process() {
                 continue;
             }
 
@@ -297,7 +303,7 @@ fn main() {
                         "error: {} when searching logfile: {} for tag: {}",
                         err,
                         search.logfile.display(),
-                        &tag.name
+                        &tag.name()
                     );
 
                     // get a mutable reference on inner counter structure

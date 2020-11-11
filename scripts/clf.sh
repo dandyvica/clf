@@ -7,7 +7,7 @@ then
 fi
 
 option=$1
-clf=~/projects/clf/target/debug/clf
+clf=~/projects/clf/target/release/clf
 config=~/projects/clf/tests/config
 log=~/projects/clf/tests/tmp/clf.log
 
