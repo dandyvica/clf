@@ -128,10 +128,10 @@ impl TryFrom<&str> for PatternType {
             "critical" => Ok(PatternType::critical),
             "warning" => Ok(PatternType::warning),
             "ok" => Ok(PatternType::ok),
-            _ => Err(AppError::App {
-                err: AppCustomErrorKind::UnsupportedPatternType,
-                msg: format!("{} pattern type is not supported", s),
-            }),
+            _ => Err(AppError::new(
+                AppCustomErrorKind::UnsupportedPatternType,
+                &format!("{} pattern type is not supported", s),
+            )),
         }
     }
 }
@@ -159,8 +159,6 @@ pub struct PatternSet {
 impl PatternSet {
     /// Returns whether a critical or warning regex is involved in the match, provided no exception is matched.
     pub fn is_match(&self, text: &str) -> Option<(PatternType, &Regex)> {
-        //dbg!(text);
-
         // try to match critical pattern first
         if let Some(critical) = &self.critical {
             trace!("critical pattern is tried");
@@ -177,6 +175,8 @@ impl PatternSet {
             trace!("warning pattern is tried");
             let ret = warning.is_match(text).map(|re| (PatternType::warning, re));
             if ret.is_some() {
+                // dbg!(&ret);
+                // dbg!(text);
                 return ret;
             }
         }

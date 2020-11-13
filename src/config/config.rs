@@ -200,10 +200,10 @@ impl TryFrom<String> for SearchOptions {
         // checks if there're any invalid arguments
         for opt in &opt_list {
             if VALID_OPTIONS.iter().all(|x| !opt.contains(x)) {
-                return Err(AppError::App {
-                    err: AppCustomErrorKind::UnsupportedSearchOption,
-                    msg: format!("search option: {}  is not supported", opt),
-                });
+                return Err(AppError::new(
+                    AppCustomErrorKind::UnsupportedSearchOption,
+                    &format!("search option: {}  is not supported", opt),
+                ));
             }
         }
 
@@ -381,25 +381,30 @@ pub struct Config<T: Clone> {
 impl<T: Clone> Config<T> {
     /// Returns a reference on `global` fields.
     #[inline(always)]
-    pub fn get_global(&self) -> &GlobalOptions {
+    pub fn global(&self) -> &GlobalOptions {
         &self.global
     }
 
+    /// Sets the snapshot file if provided
+    pub fn set_snapshot_file(&mut self, snapfile: &PathBuf) {
+        self.global.snapshot_file = snapfile.to_path_buf();
+    }
+
     /// Returns the name of the snapshot file
-    // #[inline(always)]
-    // pub fn get_snapshot_name(&self) -> &PathBuf {
-    //     &self.global.snapshot_file
-    // }
+    #[inline(always)]
+    pub fn snapshot_file(&self) -> &PathBuf {
+        &self.global.snapshot_file
+    }
 
     // Returns the user variables if any. Clone of the original HashMap.
     #[inline(always)]
-    pub fn get_user_vars(&self) -> Option<HashMap<String, String>> {
+    pub fn user_vars(&self) -> Option<HashMap<String, String>> {
         self.global.user_vars.clone()
     }
 
     /// Returns the snapshot retention
     #[inline(always)]
-    pub fn get_snapshot_retention(&self) -> u64 {
+    pub fn snapshot_retention(&self) -> u64 {
         self.global.snapshot_retention
     }
 }

@@ -3,7 +3,10 @@ use std::cell::RefCell;
 use std::convert::TryFrom;
 use std::io::Write;
 use std::net::TcpStream;
+
+#[cfg(target_family = "unix")]
 use std::os::unix::net::UnixStream;
+
 use std::path::PathBuf;
 use std::process::{Child, Command};
 use std::time::Instant;
@@ -93,31 +96,27 @@ impl Callback {
                 // build Command struct before execution.
                 debug_assert!(path.is_some());
 
-                // test whether a Command struct is already created
-                if handle.cmd.is_none() {
-                    let cmd = Command::new(path.as_ref().unwrap());
-                    handle.cmd = Some(cmd);
-                    debug!("creating Command for: {:?}", path.as_ref().unwrap());
-                }
+                let mut cmd = Command::new(path.as_ref().unwrap());
 
-                let cmd = handle.cmd.as_mut().unwrap();
-
-                // runtime variables are always there.
-                cmd.envs(vars.runtime_vars());
-
-                // user variables, maybe
+                // user vars don't change so we can add them right now
                 if let Some(uservars) = vars.user_vars() {
                     cmd.envs(uservars);
-                }
-
-                // update PATH variable if any
-                if let Some(path) = env_path {
-                    cmd.env("PATH", path);
                 }
 
                 // add arguments if any
                 if let Some(args) = &self.args {
                     cmd.args(&args[..]);
+                }
+
+                //handle.cmd = Some(cmd);
+                debug!("creating Command for: {:?}", path.as_ref().unwrap());
+
+                // runtime variables are always there.
+                cmd.envs(vars.runtime_vars());
+
+                // update PATH variable if any
+                if let Some(path) = env_path {
+                    cmd.env("PATH", path);
                 }
 
                 // start command
@@ -334,19 +333,10 @@ pub mod tests {
 
                     assert_eq!(json.args, vec!["one", "two", "three"]);
 
-                    assert_eq!(
-                        json.vars.get_runtime_var("CLF_CAPTURE1").unwrap(),
-                        "my name is"
-                    );
-                    assert_eq!(json.vars.get_runtime_var("CLF_CAPTURE2").unwrap(), "john");
-                    assert_eq!(
-                        json.vars.get_runtime_var("CLF_CAPTURE3").unwrap(),
-                        "fitzgerald"
-                    );
-                    assert_eq!(
-                        json.vars.get_runtime_var("CLF_LASTNAME").unwrap(),
-                        "kennedy"
-                    );
+                    assert_eq!(json.vars.get("CLF_CAPTURE1").unwrap(), "my name is");
+                    assert_eq!(json.vars.get("CLF_CAPTURE2").unwrap(), "john");
+                    assert_eq!(json.vars.get("CLF_CAPTURE3").unwrap(), "fitzgerald");
+                    assert_eq!(json.vars.get("CLF_LASTNAME").unwrap(), "kennedy");
                 }
                 Err(e) => panic!("couldn't get client: {:?}", e),
             }
@@ -392,19 +382,10 @@ pub mod tests {
 
                     assert_eq!(json.args, vec!["one", "two", "three"]);
 
-                    assert_eq!(
-                        json.vars.get_runtime_var("CLF_CAPTURE1").unwrap(),
-                        "my name is"
-                    );
-                    assert_eq!(json.vars.get_runtime_var("CLF_CAPTURE2").unwrap(), "john");
-                    assert_eq!(
-                        json.vars.get_runtime_var("CLF_CAPTURE3").unwrap(),
-                        "fitzgerald"
-                    );
-                    assert_eq!(
-                        json.vars.get_runtime_var("CLF_LASTNAME").unwrap(),
-                        "kennedy"
-                    );
+                    assert_eq!(json.vars.get("CLF_CAPTURE1").unwrap(), "my name is");
+                    assert_eq!(json.vars.get("CLF_CAPTURE2").unwrap(), "john");
+                    assert_eq!(json.vars.get("CLF_CAPTURE3").unwrap(), "fitzgerald");
+                    assert_eq!(json.vars.get("CLF_LASTNAME").unwrap(), "kennedy");
                 }
                 Err(e) => panic!("couldn't get client: {:?}", e),
             }

@@ -24,7 +24,7 @@ impl Cons {
     pub const DEFAULT_STRING_CAPACITY: usize = 1024;
 
     /// We define here the maximum size for the logger file (in Mb).
-    pub const MAX_LOGGER_SIZE: u64 = 50 * 1024 * 1024;
+    pub const MAX_LOGGER_SIZE: u64 = 50;
 }
 
 /// Tells whether a `PathBuf` is accessible.
@@ -41,13 +41,13 @@ impl Usable for PathBuf {
 
         // need to check if this is really a file
         if !self.is_file() {
-            Err(AppError::App {
-                err: AppCustomErrorKind::NotAFile,
-                msg: format!(
+            Err(AppError::new(
+                AppCustomErrorKind::NotAFile,
+                &format!(
                     "file: {} is not a file, probably a directory",
                     self.display()
                 ),
-            })
+            ))
         } else {
             Ok(())
         }

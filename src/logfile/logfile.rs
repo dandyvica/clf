@@ -1,6 +1,6 @@
 //! A structure representing a logfile, with all its related attributes. Those attributes are
 //! coming from the processing of the log file, every time it's read to look for patterns.
-use log::{debug, info, trace};
+use log::{debug, error, info, trace};
 use std::collections::HashMap;
 use std::fs::{File, Metadata};
 use std::io::{BufRead, BufReader, Read, Seek, SeekFrom};
@@ -15,7 +15,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::misc::{
     error::{AppCustomErrorKind, AppError},
-    nagios::MatchCounter,
+    nagios::HitCounter,
     util::Cons,
 };
 
@@ -32,7 +32,6 @@ use crate::var;
 #[derive(Debug, Serialize, Deserialize, Default)]
 pub struct RunData {
     /// tag name
-    #[serde(rename = "name")]
     tag_name: String,
 
     /// position of the last run. Used to seek the file pointer to this point.
@@ -63,7 +62,7 @@ impl RunData {
 
     /// Returns the `last_run` field value.
     #[inline(always)]
-    pub fn get_lastrun(&self) -> u64 {
+    pub fn lastrun(&self) -> u64 {
         self.last_run
     }
 }
@@ -90,7 +89,7 @@ pub struct LogFile {
     dev: u64,
 
     /// Run time data that are stored each time a logfile is searched for patterns.
-    rundata: HashMap<String, RunData>,
+    run_data: HashMap<String, RunData>,
 }
 
 impl LogFile {
@@ -118,7 +117,7 @@ impl LogFile {
         let metadata = path.metadata()?;
 
         // get inode & dev ID
-        let ids = LogFile::get_ids(&metadata);
+        let ids = LogFile::ids(&metadata);
 
         Ok(LogFile {
             path: canon,
@@ -127,14 +126,14 @@ impl LogFile {
             compressed,
             inode: ids.0,
             dev: ids.1,
-            rundata: HashMap::new(),
+            run_data: HashMap::new(),
         })
     }
 
     /// Returns the list of tags of this `LogFile`.
     #[cfg(test)]
     pub fn tags(&self) -> Vec<&str> {
-        self.rundata
+        self.run_data
             .keys()
             .map(|x| x.as_str())
             .collect::<Vec<&str>>()
@@ -143,13 +142,13 @@ impl LogFile {
     /// Returns `true` if `name` is found in this `LogFile`.
     #[cfg(test)]
     pub fn contains_key(&self, name: &str) -> bool {
-        self.rundata.contains_key(name)
+        self.run_data.contains_key(name)
     }
 
     /// Returns an Option on a reference of a `RunData`, mapping the first
     /// tag name passed in argument.
     pub fn or_insert(&mut self, name: &str) -> &mut RunData {
-        self.rundata.entry(name.to_string()).or_insert(RunData {
+        self.run_data.entry(name.to_string()).or_insert(RunData {
             tag_name: name.to_string(),
             ..Default::default()
         })
@@ -157,18 +156,18 @@ impl LogFile {
 
     /// Returns a reference on `Rundata`.
     #[inline(always)]
-    pub fn get_mut_rundata(&mut self) -> &mut HashMap<String, RunData> {
-        &mut self.rundata
+    pub fn rundata_mut(&mut self) -> &mut HashMap<String, RunData> {
+        &mut self.run_data
     }
 
     /// Sets UNIX inode and dev identifiers.
     #[cfg(target_family = "unix")]
-    pub fn get_ids(metadata: &Metadata) -> (u64, u64) {
+    pub fn ids(metadata: &Metadata) -> (u64, u64) {
         (metadata.ino(), metadata.dev())
     }
 
     #[cfg(target_family = "windows")]
-    pub fn get_ids(metadata: &Metadata) -> (u64, u64) {
+    pub fn ids(metadata: &Metadata) -> (u64, u64) {
         (0, 0)
     }
 
@@ -213,10 +212,10 @@ where
 
         let pos = match self.by_ref().bytes().nth((offset - 1) as usize) {
             None => {
-                return Err(AppError::App {
-                    err: AppCustomErrorKind::SeekPosBeyondEof,
-                    msg: format!("tried to set offset beyond EOF, at offset: {}", offset),
-                })
+                return Err(AppError::new(
+                    AppCustomErrorKind::SeekPosBeyondEof,
+                    &format!("tried to set offset beyond EOF, at offset: {}", offset),
+                ))
             }
             Some(x) => x,
         };
@@ -230,8 +229,7 @@ pub struct Wrapper<'a> {
     pub global: &'a GlobalOptions,
     pub tag: &'a Tag,
     pub vars: &'a mut Variables,
-    pub global_counter: &'a mut MatchCounter,
-    pub logfile_counter: &'a mut MatchCounter,
+    pub logfile_counter: &'a mut HitCounter,
 }
 
 impl<'a> Wrapper<'a> {
@@ -240,35 +238,33 @@ impl<'a> Wrapper<'a> {
         global: &'a GlobalOptions,
         tag: &'a Tag,
         vars: &'a mut Variables,
-        global_counter: &'a mut MatchCounter,
-        logfile_counter: &'a mut MatchCounter,
+        logfile_counter: &'a mut HitCounter,
     ) -> Self {
         Wrapper {
             global,
             tag,
             vars,
-            global_counter,
             logfile_counter,
         }
     }
 }
 
 /// Return type for all `Lookup` methods.
-pub type LookupRet = Result<Vec<ChildData>, AppError>;
+//pub type LookupRet = Result<Vec<ChildData>, AppError>;
 
 /// Trait, implemented by `LogFile` to search patterns.
 pub trait Lookup {
-    fn lookup(&mut self, wrapper: &mut Wrapper) -> LookupRet;
+    fn lookup(&mut self, wrapper: &mut Wrapper) -> Result<Vec<ChildData>, AppError>;
     fn lookup_from_reader<R: BufRead + Seeker>(
         &mut self,
         reader: R,
         wrapper: &mut Wrapper,
-    ) -> LookupRet;
+    ) -> Result<Vec<ChildData>, AppError>;
 }
 
 impl Lookup for LogFile {
     ///Just a wrapper function for a file.
-    fn lookup(&mut self, wrapper: &mut Wrapper) -> LookupRet {
+    fn lookup(&mut self, wrapper: &mut Wrapper) -> Result<Vec<ChildData>, AppError> {
         // open target file
         let file = File::open(&self.path)?;
 
@@ -310,7 +306,7 @@ impl Lookup for LogFile {
         &mut self,
         mut reader: R,
         wrapper: &mut Wrapper,
-    ) -> LookupRet {
+    ) -> Result<Vec<ChildData>, AppError> {
         //------------------------------------------------------------------------------------
         // 1. initialize local variables
         //------------------------------------------------------------------------------------
@@ -345,19 +341,19 @@ impl Lookup for LogFile {
         );
         wrapper.vars.insert("TAG", wrapper.tag.name());
 
-        // get rundata corresponding to tag name, or insert that new one if not yet in the snapshot file
-        let mut rundata = self.or_insert(&wrapper.tag.name());
+        // get run_data corresponding to tag name, or insert that new one if not yet in the snapshot file
+        let mut run_data = self.or_insert(&wrapper.tag.name());
         trace!(
-            "tagname: {:?}, rundata:{:?}\n\n",
+            "tagname: {:?}, run_data:{:?}\n\n",
             &wrapper.tag.name(),
-            rundata
+            run_data
         );
 
         // if we don't need to read the file from the beginning, adjust counters and set offset
         if !wrapper.tag.options.rewind {
-            bytes_count = rundata.last_offset;
-            line_number = rundata.last_line;
-            reader.set_offset(rundata.last_offset)?;
+            bytes_count = run_data.last_offset;
+            line_number = run_data.last_line;
+            reader.set_offset(run_data.last_offset)?;
         }
 
         info!(
@@ -366,7 +362,7 @@ impl Lookup for LogFile {
         );
 
         // reset exec count
-        rundata.exec_count = 0;
+        run_data.exec_count = 0;
 
         //------------------------------------------------------------------------------------
         // 3. loop to read each line of the file
@@ -381,7 +377,14 @@ impl Lookup for LogFile {
             let ret = reader.read_until(b'\n', &mut buffer);
 
             // to deal with UTF-8 conversion problems, use the lossy method. It will replace non-UTF-8 chars with ?
-            let line = String::from_utf8_lossy(&buffer);
+            let mut line = String::from_utf8_lossy(&buffer);
+
+            // remove newline
+            line.to_mut().pop();
+
+            // and line feed for Windows platforms
+            #[cfg(target_family = "windows")]
+            line.to_mut().pop();
 
             // read_line() returns a Result<usize>
             match ret {
@@ -412,34 +415,34 @@ impl Lookup for LogFile {
                             line_number,
                             re.0,
                             re.1.as_str(),
-                            rundata.warning_count,
-                            rundata.critical_count
+                            run_data.warning_count,
+                            run_data.critical_count
                         );
 
                         // increments thresholds and compare with possible defined limits and accumulate counters for plugin output
                         match re.0 {
                             PatternType::critical => {
-                                rundata.critical_count += 1;
-                                if rundata.critical_count < wrapper.tag.options.criticalthreshold {
+                                run_data.critical_count += 1;
+                                if run_data.critical_count < wrapper.tag.options.criticalthreshold {
                                     buffer.clear();
                                     continue;
                                 }
-                                wrapper.global_counter.critical_count += 1;
+                                //wrapper.global_counter.critical_count += 1;
                                 wrapper.logfile_counter.critical_count += 1;
                             }
                             PatternType::warning => {
-                                rundata.warning_count += 1;
-                                if rundata.warning_count < wrapper.tag.options.warningthreshold {
+                                run_data.warning_count += 1;
+                                if run_data.warning_count < wrapper.tag.options.warningthreshold {
                                     buffer.clear();
                                     continue;
                                 }
-                                wrapper.global_counter.warning_count += 1;
+                                //wrapper.global_counter.warning_count += 1;
                                 wrapper.logfile_counter.warning_count += 1;
                             }
                             // this special Ok pattern resets counters
                             PatternType::ok => {
-                                rundata.critical_count = 0;
-                                rundata.warning_count = 0;
+                                run_data.critical_count = 0;
+                                run_data.warning_count = 0;
 
                                 // no need to process further: don't call a script
                                 buffer.clear();
@@ -456,25 +459,44 @@ impl Lookup for LogFile {
                             wrapper.vars.insert("LINE", line.clone());
                             wrapper.vars.insert("MATCHED_RE", re.1.as_str());
                             wrapper.vars.insert("MATCHED_RE_TYPE", re.0);
-                            //wrapper.vars.insert("TAG", &wrapper.tag.name);
 
                             wrapper.vars.insert_captures(re.1, &line);
 
                             debug!("added variables: {:?}", wrapper.vars);
 
-                            // now call script if limit is not reached yet
-                            if rundata.exec_count < wrapper.tag.options.runlimit {
-                                if let Some(child) = wrapper.tag.callback_call(
+                            // now call script if upper run limit is not reached yet
+                            if run_data.exec_count < wrapper.tag.options.runlimit {
+                                // in case of a callback error, stop iterating and save state here
+                                match wrapper.tag.callback_call(
                                     Some(&wrapper.global.path()),
                                     wrapper.vars,
                                     &mut handle,
-                                )? {
-                                    // save child structure
-                                    children.push(child);
+                                ) {
+                                    Ok(child) => {
+                                        // save child structure
+                                        if child.is_some() {
+                                            children.push(child.unwrap());
+                                        }
 
-                                    // increment number of script executions
-                                    rundata.exec_count += 1;
-                                }
+                                        // increment number of script executions
+                                        run_data.exec_count += 1;
+                                    }
+                                    Err(e) => {
+                                        error!("error {} when calling callback", e);
+                                        break;
+                                    }
+                                };
+                                // if let Some(child) = wrapper.tag.callback_call(
+                                //     Some(&wrapper.global.path()),
+                                //     wrapper.vars,
+                                //     &mut handle,
+                                // )? {
+                                //     // save child structure
+                                //     children.push(child);
+
+                                //     // increment number of script executions
+                                //     run_data.exec_count += 1;
+                                // }
                             }
                         };
                     }
@@ -491,23 +513,21 @@ impl Lookup for LogFile {
         }
 
         // save current offset and line number
-        rundata.last_offset = bytes_count;
-        rundata.last_line = line_number;
+        run_data.last_offset = bytes_count;
+        run_data.last_line = line_number;
 
         // resets thresholds if requested
         // this will count number of matches for warning & critical, to see if this matches the thresholds
         // first is warning, second is critical
         if !wrapper.tag.options.savethresholdcount {
-            rundata.critical_count = 0;
-            rundata.warning_count = 0;
+            run_data.critical_count = 0;
+            run_data.warning_count = 0;
         }
 
         // and last run
         let time = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH)?;
-        rundata.last_run = time.as_secs();
+        run_data.last_run = time.as_secs();
 
-        //trace!("logfile counter:{:?}", logfile_counter);
-        trace!("global_counter: {:?}", &wrapper.global_counter);
         trace!("logfile_counter: {:?}", &wrapper.logfile_counter);
         trace!(
             "========================> end processing logfile:{} for tag:{}",
@@ -561,9 +581,9 @@ mod tests {
                 "compressed": false, 
                 "inode": 1,
                 "dev": 1,
-                "rundata": {
+                "run_data": {
                     "tag1": {
-                        "name": "tag1",
+                        "tag_name": "tag1",
                         "last_offset": 1000,
                         "last_line": 10,
                         "last_run": 1000000,
@@ -572,7 +592,7 @@ mod tests {
                         "exec_count": 10
                     },
                     "tag2": {
-                        "name": "tag2",
+                        "tag_name": "tag2",
                         "last_offset": 1000,
                         "last_line": 10,
                         "last_run": 1000000,
@@ -587,9 +607,9 @@ mod tests {
                 "compressed": false, 
                 "inode": 1,
                 "dev": 1,
-                "rundata": {
+                "run_data": {
                     "tag3": {
-                        "name": "tag3",
+                        "tag_name": "tag3",
                         "last_offset": 1000,
                         "last_line": 10,
                         "last_run": 1000000,
@@ -599,7 +619,7 @@ mod tests {
 
                     },
                     "tag4": {
-                        "name": "tag4",
+                        "tag_name": "tag4",
                         "last_offset": 1000,
                         "last_line": 10,
                         "last_run": 1000000,
@@ -694,14 +714,14 @@ mod tests {
 
         {
             let logfile1 = json.get_mut(&PathBuf::from("/usr/bin/zip")).unwrap();
-            assert_eq!(logfile1.rundata.len(), 2);
+            assert_eq!(logfile1.run_data.len(), 2);
             assert!(logfile1.contains_key("tag1"));
             assert!(logfile1.contains_key("tag2"));
         }
 
         {
             let logfile2 = json.get_mut(&PathBuf::from("/etc/hosts.allow")).unwrap();
-            assert_eq!(logfile2.rundata.len(), 2);
+            assert_eq!(logfile2.run_data.len(), 2);
             assert!(logfile2.contains_key("tag3"));
             assert!(logfile2.contains_key("tag4"));
         }
@@ -729,13 +749,13 @@ mod tests {
         assert!(!logfile1.contains_key("tag3"));
 
         // // tag4 is not part of LogFile
-        // let mut rundata = json[1].or_insert("tag4");
+        // let mut run_data = json[1].or_insert("tag4");
 
         // // but tag3 is and even is duplicated
-        // rundata = json[1].or_insert("tag3");
-        // rundata.last_line = 999;
+        // run_data = json[1].or_insert("tag3");
+        // run_data.last_line = 999;
 
-        // assert_eq!(json[1].rundata.get("tag3").unwrap().last_line, 999);
+        // assert_eq!(json[1].run_data.get("tag3").unwrap().last_line, 999);
     }
 
     fn get_compressed_reader() -> BufReader<GzDecoder<File>> {
@@ -813,16 +833,9 @@ mod tests {
 
         let tag = Tag::from_str(yaml).expect("unable to read YAML");
         let mut vars = Variables::default();
-        let mut global_counter = MatchCounter::default();
-        let mut logfile_counter = MatchCounter::default();
+        let mut logfile_counter = HitCounter::default();
 
-        let mut w = Wrapper::new(
-            &opts,
-            &tag,
-            &mut vars,
-            &mut global_counter,
-            &mut logfile_counter,
-        );
+        let mut w = Wrapper::new(&opts, &tag, &mut vars, &mut logfile_counter);
 
         let mut logfile = LogFile::new("tests/logfiles/adhoc.txt").unwrap();
 
@@ -841,49 +854,38 @@ mod tests {
                     let json_data = json.unwrap();
                     //dbg!(&json_data);
 
-                    match json_data
-                        .vars
-                        .get_runtime_var("CLF_MATCHED_RE_TYPE")
-                        .unwrap()
-                        .as_str()
-                    {
+                    match json_data.vars.get("CLF_MATCHED_RE_TYPE").unwrap().as_str() {
                         "critical" => {
                             assert_eq!(json_data.args, vec!["arg1", "arg2", "arg3"]);
                             assert_eq!(
-                                json_data.vars.get_runtime_var("CLF_CAPTURE1").unwrap(),
+                                json_data.vars.get("CLF_CAPTURE1").unwrap(),
                                 &format!(
                                     "{}{}",
                                     "/var/log/messages",
-                                    json_data.vars.get_runtime_var("CLF_LINE_NUMBER").unwrap()
+                                    json_data.vars.get("CLF_LINE_NUMBER").unwrap()
                                 )
                             );
                             assert_eq!(
-                                json_data.vars.get_runtime_var("CLF_CAPTURE2").unwrap(),
+                                json_data.vars.get("CLF_CAPTURE2").unwrap(),
                                 "server01.domain.com"
                             );
-                            assert_ne!(
-                                json_data.vars.get_runtime_var("CLF_CAPTURE3").unwrap(),
-                                "5"
-                            );
+                            assert_ne!(json_data.vars.get("CLF_CAPTURE3").unwrap(), "5");
                         }
                         "warning" => {
                             assert_eq!(json_data.args, vec!["arg1", "arg2", "arg3"]);
                             assert_eq!(
-                                json_data.vars.get_runtime_var("CLF_CAPTURE1").unwrap(),
+                                json_data.vars.get("CLF_CAPTURE1").unwrap(),
                                 &format!(
                                     "{}{}",
                                     "/var/log/syslog",
-                                    json_data.vars.get_runtime_var("CLF_LINE_NUMBER").unwrap()
+                                    json_data.vars.get("CLF_LINE_NUMBER").unwrap()
                                 )
                             );
                             assert_eq!(
-                                json_data.vars.get_runtime_var("CLF_CAPTURE2").unwrap(),
+                                json_data.vars.get("CLF_CAPTURE2").unwrap(),
                                 "server01.domain.com"
                             );
-                            assert_ne!(
-                                json_data.vars.get_runtime_var("CLF_CAPTURE3").unwrap(),
-                                "5"
-                            );
+                            assert_ne!(json_data.vars.get("CLF_CAPTURE3").unwrap(), "5");
                         }
                         "ok" => (),
                         &_ => panic!("unexpected case"),

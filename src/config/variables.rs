@@ -3,6 +3,7 @@
 use log::trace;
 use std::collections::HashMap;
 use std::fmt::Debug;
+use std::ops::{Deref, DerefMut};
 
 use regex::Regex;
 use serde::{Deserialize, Serialize};
@@ -29,6 +30,21 @@ pub struct Variables {
     user_vars: Option<HashMap<String, String>>,
 }
 
+/// As user variables are mainly used, just defer the `runtime_vars` field.
+impl Deref for Variables {
+    type Target = HashMap<String, String>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.runtime_vars
+    }
+}
+
+impl DerefMut for Variables {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.runtime_vars
+    }
+}
+
 impl Default for Variables {
     fn default() -> Self {
         Variables {
@@ -39,31 +55,11 @@ impl Default for Variables {
 }
 
 impl Variables {
-    /// Clear runtime variables.
-    #[inline(always)]
-    pub fn clear(&mut self) {
-        self.runtime_vars.clear();
-    }
-
-    /// Tests whether a runtime var is present.
-    #[cfg(test)]
-    #[inline(always)]
-    pub fn contains_key(&self, key: &str) -> bool {
-        self.runtime_vars.contains_key(key)
-    }
-
     /// Only keeps variables matching the values passed in `vars` slice.
     #[inline(always)]
     pub fn retain(&mut self, vars: &[&str]) {
         self.runtime_vars.retain(|k, _| vars.contains(&k.as_str()));
         debug_assert!(self.runtime_vars.len() == vars.len());
-    }
-
-    /// Returns the variable from runtime_vars
-    #[cfg(test)]
-    #[inline(always)]
-    pub fn get_runtime_var(&self, var: &str) -> Option<&String> {
-        self.runtime_vars.get(var)
     }
 
     /// Returns all runtime_vars
@@ -139,11 +135,6 @@ impl Variables {
             }
         };
     }
-
-    // Converts runtime & user variables into a JSON string.
-    // pub fn to_json(&self) -> String {
-    //     serde_json::to_string(&self).unwrap()
-    // }
 }
 
 #[cfg(test)]
@@ -159,10 +150,10 @@ mod tests {
             v.runtime_vars().get("CLF_CAPTURE0").unwrap(),
             "my name is john fitzgerald kennedy"
         );
-        assert_eq!(v.get_runtime_var("CLF_CAPTURE1").unwrap(), "my name is");
-        assert_eq!(v.get_runtime_var("CLF_CAPTURE2").unwrap(), "john");
-        assert_eq!(v.get_runtime_var("CLF_CAPTURE3").unwrap(), "fitzgerald");
-        assert_eq!(v.get_runtime_var("CLF_LASTNAME").unwrap(), "kennedy");
+        assert_eq!(v.get("CLF_CAPTURE1").unwrap(), "my name is");
+        assert_eq!(v.get("CLF_CAPTURE2").unwrap(), "john");
+        assert_eq!(v.get("CLF_CAPTURE3").unwrap(), "fitzgerald");
+        assert_eq!(v.get("CLF_LASTNAME").unwrap(), "kennedy");
 
         v.insert("LOGFILE", "/var/log/foo");
         v.insert("TAG", "tag1");

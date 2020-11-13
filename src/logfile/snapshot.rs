@@ -16,35 +16,30 @@ use crate::misc::error::AppError;
 /// a kind of central repository for all searches.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Snapshot {
+    // snapshot file name
+    //#[serde(skip)]
+    //path: PathBuf,
+
     //last_run:
     snapshot: HashMap<PathBuf, LogFile>,
 }
 
-impl Snapshot {
-    /// Creates an empty snapshot.
-    pub fn new() -> Snapshot {
+impl Default for Snapshot {
+    fn default() -> Self {
         Snapshot {
             snapshot: HashMap::new(),
         }
     }
+}
 
-    /// Helper function to return the logfile corresponding to `path`
-    pub fn get_logfile(&self, path: &str) -> Option<&LogFile> {
-        self.snapshot.get(&PathBuf::from(path))
-    }
-
+impl Snapshot {
     /// Builds a new snapshot file name from `path`.
-    pub fn from_path(path: &PathBuf, dir: Option<PathBuf>) -> PathBuf {
+    pub fn from_path(path: &PathBuf) -> PathBuf {
         // get file name from path variable
         let name = path.file_stem().unwrap_or(OsStr::new("clf_snapshot"));
 
         // builds new name
         let mut snapshot_file = PathBuf::new();
-
-        match dir {
-            Some(dir) => snapshot_file.push(dir),
-            None => snapshot_file.push(std::env::temp_dir()),
-        };
 
         snapshot_file.push(name);
         snapshot_file.set_extension("json");
@@ -59,7 +54,7 @@ impl Snapshot {
             Ok(file) => file,
             Err(e) => {
                 if e.kind() == ErrorKind::NotFound {
-                    return Ok(Snapshot::new());
+                    return Ok(Snapshot::default());
                 } else {
                     return Err(AppError::Io(e));
                 }
@@ -85,8 +80,8 @@ impl Snapshot {
         // first delete tags having run before retention
         debug!("checking retention time for snapshot");
         for logfile in self.snapshot.values_mut() {
-            let rundata = logfile.get_mut_rundata();
-            rundata.retain(|_, v| time.as_secs() - v.get_lastrun() < snapshot_retention);
+            let run_data = logfile.rundata_mut();
+            run_data.retain(|_, v| time.as_secs() - v.lastrun() < snapshot_retention);
         }
 
         // then just saves this file.
@@ -96,14 +91,13 @@ impl Snapshot {
         Ok(())
     }
 
-    /// Ensures a value is in the entry by inserting a value if empty, and returns a
-    /// mutable reference to the value in the entry.
-    pub fn or_insert(&mut self, path: &PathBuf) -> Result<&mut LogFile, AppError> {
+    /// Creates a new `LogfiFile` struct if not found, or retrieve an already stored one in
+    /// the snapshot.
+    pub fn logfile_mut(&mut self, path: &PathBuf) -> Result<&mut LogFile, AppError> {
         // is logfile already in the snapshot ?
         if !self.snapshot.contains_key(path) {
             // create a new LogFile
             let logfile = LogFile::new(&path)?;
-            //println!("logfile={:?}", logfile);
             let opt = self.snapshot.insert(path.clone().to_path_buf(), logfile);
             debug_assert!(opt.is_none());
             debug_assert!(self.snapshot.contains_key(path));
@@ -113,11 +107,6 @@ impl Snapshot {
 
         Ok(self.snapshot.get_mut(path).unwrap())
     }
-
-    // Removes an entry in the snapshot.
-    // pub fn remove(&mut self, key: &PathBuf) -> Option<LogFile> {
-    //     self.snapshot.remove(key)
-    // }
 }
 
 #[cfg(test)]
@@ -137,9 +126,9 @@ mod tests {
                 "compressed": false, 
                 "inode": 1,
                 "dev": 1,
-                "rundata": {
+                "run_data": {
                     "tag1": {
-                        "name": "tag1",
+                        "tag_name": "tag1",
                         "last_offset": 1000,
                         "last_line": 10,
                         "last_run": 1000000,
@@ -148,7 +137,7 @@ mod tests {
                         "exec_count": 10
                     },                       
                     "tag2": {
-                        "name": "tag2",
+                        "tag_name": "tag2",
                         "last_offset": 1000,
                         "last_line": 10,
                         "last_run": 1000000,
@@ -163,9 +152,9 @@ mod tests {
                 "compressed": false, 
                 "inode": 1,
                 "dev": 1,
-                "rundata": {
+                "run_data": {
                     "tag3": {
-                        "name": "tag3",
+                        "tag_name": "tag3",
                         "last_offset": 1000,
                         "last_line": 10,
                         "last_run": 1000000,
@@ -174,7 +163,7 @@ mod tests {
                         "exec_count": 10
                     },
                     "tag4": {
-                        "name": "tag3",
+                        "tag_name": "tag3",
                         "last_offset": 1500,
                         "last_line": 10,
                         "last_run": 1000000,
@@ -200,7 +189,7 @@ mod tests {
 
     #[test]
     #[cfg(target_family = "unix")]
-    fn or_insert() {
+    fn logfile_mut() {
         let mut data: Snapshot = serde_json::from_str(JSON).unwrap();
         assert!(data.snapshot.contains_key(&PathBuf::from("/usr/bin/zip")));
         assert!(data
@@ -209,28 +198,28 @@ mod tests {
         assert_eq!(data.snapshot.len(), 2);
         // assert!(keys.contains(&&std::path::PathBuf::from("/etc/hosts.allow")));
 
-        let _ = data.or_insert(&PathBuf::from("/bin/gzip"));
+        let _ = data.logfile_mut(&PathBuf::from("/bin/gzip"));
 
         // snapshot has now 3 logfiles
         assert!(data.snapshot.contains_key(&PathBuf::from("/bin/gzip")));
         assert_eq!(data.snapshot.len(), 3);
 
-        let _ = data.or_insert(&PathBuf::from("/usr/bin/zip"));
+        let _ = data.logfile_mut(&PathBuf::from("/usr/bin/zip"));
         assert_eq!(data.snapshot.len(), 3);
     }
 
-    #[test]
-    #[cfg(target_family = "unix")]
-    fn from_path() {
-        let config = PathBuf::from("/home/johndoe/config.yml");
+    // #[test]
+    // #[cfg(target_family = "unix")]
+    // fn from_path() {
+    //     let config = PathBuf::from("/home/johndoe/config.yml");
 
-        assert_eq!(
-            Snapshot::from_path(&config, None),
-            PathBuf::from("/tmp/config.json")
-        );
-        assert_eq!(
-            Snapshot::from_path(&config, Some(PathBuf::from("/home/foo"))),
-            PathBuf::from("/home/foo/config.json")
-        );
-    }
+    //     assert_eq!(
+    //         Snapshot::from_path(&config),
+    //         PathBuf::from("/tmp/config.json")
+    //     );
+    //     assert_eq!(
+    //         Snapshot::from_path(&config, Some(PathBuf::from("/home/foo"))),
+    //         PathBuf::from("/home/foo/config.json")
+    //     );
+    // }
 }

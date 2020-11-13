@@ -1,12 +1,14 @@
 use std::path::PathBuf;
-use std::process::exit;
 use std::str::FromStr;
 
-use clap::{App, Arg};
+use clap::{value_t, App, Arg};
 use simplelog::LevelFilter;
 
-use crate::error::AppExitCode;
-use crate::misc::{nagios::NagiosVersion, util::Cons};
+//use crate::error::AppExitCode;
+use crate::misc::{
+    nagios::{Nagios, NagiosVersion},
+    util::Cons,
+};
 
 /// This structure holds the command line arguments.
 #[derive(Debug)]
@@ -19,7 +21,7 @@ pub struct CliOptions {
     pub max_logger_size: u64,
     pub show_options: bool,
     pub nagios_version: NagiosVersion,
-    pub snap_dir: Option<PathBuf>,
+    pub snapshot_file: Option<PathBuf>,
 }
 
 /// Implements `Default` trait for `CliOptions`.
@@ -35,16 +37,16 @@ impl Default for CliOptions {
             delete_snapfile: false,
             check_conf: false,
             logger_level: LevelFilter::Info,
-            max_logger_size: Cons::MAX_LOGGER_SIZE,
+            max_logger_size: Cons::MAX_LOGGER_SIZE * 1024 * 1024,
             show_options: false,
-            nagios_version: NagiosVersion::NagiosNrpe3,
-            snap_dir: None,
+            nagios_version: NagiosVersion::Nrpe3,
+            snapshot_file: None,
         }
     }
 }
 
 impl CliOptions {
-    pub fn get_options() -> CliOptions {
+    pub fn options() -> CliOptions {
         let matches = App::new("Log files reader")
             .version("0.1")
             .author("Alain Viguier dandyvica@gmail.com")
@@ -121,11 +123,11 @@ impl CliOptions {
                     .takes_value(true),
             )
             .arg(
-                Arg::with_name("snapdir")
+                Arg::with_name("snapfile")
                     .short("p")
-                    .long("snapdir")
+                    .long("snapfile")
                     .required(false)
-                    .help("Name of the snapshot file directory. If not provided, will default to the platform-dependent temporary directory.")
+                    .help("Overrides the snapshot file specified in the configuration file. Will defaults to the platform-dependent temporary directory in not provided in configuration file or using this flag.")
                     .takes_value(true),
             )
             .get_matches();
@@ -135,18 +137,15 @@ impl CliOptions {
 
         // config file is mandatory. Try to canonicalize() at the same time.
         let config_file = PathBuf::from(matches.value_of("config").unwrap());
-
-        options.config_file = match config_file.canonicalize() {
-            Ok(file) => PathBuf::from(file),
-            Err(e) => {
-                eprintln!(
-                    "error trying to canonicalize config file: {}, error: {}",
-                    config_file.display(),
-                    e
-                );
-                exit(AppExitCode::CANONICALIZE_IO_ERROR as i32);
-            }
-        };
+        let canonicalized_config_file = config_file.canonicalize();
+        if let Err(ref e) = canonicalized_config_file {
+            Nagios::exit_critical(&format!(
+                "error trying to canonicalize config file: {}, error: {}",
+                config_file.display(),
+                e
+            ));
+        }
+        options.config_file = canonicalized_config_file.unwrap();
 
         // optional logger file
         if matches.is_present("clflog") {
@@ -168,23 +167,13 @@ impl CliOptions {
                 NagiosVersion::from_str(matches.value_of("nagver").unwrap()).unwrap();
         }
 
-        if matches.is_present("snapdir") {
-            options.snap_dir = Some(PathBuf::from(matches.value_of("snapdir").unwrap()));
+        if matches.is_present("snapfile") {
+            options.snapshot_file = Some(PathBuf::from(matches.value_of("snapfile").unwrap()));
         }
 
         if matches.is_present("logsize") {
-            let value = matches.value_of("logsize").unwrap();
-            let size = match value.parse::<u64>() {
-                Ok(s) => s,
-                Err(e) => {
-                    eprintln!(
-                        "error converting value logsize: {} into an integer, error: {}",
-                        value, e
-                    );
-                    exit(AppExitCode::ERROR_CONV as i32);
-                }
-            };
-            options.max_logger_size = size * 1024 * 1024;
+            options.max_logger_size =
+                value_t!(matches, "logsize", u64).unwrap_or(Cons::MAX_LOGGER_SIZE) * 1024 * 1024;
         }
 
         options
