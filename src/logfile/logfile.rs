@@ -608,10 +608,6 @@ mod tests {
         }
     "#;
 
-    // fn load_json() -> HashMap<PathBuf, LogFile> {
-    //     serde_json::from_str(JSON).unwrap()
-    // }
-
     #[test]
     #[cfg(target_os = "linux")]
     fn new() {
@@ -622,29 +618,6 @@ mod tests {
         lf_ok = LogFile::new("/etc/hosts.allow").unwrap();
         assert_eq!(lf_ok.path.to_str(), Some("/etc/hosts.allow"));
         assert_eq!(lf_ok.extension.unwrap(), "allow");
-
-        // file not found
-        // let mut lf_err = LogFile::new("/usr/bin/foo");
-        // assert!(lf_err.is_err());
-        // match lf_err.unwrap_err() {
-        //     AppError::App { err: e, msg: _ } => assert_eq!(e, AppCustomErrorKind::FileNotUsable),
-        //     _ => panic!("error not expected here!"),
-        // };
-
-        // // not a file
-        // lf_err = LogFile::new("/usr/bin");
-        // match lf_err.unwrap_err() {
-        //     AppError::App { err: e, msg: _ } => assert_eq!(e, AppCustomErrorKind::FileNotUsable),
-        //     _ => panic!("error not expected here!"),
-        // };
-
-        // // file has no root
-        // lf_err = LogFile::new("usr/bin/foo");
-        // assert!(lf_err.is_err());
-        // match lf_err.unwrap_err() {
-        //     AppError::App { err: e, msg: _ } => assert_eq!(e, AppCustomErrorKind::FileNotUsable),
-        //     _ => panic!("error not expected here!"),
-        // };
     }
 
     #[test]
@@ -658,28 +631,6 @@ mod tests {
         //assert_eq!(lf_ok.path.as_os_str(), std::ffi::OsStr::new(r"C:\Windows\System32\cmd.exe"));
         assert!(lf_ok.extension.is_none());
 
-        // // file not found
-        // let mut lf_err = LogFile::new(r"C:\Windows\System32\foo.exe");
-        // assert!(lf_err.is_err());
-        // match lf_err.unwrap_err() {
-        //     AppError::App { err: e, msg: _ } => assert_eq!(e, AppCustomErrorKind::FileNotUsable),
-        //     _ => panic!("error not expected here!"),
-        // };
-
-        // // not a file
-        // lf_err = LogFile::new(r"C:\Windows\System32");
-        // match lf_err.unwrap_err() {
-        //     AppError::App { err: e, msg: _ } => assert_eq!(e, AppCustomErrorKind::FileNotUsable),
-        //     _ => panic!("error not expected here!"),
-        // };
-
-        // // file has no root
-        // lf_err = LogFile::new(r"Windows\System32\cmd.exe");
-        // assert!(lf_err.is_err());
-        // match lf_err.unwrap_err() {
-        //     AppError::App { err: e, msg: _ } => assert_eq!(e, AppCustomErrorKind::FileNotUsable),
-        //     _ => panic!("error not expected here!"),
-        // };
     }
     #[test]
     fn deserialize() {

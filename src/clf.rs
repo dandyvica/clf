@@ -109,8 +109,8 @@ fn main() {
         }
 
         // create a LogFile struct or get it from snapshot
-        let _logfile = snapshot.logfile_mut(&search.logfile);
-        if let Err(ref e) = _logfile {
+        let logfile = snapshot.logfile_mut(&search.logfile);
+        if let Err(ref e) = logfile {
             Nagios::exit_critical(&format!(
                 "unexpected error {:?}, file:{}, line{}",
                 e,
@@ -118,7 +118,7 @@ fn main() {
                 line!()
             ));
         }
-        let logfile = _logfile.unwrap();
+        let snapshot_logfile = logfile.unwrap();
 
         debug!("calling or_insert() at line {}", line!());
 
@@ -130,7 +130,7 @@ fn main() {
             let mut wrapper = Wrapper::new(config.global(), &tag, &mut vars, &mut hit_counter);
 
             // now we can search for the pattern and save the child handle if a script was called
-            match logfile.lookup(&mut wrapper) {
+            match snapshot_logfile.lookup(&mut wrapper) {
                 // script might be started, giving back a `Child` structure with process features like pid etc
                 Ok(mut children) => {
                     // merge list of children

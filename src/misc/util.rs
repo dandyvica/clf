@@ -41,8 +41,6 @@ pub trait Usable {
 impl Usable for PathBuf {
     /// Tells whether a `PathBuf` is accessible i.e. it combines `has_root()`, `exists()` and `is_file()`.  
     fn is_usable(&self) -> Result<(), AppError> {
-        //self.has_root() && self.exists() && self.is_file()
-        //self.exists() && self.is_file()
         let _ = File::open(self)?;
 
         // need to check if this is really a file
