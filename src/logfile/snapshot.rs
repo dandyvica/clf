@@ -34,7 +34,7 @@ impl Default for Snapshot {
 
 impl Snapshot {
     /// Builds a new snapshot file name from `path`.
-    pub fn from_path(path: &PathBuf) -> PathBuf {
+    pub fn build_name(path: &PathBuf) -> PathBuf {
         // get file name from path variable
         let name = path.file_stem().unwrap_or(OsStr::new("clf_snapshot"));
 
@@ -106,6 +106,13 @@ impl Snapshot {
         debug_assert!(self.snapshot.get_mut(path).is_some());
 
         Ok(self.snapshot.get_mut(path).unwrap())
+    }
+
+    /// Builds a default snapshot file name.
+    pub fn default_name() -> PathBuf {
+        let mut snapfile = std::env::temp_dir();
+        snapfile.push("clf_snapshot.json");
+        snapfile
     }
 }
 

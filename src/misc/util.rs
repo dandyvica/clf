@@ -25,6 +25,12 @@ impl Cons {
 
     /// We define here the maximum size for the logger file (in Mb).
     pub const MAX_LOGGER_SIZE: u64 = 50;
+
+    /// Returns the number of seconds for a standard timeout when not defined in the YAML file.
+    /// Needed by `serde`.
+    pub const fn default_timeout() -> u64 {
+        180
+    }
 }
 
 /// Tells whether a `PathBuf` is accessible.
@@ -119,12 +125,12 @@ impl Util {
             .collect::<Vec<PathBuf>>())
     }
 
-    /// Builds a default snapshot file name.
-    pub fn snapshot_default_name() -> PathBuf {
-        let mut snapfile = std::env::temp_dir();
-        snapfile.push("clf_snapshot.json");
-        snapfile
-    }
+    // Builds a default snapshot file name.
+    // pub fn snapshot_default_name() -> PathBuf {
+    //     let mut snapfile = std::env::temp_dir();
+    //     snapfile.push("clf_snapshot.json");
+    //     snapfile
+    // }
 }
 
 #[cfg(test)]

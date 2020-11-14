@@ -34,6 +34,8 @@ use crate::misc::{
     util::{Cons, Util},
 };
 
+use crate::logfile::snapshot::Snapshot;
+
 /// Auto-implement the FromStr trait for a struct
 #[macro_export]
 macro_rules! fromstr {
@@ -100,7 +102,7 @@ impl Default for GlobalOptions {
         GlobalOptions {
             path: path_var,
             output_dir: std::env::temp_dir(),
-            snapshot_file: Util::snapshot_default_name(),
+            snapshot_file: Snapshot::default_name(),
             snapshot_retention: Cons::DEFAULT_RETENTION,
             user_vars: None,
         }
@@ -274,7 +276,7 @@ pub struct Tag {
     name: String,
 
     /// Tells whether we process this tag or not. Useful for testing purposes.
-    #[serde(default = "Tag::process_default")]
+    #[serde(default = "Tag::default_process")]
     process: bool,
 
     /// A list of options specific to this search. As such options are optional, add a default `serde`
@@ -308,7 +310,7 @@ impl Tag {
     }
 
     /// Default value for processing a tag
-    pub fn process_default() -> bool {
+    pub fn default_process() -> bool {
         true
     }
 
@@ -413,20 +415,6 @@ impl<T: Clone> Config<T> {
 fromstr!(Config<LogSource>);
 
 impl Config<LogSource> {
-    /// Loads a YAML configuration string as a `Config` struct.
-    // pub fn from_str(s: &str) -> Result<Config<LogSource>, AppError> {
-    //     // load YAML data from a string
-    //     let yaml = serde_yaml::from_str(s)?;
-    //     Ok(yaml)
-    // }
-
-    /// Loads a YAML configuration from a reader as a `Config` struct.
-    // pub fn from_reader<R: Read>(rdr: R) -> Result<Config<LogSource>, AppError> {
-    //     // load YAML data from a reader
-    //     let yaml = serde_yaml::from_reader(rdr)?;
-    //     Ok(yaml)
-    // }
-
     /// Loads a YAML configuration file as a `Config` struct.
     pub fn from_file<P: AsRef<Path>>(file_name: P) -> Result<Config<LogSource>, AppError> {
         // open YAML file
@@ -441,10 +429,6 @@ impl Config<LogSource> {
         );
         Ok(yaml)
     }
-
-    // pub fn get_snapshot_name(&self) -> &PathBuf {
-    //     &self.global.as_ref().unwrap().snapshotfile
-    // }
 }
 
 impl From<Config<LogSource>> for Config<PathBuf> {

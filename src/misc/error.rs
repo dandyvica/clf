@@ -66,48 +66,24 @@ impl fmt::Display for AppError {
     }
 }
 
-// define conversion methods for all types we might return in our methods
-impl From<io::Error> for AppError {
-    fn from(err: io::Error) -> AppError {
-        AppError::Io(err)
-    }
+/// To simplify definition of all error conversions.
+macro_rules! from_error {
+    ($e:path, $f:path) => {
+        impl From<$e> for AppError {
+            fn from(err: $e) -> AppError {
+                $f(err)
+            }
+        }
+    };
 }
 
-impl From<regex::Error> for AppError {
-    fn from(err: regex::Error) -> AppError {
-        AppError::Regex(err)
-    }
-}
-
-impl From<serde_yaml::Error> for AppError {
-    fn from(err: serde_yaml::Error) -> AppError {
-        AppError::Yaml(err)
-    }
-}
-
-impl From<serde_json::Error> for AppError {
-    fn from(err: serde_json::Error) -> AppError {
-        AppError::Json(err)
-    }
-}
-
-impl From<std::time::SystemTimeError> for AppError {
-    fn from(err: std::time::SystemTimeError) -> AppError {
-        AppError::SystemTime(err)
-    }
-}
-
-impl From<num::ParseIntError> for AppError {
-    fn from(err: num::ParseIntError) -> AppError {
-        AppError::Parse(err)
-    }
-}
-
-impl From<std::str::Utf8Error> for AppError {
-    fn from(err: std::str::Utf8Error) -> AppError {
-        AppError::Utf8Error(err)
-    }
-}
+from_error!(io::Error, AppError::Io);
+from_error!(regex::Error, AppError::Regex);
+from_error!(serde_yaml::Error, AppError::Yaml);
+from_error!(serde_json::Error, AppError::Json);
+from_error!(std::time::SystemTimeError, AppError::SystemTime);
+from_error!(num::ParseIntError, AppError::Parse);
+from_error!(std::str::Utf8Error, AppError::Utf8Error);
 
 impl From<std::ffi::OsString> for AppError {
     fn from(err: std::ffi::OsString) -> AppError {

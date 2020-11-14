@@ -89,7 +89,7 @@ pub fn init_log(options: &CliOptions) {
 
 /// Load the snapshot file
 pub fn load_snapshot(options: &CliOptions) -> Snapshot {
-    let snapfile = Snapshot::from_path(&options.config_file);
+    let snapfile = Snapshot::build_name(&options.config_file);
 
     // delete snapshot file if requested
     if options.delete_snapfile {

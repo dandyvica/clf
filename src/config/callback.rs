@@ -15,15 +15,9 @@ use log::{debug, info};
 use serde::Deserialize;
 use serde_json::json;
 
-/// Returns the number of seconds for a standard timeout when not defined in the YAML file.
-/// Neede by `serde`.
-const fn default_timeout() -> u64 {
-    2 * 3600
-}
-
 use crate::config::variables::Variables;
 use crate::fromstr;
-use crate::misc::error::AppError;
+use crate::misc::{error::AppError, util::Cons};
 
 /// A callback is either a script, or a TCP socket or a UNIX domain socket
 #[derive(Debug, Deserialize, PartialEq, Hash, Eq, Clone)]
@@ -68,7 +62,7 @@ pub struct Callback {
     pub(in crate) args: Option<Vec<String>>,
 
     /// A timeout in seconds to for wait command completion.
-    #[serde(default = "self::default_timeout")]
+    #[serde(default = "Cons::default_timeout")]
     timeout: u64,
 }
 
