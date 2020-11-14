@@ -1,64 +1,64 @@
 # a list of logfiles & tags, to search for patterns. This is either a list of logfiles, or a command giving back a list of 
 # files to search for.
 searches:
-  # # name & path of the logfile to search
-  # - logfile: /var/log/syslog
+  # name & path of the logfile to search
+  - logfile: /var/log/syslog
 
-  #   # list of tags to refer to
-  #   tags: 
+    # list of tags to refer to
+    tags: 
 
-  #     # tag name
-  #     - name: nokernel
+      # tag name
+      - name: nokernel
 
-  #       # set it to false if you don't want to process this tag. This is particularly useful for testing purposes, without changing other fields
-  #       process: true
+        # set it to false if you don't want to process this tag. This is particularly useful for testing purposes, without changing other fields
+        process: true
 
-  #       # a list of comma-separated options to manage the search. Current supported options are:
-  #       # runcallback: if present, means the provided script will be called
-  #       # rewind: restart the search from the beginning of the file
-  #       options: "runcallback"
+        # a list of comma-separated options to manage the search. Current supported options are:
+        # runcallback: if present, means the provided script will be called
+        # rewind: restart the search from the beginning of the file
+        options: "runcallback"
 
-  #       # a script or command to be called, every time a hit is found.
-  #       callback: { 
-  #         script: "./syslog.py",
-  #         args: ['arg1', 'arg2', 'arg3']
-  #       }
+        # a script or command to be called, every time a hit is found.
+        callback: { 
+          script: "./syslog.py",
+          args: ['arg1', 'arg2', 'arg3']
+        }
 
-  #       # list of patterns to match
-  #       patterns:
-  #         warning: {
-  #           regexes: [
-  #             '(\w+)[(\d+)]'
-  #           ],
-  #           exceptions: [
-  #             'kernel:'
-  #           ]
-  #         }
+        # list of patterns to match
+        patterns:
+          warning: {
+            regexes: [
+              '(\w+)[(\d+)]'
+            ],
+            exceptions: [
+              'kernel:'
+            ]
+          }
 
-  #     # tag name
-  #     - name: kernel
+      # tag name
+      - name: kernel
 
-  #       # set it to false if you don't want to process this tag. This is particularly useful for testing purposes, without changing other fields
-  #       process: true
+        # set it to false if you don't want to process this tag. This is particularly useful for testing purposes, without changing other fields
+        process: true
 
-  #       # a list of comma-separated options to manage the search. Current supported options are:
-  #       # runcallback: if present, means the provided script will be called
-  #       # rewind: restart the search from the beginning of the file
-  #       options: "runcallback"
+        # a list of comma-separated options to manage the search. Current supported options are:
+        # runcallback: if present, means the provided script will be called
+        # rewind: restart the search from the beginning of the file
+        options: "runcallback"
 
-  #       # a script or command to be called, every time a hit is found.
-  #       callback: { 
-  #         script: "./syslog.py",
-  #         args: ['arg1', 'arg2', 'arg3']
-  #       }
+        # a script or command to be called, every time a hit is found.
+        callback: { 
+          script: "./syslog.py",
+          args: ['arg1', 'arg2', 'arg3']
+        }
 
-  #       # list of patterns to match
-  #       patterns:
-  #         warning: {
-  #           regexes: [
-  #             'kernel: (.*)'
-  #           ]
-  #         }
+        # list of patterns to match
+        patterns:
+          warning: {
+            regexes: [
+              'kernel: (.*)'
+            ]
+          }
 
   # name & path of the logfile to search
   - logfile: /var/log/kern.log
@@ -94,27 +94,27 @@ searches:
             ]
           }
 
-      # # tag name
-      # - name: kernel
+      # tag name
+      - name: kernel
 
-      #   # set it to false if you don't want to process this tag. This is particularly useful for testing purposes, without changing other fields
-      #   process: true
+        # set it to false if you don't want to process this tag. This is particularly useful for testing purposes, without changing other fields
+        process: true
 
-      #   # a list of comma-separated options to manage the search. Current supported options are:
-      #   # runcallback: if present, means the provided script will be called
-      #   # rewind: restart the search from the beginning of the file
-      #   options: "runcallback,runlimit=10"
+        # a list of comma-separated options to manage the search. Current supported options are:
+        # runcallback: if present, means the provided script will be called
+        # rewind: restart the search from the beginning of the file
+        options: "runcallback,runlimit=10"
 
-      #   # a script or command to be called, every time a hit is found.
-      #   callback: { 
-      #     script: "./syslog.py",
-      #     args: ['arg1', 'arg2', 'arg3']
-      #   }
+        # a script or command to be called, every time a hit is found.
+        callback: { 
+          script: "./syslog.py",
+          args: ['arg1', 'arg2', 'arg3']
+        }
 
-      #   # list of patterns to match
-      #   patterns:
-      #     warning: {
-      #       regexes: [
-      #         'kernel: (.*)'
-      #       ]
-      #     }
+        # list of patterns to match
+        patterns:
+          warning: {
+            regexes: [
+              'kernel: (.*)'
+            ]
+          }

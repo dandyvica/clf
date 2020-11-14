@@ -115,7 +115,15 @@ pub struct HitCounter {
     pub unknown_count: u16,
 
     /// Optional error if an error occured reading file
-    pub logfile_error: Option<AppError>,
+    pub error: Option<AppError>,
+}
+
+impl HitCounter {
+    // store error which corresponds to an unknown Nagios count also
+    pub fn set_error(&mut self, e: AppError) {
+        self.unknown_count += 1;
+        self.error = Some(e);
+    }
 }
 
 /// Get the exit code from the HitCounter
@@ -127,7 +135,7 @@ impl From<&HitCounter> for NagiosError {
                 critical_count: 0,
                 warning_count: 0,
                 unknown_count: 0,
-                logfile_error: _,
+                error: _,
             } => NagiosError::OK,
 
             // unkowns only
@@ -135,7 +143,7 @@ impl From<&HitCounter> for NagiosError {
                 critical_count: 0,
                 warning_count: 0,
                 unknown_count: _,
-                logfile_error: _,
+                error: _,
             } => NagiosError::UNKNOWN,
 
             // only warnings errors
@@ -143,7 +151,7 @@ impl From<&HitCounter> for NagiosError {
                 critical_count: 0,
                 warning_count: _,
                 unknown_count: _,
-                logfile_error: _,
+                error: _,
             } => NagiosError::WARNING,
 
             // critical errors
@@ -151,7 +159,7 @@ impl From<&HitCounter> for NagiosError {
                 critical_count: _,
                 warning_count: _,
                 unknown_count: _,
-                logfile_error: _,
+                error: _,
             } => NagiosError::CRITICAL,
         }
     }
@@ -210,7 +218,7 @@ impl LogfileHitCounter {
     /// Checks whether the underlying hashmap contains an error
     #[cfg(test)]
     pub fn is_error(&self) -> bool {
-        self.0.iter().any(|(_, v)| v.logfile_error.is_some())
+        self.0.iter().any(|(_, v)| v.error.is_some())
     }
 }
 
@@ -220,7 +228,7 @@ impl fmt::Display for LogfileHitCounter {
         let mut s = String::with_capacity(Cons::DEFAULT_STRING_CAPACITY);
 
         for (path, counter) in self.0.iter() {
-            match &counter.logfile_error {
+            match &counter.error {
                 None => s.push_str(&format!("{}: {}\n", path.display(), counter)),
                 Some(error) => s.push_str(&format!("{}: {}\n", path.display(), error)),
             }
@@ -242,7 +250,7 @@ mod tests {
             critical_count: 10,
             warning_count: 100,
             unknown_count: 0,
-            logfile_error: None,
+            error: None,
         };
         assert_eq!(
             &format!("{}", m),
@@ -262,7 +270,7 @@ mod tests {
             critical_count: 0,
             warning_count: 0,
             unknown_count: 0,
-            logfile_error: None,
+            error: None,
         };
         assert_eq!(NagiosError::from(&m), NagiosError::OK);
 
@@ -292,7 +300,7 @@ mod tests {
     fn logfile_matcher() {
         let mut m = LogfileHitCounter::default();
         let mut a = m.or_default(&PathBuf::from("/usr/bin/gzip"));
-        a.logfile_error = Some(AppError::new(
+        a.error = Some(AppError::new(
             crate::misc::error::AppCustomErrorKind::UnsupportedPatternType,
             "foo",
         ));

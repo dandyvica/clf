@@ -304,6 +304,12 @@ impl Tag {
         self.process
     }
 
+    /// Returns the callback field
+    #[inline(always)]
+    pub fn callback(&self) -> &Option<Callback> {
+        &self.callback
+    }
+
     /// Returns the regex involved in a match, if any, along with associated the pattern type.
     pub fn is_match(&self, text: &str) -> Option<(PatternType, &Regex)> {
         self.patterns.is_match(text)

@@ -57,40 +57,7 @@ fn main() {
     //---------------------------------------------------------------------------------------------------
     // load configuration file as specified from the command line
     //---------------------------------------------------------------------------------------------------
-    // let _config = if options.config_file == PathBuf::from("-") {
-    //     let mut buffer = String::with_capacity(Cons::DEFAULT_STRING_CAPACITY);
-    //     let stdin = stdin();
-    //     let mut handle = stdin.lock();
-
-    //     if let Err(e) = handle.read_to_string(&mut buffer) {
-    //         eprintln!("error reading stdin: {}", e);
-    //         exit(AppExitCode::STDIN_ERROR as i32);
-    //     }
-    //     Config::<LogSource>::from_str(&buffer)
-    // } else {
-    //     Config::<LogSource>::from_file(&options.config_file)
-    // };
-    // let _config = Config::<LogSource>::from_file(&options.config_file);
-
-    // // check for loading errors
-    // if let Err(error) = _config {
-    //     eprintln!(
-    //         "error loading config file: {:?}, error: {}",
-    //         &options.config_file, error
-    //     );
-
-    //     // break down errors
-    //     match error.get_ioerror() {
-    //         Some(_) => exit(AppExitCode::CONFIG_IO_ERROR as i32),
-    //         None => exit(AppExitCode::CONFIG_ERROR as i32),
-    //     };
-    //     //exit(AppExitCode::CONFIG_ERROR as i32);
-    // }
-
-    // // replace, if any, "loglist" by "logfile"
-    // let mut config = Config::<PathBuf>::from(_config.unwrap());
     let mut config = init_config(&options);
-
     debug!("{:#?}", config);
 
     // print out config if requested and exit
@@ -127,17 +94,16 @@ fn main() {
         // get counter corresponding to the logfile
         let mut hit_counter = &mut logfile_counter.or_default(&search.logfile);
 
-        // checks if logfile is accessible. If not, no need to move further
-        if let Err(err) = search.logfile.is_usable() {
+        // checks if logfile is accessible. If not, no need to move further, just record last error
+        if let Err(e) = search.logfile.is_usable() {
             error!(
                 "logfile: {} is not a file or is not accessible, error: {}",
                 search.logfile.display(),
-                err
+                e
             );
 
             // this is a error for this logfile which boils down to a Nagios unknown error
-            hit_counter.unknown_count = 1;
-            hit_counter.logfile_error = Some(err);
+            hit_counter.set_error(e);
 
             continue;
         }
@@ -156,14 +122,9 @@ fn main() {
 
         debug!("calling or_insert() at line {}", line!());
 
-        // for each tag, search inside logfile
-        for tag in &search.tags {
+        // for each tag, search inside logfile for those we need to process (having process tag == true)
+        for tag in search.tags.iter().filter(|t| t.process()) {
             debug!("searching for tag: {}", &tag.name());
-
-            // if we've been explicitely asked to not process this logfile, just loop
-            if !&tag.process() {
-                continue;
-            }
 
             // wraps all structures into a helper struct
             let mut wrapper = Wrapper::new(config.global(), &tag, &mut vars, &mut hit_counter);
@@ -179,17 +140,16 @@ fn main() {
                 }
 
                 // otherwise, an error when opening (most likely) the file and then report an error on counters
-                Err(err) => {
+                Err(e) => {
                     error!(
                         "error: {} when searching logfile: {} for tag: {}",
-                        err,
+                        e,
                         search.logfile.display(),
                         &tag.name()
                     );
 
-                    // get a mutable reference on inner counter structure
-                    // let mut logfile_counter = &mut logfile_counter.or_default(&search.logfile);
-                    // logfile_counter.app_error = (tag.options.logfilemissing.clone(), Some(err));
+                    // set error for this logfile
+                    hit_counter.set_error(e);
                 }
             }
         }
@@ -221,6 +181,44 @@ fn main() {
     info!("exiting process pid:{}, exit code:{:?}", id(), exit_code);
     Nagios::exit(exit_code);
 }
+
+/// Lookup data from tags
+// fn lookup(tags: &[Tag], global: &GlobalOptions, vars: &Variables) {
+//         // for each tag, search inside logfile
+//         for tag in &search.tags {
+//             debug!("searching for tag: {}", &tag.name());
+
+//             // if we've been explicitely asked to not process this logfile, just loop
+//             if !&tag.process() {
+//                 continue;
+//             }
+
+//             // wraps all structures into a helper struct
+//             let mut wrapper = Wrapper::new(config.global(), &tag, &mut vars, &mut hit_counter);
+
+//             // now we can search for the pattern and save the child handle if a script was called
+//             match logfile.lookup(&mut wrapper) {
+//                 // script might be started, giving back a `Child` structure with process features like pid etc
+//                 Ok(mut children) => {
+//                     // merge list of children
+//                     if children.len() != 0 {
+//                         children_list.append(&mut children);
+//                     }
+//                 }
+
+//                 // otherwise, an error when opening (most likely) the file and then report an error on counters
+//                 Err(err) => {
+//                     error!(
+//                         "error: {} when searching logfile: {} for tag: {}",
+//                         err,
+//                         search.logfile.display(),
+//                         &tag.name()
+//                     );
+//                 }
+//             }
+//         }
+
+// }
 
 /// Manage end of all started processes from clf.
 fn wait_children(children_list: Vec<ChildData>) {

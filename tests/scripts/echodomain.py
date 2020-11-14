@@ -30,6 +30,9 @@ while True:
     print('waiting for a connection')
     connection, client_address = sock.accept()
 
+    # number of JSON data received so far
+    nb_json = 0
+
     try:
         print('connection from', client_address)
 
@@ -40,7 +43,7 @@ while True:
             if not data:
                 break
             size = int.from_bytes(data, byteorder='big')
-            print("size==", size)
+            #print("size==", size)
 
             # receive JSON payload
             data = connection.recv(size)
@@ -48,10 +51,11 @@ while True:
                 break
 
             # decode and display JSON
+            nb_json += 1
             decode = data.decode("ascii", errors="ignore")
             parsed = json.loads(decode)
             pretty = json.dumps(parsed, indent=4, sort_keys=False)
-            print('received "%s"' % pretty)
+            print('JSON# %s, received "%s"' % (nb_json, pretty))
             
     finally:
         # Clean up the connection

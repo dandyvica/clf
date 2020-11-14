@@ -1,0 +1,60 @@
+{
+  "snapshot": {
+    "/var/log/syslog": {
+      "path": "/var/log/syslog",
+      "directory": "/var/log",
+      "extension": null,
+      "compressed": false,
+      "inode": 981600,
+      "dev": 28,
+      "run_data": {
+        "nokernel": {
+          "tag_name": "nokernel",
+          "last_offset": 80222,
+          "last_line": 693,
+          "last_run": 1605364378,
+          "critical_count": 0,
+          "warning_count": 0,
+          "exec_count": 641
+        },
+        "kernel": {
+          "tag_name": "kernel",
+          "last_offset": 80222,
+          "last_line": 693,
+          "last_run": 1605364378,
+          "critical_count": 0,
+          "warning_count": 0,
+          "exec_count": 52
+        }
+      }
+    },
+    "/var/log/kern.log": {
+      "path": "/var/log/kern.log",
+      "directory": "/var/log",
+      "extension": "log",
+      "compressed": false,
+      "inode": 799671,
+      "dev": 28,
+      "run_data": {
+        "nokernel": {
+          "tag_name": "nokernel",
+          "last_offset": 795705,
+          "last_line": 7875,
+          "last_run": 1605364378,
+          "critical_count": 0,
+          "warning_count": 0,
+          "exec_count": 7833
+        },
+        "kernel": {
+          "tag_name": "kernel",
+          "last_offset": 795705,
+          "last_line": 7875,
+          "last_run": 1605364378,
+          "critical_count": 0,
+          "warning_count": 0,
+          "exec_count": 10
+        }
+      }
+    }
+  }
+}

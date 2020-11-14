@@ -147,7 +147,7 @@ impl LogFile {
 
     /// Returns an Option on a reference of a `RunData`, mapping the first
     /// tag name passed in argument.
-    pub fn or_insert(&mut self, name: &str) -> &mut RunData {
+    pub fn rundata(&mut self, name: &str) -> &mut RunData {
         self.run_data.entry(name.to_string()).or_insert(RunData {
             tag_name: name.to_string(),
             ..Default::default()
@@ -329,6 +329,9 @@ impl Lookup for LogFile {
         // to keep handles: stream etc
         let mut handle = CallbackHandle::default();
 
+        // sometimes, early return due to callback errors or I/O errors
+        let mut early_ret: Option<AppError> = None;
+
         //------------------------------------------------------------------------------------
         // 2. reset `RunData` fields depending on local options
         //------------------------------------------------------------------------------------
@@ -342,7 +345,7 @@ impl Lookup for LogFile {
         wrapper.vars.insert("TAG", wrapper.tag.name());
 
         // get run_data corresponding to tag name, or insert that new one if not yet in the snapshot file
-        let mut run_data = self.or_insert(&wrapper.tag.name());
+        let mut run_data = self.rundata(&wrapper.tag.name());
         trace!(
             "tagname: {:?}, run_data:{:?}\n\n",
             &wrapper.tag.name(),
@@ -478,25 +481,19 @@ impl Lookup for LogFile {
                                             children.push(child.unwrap());
                                         }
 
-                                        // increment number of script executions
+                                        // increment number of script executions or number of JSON data sent
                                         run_data.exec_count += 1;
                                     }
                                     Err(e) => {
-                                        error!("error {} when calling callback", e);
+                                        error!(
+                                            "error <{}> when calling callback <{:#?}>",
+                                            e,
+                                            wrapper.tag.callback()
+                                        );
+                                        early_ret = Some(e);
                                         break;
                                     }
                                 };
-                                // if let Some(child) = wrapper.tag.callback_call(
-                                //     Some(&wrapper.global.path()),
-                                //     wrapper.vars,
-                                //     &mut handle,
-                                // )? {
-                                //     // save child structure
-                                //     children.push(child);
-
-                                //     // increment number of script executions
-                                //     run_data.exec_count += 1;
-                                // }
                             }
                         };
                     }
@@ -505,9 +502,10 @@ impl Lookup for LogFile {
                     buffer.clear();
                 }
                 // a rare IO error could occur here
-                Err(err) => {
-                    debug!("read_line() error kind: {:?}, line: {}", err.kind(), line);
-                    return Err(AppError::Io(err));
+                Err(e) => {
+                    error!("read_line() error kind: {:?}, line: {}", e.kind(), line);
+                    early_ret = Some(AppError::Io(e));
+                    break;
                 }
             };
         }
@@ -528,6 +526,7 @@ impl Lookup for LogFile {
         let time = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH)?;
         run_data.last_run = time.as_secs();
 
+        info!("number of callback execution: {}", run_data.exec_count);
         trace!("logfile_counter: {:?}", &wrapper.logfile_counter);
         trace!(
             "========================> end processing logfile:{} for tag:{}",
@@ -535,7 +534,12 @@ impl Lookup for LogFile {
             wrapper.tag.name()
         );
 
-        Ok(children)
+        // return error if we got one or the list of children from calling the script
+        if early_ret.is_some() {
+            Err(early_ret.unwrap())
+        } else {
+            Ok(children)
+        }
     }
 }
 
@@ -546,32 +550,8 @@ mod tests {
     use std::str::FromStr;
 
     use super::*;
-    //use std::io::{Error, ErrorKind};
 
     use crate::testing::setup::*;
-
-    // // utility fn to receive JSON from a stream
-    // fn get_json<T: Read>(socket: &mut T) -> Result<JSONStream, std::io::Error> {
-    //     // try to read size first
-    //     let mut size_buffer = [0; std::mem::size_of::<u16>()];
-    //     let bytes_read = socket.read(&mut size_buffer)?;
-    //     dbg!(bytes_read);
-    //     if bytes_read == 0 {
-    //         return Err(Error::new(ErrorKind::Interrupted, "socket closed"));
-    //     }
-
-    //     let json_size = u16::from_be_bytes(size_buffer);
-
-    //     // read JSON raw data
-    //     let mut json_buffer = vec![0; json_size as usize];
-    //     socket.read_exact(&mut json_buffer).unwrap();
-
-    //     // get JSON
-    //     let s = std::str::from_utf8(&json_buffer).unwrap();
-
-    //     let json: JSONStream = serde_json::from_str(&s).unwrap();
-    //     Ok(json)
-    // }
 
     // useful set of data for our unit tests
     const JSON: &'static str = r#"
@@ -728,14 +708,14 @@ mod tests {
     }
 
     #[test]
-    fn or_insert() {
+    fn rundata() {
         let mut json: HashMap<PathBuf, LogFile> = load_json(&JSON);
 
         {
             let rundata1 = json
                 .get_mut(&PathBuf::from("/usr/bin/zip"))
                 .unwrap()
-                .or_insert("another_tag");
+                .rundata("another_tag");
 
             assert_eq!(rundata1.tag_name, "another_tag");
         }
@@ -747,15 +727,6 @@ mod tests {
 
         assert!(logfile1.contains_key("tag1"));
         assert!(!logfile1.contains_key("tag3"));
-
-        // // tag4 is not part of LogFile
-        // let mut run_data = json[1].or_insert("tag4");
-
-        // // but tag3 is and even is duplicated
-        // run_data = json[1].or_insert("tag3");
-        // run_data.last_line = 999;
-
-        // assert_eq!(json[1].run_data.get("tag3").unwrap().last_line, 999);
     }
 
     fn get_compressed_reader() -> BufReader<GzDecoder<File>> {
