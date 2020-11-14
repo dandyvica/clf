@@ -131,8 +131,10 @@ mod tests {
             "/usr/bin/zip": {
                 "path": "/usr/bin/zip",
                 "compressed": false, 
-                "inode": 1,
-                "dev": 1,
+                "signature": {
+                    "inode": 799671,
+                    "dev": 28
+                },
                 "run_data": {
                     "tag1": {
                         "tag_name": "tag1",
@@ -157,8 +159,10 @@ mod tests {
             "/etc/hosts.allow": {
                 "path": "/etc/hosts.allow",
                 "compressed": false, 
-                "inode": 1,
-                "dev": 1,
+                "signature": {
+                    "inode": 799671,
+                    "dev": 28
+                },
                 "run_data": {
                     "tag3": {
                         "tag_name": "tag3",
