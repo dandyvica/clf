@@ -15,13 +15,6 @@ pub fn init_config(options: &CliOptions) -> Config<PathBuf> {
 
     // check for loading errors
     if let Err(ref e) = _config {
-        // break down errors
-        // match error.get_ioerror() {
-        //     Some(_) => exit(AppExitCode::CONFIG_IO_ERROR as i32),
-        //     None => exit(AppExitCode::CONFIG_ERROR as i32),
-        // };
-        //exit(AppExitCode::CONFIG_ERROR as i32);
-
         Nagios::exit_critical(&format!(
             "error loading config file: {:?}, error: {}",
             &options.config_file, e

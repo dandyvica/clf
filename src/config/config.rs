@@ -30,7 +30,6 @@ use crate::config::{
 
 use crate::misc::{
     error::{AppCustomErrorKind, AppError},
-    nagios::NagiosError,
     util::{Cons, Util},
 };
 
@@ -346,9 +345,6 @@ pub struct Search<T: Clone> {
     #[serde(flatten)]
     pub logfile: T,
 
-    #[serde(default = "NagiosError::default")]
-    pub io_error: NagiosError,
-
     /// a unique identifier for this search
     pub tags: Vec<Tag>,
 }
@@ -366,9 +362,7 @@ impl From<Search<LogSource>> for Search<PathBuf> {
 
         Search {
             logfile: logfile.clone(),
-            io_error: search_logsource.io_error.clone(),
             tags: search_logsource.tags.clone(),
-            //process: search_logsource.process.clone(),
         }
     }
 }
@@ -489,9 +483,7 @@ impl From<Config<LogSource>> for Config<PathBuf> {
                         // create a new Search structure based on the file we just found
                         let search_pathbuf = Search::<PathBuf> {
                             logfile: file.clone(),
-                            io_error: search.io_error.clone(),
                             tags: search.tags.clone(),
-                            //process: search.process.clone(),
                         };
 
                         // now use this structure and add it to config_pathbuf
