@@ -11,7 +11,7 @@ use std::path::PathBuf;
 use std::process::{Child, Command};
 use std::time::Instant;
 
-use log::{debug, info};
+use log::debug;
 use serde::Deserialize;
 use serde_json::json;
 
@@ -115,7 +115,7 @@ impl Callback {
 
                 // start command
                 let child = cmd.spawn()?;
-                info!("starting script {:?}, pid={}", path, child.id());
+                debug!("starting script {:?}, pid={}", path, child.id());
 
                 Ok(Some(ChildData {
                     child: Some(RefCell::new(child)),

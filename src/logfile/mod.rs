@@ -2,4 +2,5 @@
 //! a logfile for patterns.
 #[macro_use]
 pub mod logfile;
+pub mod signature;
 pub mod snapshot;

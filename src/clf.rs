@@ -246,7 +246,7 @@ fn wait_children(children_list: Vec<ChildData>) {
         // use try_wait() to check if command has exited
         match child.try_wait() {
             // child has already exited. So check output status code if any
-            Ok(Some(status)) => info!(
+            Ok(Some(status)) => debug!(
                 "command with path: {}, pid: {} exited with: {}",
                 path.display(),
                 pid,

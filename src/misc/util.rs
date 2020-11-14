@@ -124,13 +124,6 @@ impl Util {
             .map(PathBuf::from)
             .collect::<Vec<PathBuf>>())
     }
-
-    // Builds a default snapshot file name.
-    // pub fn snapshot_default_name() -> PathBuf {
-    //     let mut snapfile = std::env::temp_dir();
-    //     snapfile.push("clf_snapshot.json");
-    //     snapfile
-    // }
 }
 
 #[cfg(test)]

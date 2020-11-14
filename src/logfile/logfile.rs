@@ -2,13 +2,10 @@
 //! coming from the processing of the log file, every time it's read to look for patterns.
 use log::{debug, error, info, trace};
 use std::collections::HashMap;
-use std::fs::{File, Metadata};
+use std::fs::File;
 use std::io::{BufRead, BufReader, Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
-
-#[cfg(target_os = "linux")]
-use std::os::unix::fs::MetadataExt;
 
 use flate2::read::GzDecoder;
 use serde::{Deserialize, Serialize};
@@ -25,6 +22,8 @@ use crate::config::{
     pattern::PatternType,
     variables::Variables,
 };
+
+use crate::logfile::signature::{GetSignature, Signature};
 
 use crate::var;
 
@@ -82,11 +81,8 @@ pub struct LogFile {
     /// `true` if logfile is compressed.
     compressed: bool,
 
-    /// Linux inode or Windows equivalent.
-    inode: u64,
-
-    /// Linux device ID or equivalent for Windows.
-    dev: u64,
+    /// Uniquely identifies a logfile
+    signature: Signature,
 
     /// Run time data that are stored each time a logfile is searched for patterns.
     run_data: HashMap<String, RunData>,
@@ -113,19 +109,15 @@ impl LogFile {
         // components normalized and symbolic links resolved.
         let canon = path.canonicalize()?;
 
-        // get metadata if possible
-        let metadata = path.metadata()?;
-
-        // get inode & dev ID
-        let ids = LogFile::ids(&metadata);
+        // // get inode & dev ID
+        let signature = path.signature()?;
 
         Ok(LogFile {
             path: canon,
             directory,
             extension,
             compressed,
-            inode: ids.0,
-            dev: ids.1,
+            signature,
             run_data: HashMap::new(),
         })
     }
@@ -161,15 +153,15 @@ impl LogFile {
     }
 
     /// Sets UNIX inode and dev identifiers.
-    #[cfg(target_family = "unix")]
-    pub fn ids(metadata: &Metadata) -> (u64, u64) {
-        (metadata.ino(), metadata.dev())
-    }
+    // #[cfg(target_family = "unix")]
+    // pub fn ids(metadata: &Metadata) -> (u64, u64) {
+    //     (metadata.ino(), metadata.dev())
+    // }
 
-    #[cfg(target_family = "windows")]
-    pub fn ids(metadata: &Metadata) -> (u64, u64) {
-        (0, 0)
-    }
+    // #[cfg(target_family = "windows")]
+    // pub fn ids(metadata: &Metadata) -> (u64, u64) {
+    //     (0, 0)
+    // }
 
     /// True is file is compressed.
     #[inline(always)]
@@ -179,11 +171,11 @@ impl LogFile {
 }
 
 /// Two log files are considered equal if they have the same name, inode & dev.
-impl PartialEq for LogFile {
-    fn eq(&self, other: &Self) -> bool {
-        self.path == other.path && self.dev == other.dev && self.inode == other.inode
-    }
-}
+// impl PartialEq for LogFile {
+//     fn eq(&self, other: &Self) -> bool {
+//         self.path == other.path && self.dev == other.dev && self.inode == other.inode
+//     }
+// }
 
 /// Trait which provides a seek function, and is implemented for all
 /// `BufReader<T>` types used in `Lookup` trait.
@@ -310,8 +302,8 @@ impl Lookup for LogFile {
         //------------------------------------------------------------------------------------
         // 1. initialize local variables
         //------------------------------------------------------------------------------------
-        trace!(
-            "#######################> start processing logfile:{} for tag:{}",
+        info!(
+            "start processing logfile:{} for tag:{}",
             self.path.display(),
             wrapper.tag.name()
         );
