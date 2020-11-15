@@ -23,7 +23,7 @@ This reimplementation in Rust aims at solving original *check_logfiles* drawback
 * standard configuration file format: opposite to the original *check_logfiles* with uses non-standard files (regular *Perl* files containing *Perl* variables), this implementation uses YAML format for its configuration files. YAML is best suited comparing to JSON or XML because there's no need to escape chars for regexes expressions.
 * versatility: coupled with *Jinja2*-like well-known templates, you can imagine lots of possibilities to manage configuration files in a professionnal environment.
 * power: it will take into account not only regular log files, but also list of files command from a shell command or a script.
-* no need for a decompression binary: logfiles are *gunzipped* out of the box.
+* no need for a decompression binary: logfiles are *gunzipped* out of the box. Supported formats: gzip (extension: .gz), bzip2 (extension: .bz2), xy (extension: .xy)
 * search for current or archived log files.
 
 *Caveat*: Even though the current ```regex``` Rust crate is providing fast regexes checks, it doesn't currently support _lookahead or lookbehind_ patterns.

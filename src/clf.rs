@@ -120,6 +120,11 @@ fn main() {
         }
         let snapshot_logfile = logfile.unwrap();
 
+        // compare snapshot_logfile with config_logfile
+        // if not the same signature, snapshot_logfile has been rotated =>
+        //       get rotated file name
+        //
+
         debug!("calling or_insert() at line {}", line!());
 
         // for each tag, search inside logfile for those we need to process (having process tag == true)
@@ -183,21 +188,16 @@ fn main() {
 }
 
 /// Lookup data from tags
-// fn lookup(tags: &[Tag], global: &GlobalOptions, vars: &Variables) {
-//         // for each tag, search inside logfile
-//         for tag in &search.tags {
+// fn lookup(tags: &[Tag], logile: &LogFile, global: &GlobalOptions, vars: &Variables, hit_counter: &HitCounter) {
+//         // for each tag, search inside logfile for those we need to process (having process tag == true)
+//         for tag in search.tags.iter().filter(|t| t.process()) {
 //             debug!("searching for tag: {}", &tag.name());
-
-//             // if we've been explicitely asked to not process this logfile, just loop
-//             if !&tag.process() {
-//                 continue;
-//             }
 
 //             // wraps all structures into a helper struct
 //             let mut wrapper = Wrapper::new(config.global(), &tag, &mut vars, &mut hit_counter);
 
 //             // now we can search for the pattern and save the child handle if a script was called
-//             match logfile.lookup(&mut wrapper) {
+//             match snapshot_logfile.lookup(&mut wrapper) {
 //                 // script might be started, giving back a `Child` structure with process features like pid etc
 //                 Ok(mut children) => {
 //                     // merge list of children
@@ -207,17 +207,19 @@ fn main() {
 //                 }
 
 //                 // otherwise, an error when opening (most likely) the file and then report an error on counters
-//                 Err(err) => {
+//                 Err(e) => {
 //                     error!(
 //                         "error: {} when searching logfile: {} for tag: {}",
-//                         err,
+//                         e,
 //                         search.logfile.display(),
 //                         &tag.name()
 //                     );
+
+//                     // set error for this logfile
+//                     hit_counter.set_error(e);
 //                 }
 //             }
 //         }
-
 // }
 
 /// Manage end of all started processes from clf.

@@ -60,3 +60,72 @@ searches:
 
     conf.to_string().replace("$opts", opts)
 }
+
+pub const SNAPSHOT_SAMPLE: &'static str = r#"
+   {
+       "snapshot": {
+            "/usr/bin/zip": {
+                "path": "/usr/bin/zip",
+                "directory": "/usr/bin",
+                "compression": "uncompressed", 
+                "signature": {
+                    "inode": 799671,
+                    "dev": 28
+                },
+                "run_data": {
+                    "tag1": {
+                        "tag_name": "tag1",
+                        "last_offset": 1000,
+                        "last_line": 10,
+                        "last_run": 1000000,
+                        "critical_count": 10,
+                        "warning_count": 10,
+                        "exec_count": 10
+                    },
+                    "tag2": {
+                        "tag_name": "tag2",
+                        "last_offset": 1000,
+                        "last_line": 10,
+                        "last_run": 1000000,
+                        "critical_count": 10,
+                        "warning_count": 10,
+                        "exec_count": 10
+                    }
+                }
+            },
+            "/etc/hosts.allow": {
+                "path": "/etc/hosts.allow",
+                "directory": "/etc",      
+                "extension": "allow",                      
+                "compression": "uncompressed", 
+                "signature": {
+                    "inode": 799671,
+                    "dev": 28
+                },
+                "run_data": {
+                    "tag3": {
+                        "tag_name": "tag3",
+                        "last_offset": 1000,
+                        "last_line": 10,
+                        "last_run": 1000000,
+                        "critical_count": 10,
+                        "warning_count": 10,
+                        "exec_count": 10
+
+                    },
+                    "tag4": {
+                        "tag_name": "tag4",
+                        "last_offset": 1000,
+                        "last_line": 10,
+                        "last_run": 1000000,
+                        "critical_count": 10,
+                        "warning_count": 10,
+                        "exec_count": 10
+                    }
+                }
+            }
+        }
+    }
+"#;
+
+

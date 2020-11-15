@@ -122,75 +122,11 @@ mod tests {
 
     use super::*;
 
-    //use serde::{Deserialize, Serialize};
-
-    // useful set of data for our unit tests
-    const JSON: &'static str = r#"
-    {
-        "snapshot": {
-            "/usr/bin/zip": {
-                "path": "/usr/bin/zip",
-                "compressed": false, 
-                "signature": {
-                    "inode": 799671,
-                    "dev": 28
-                },
-                "run_data": {
-                    "tag1": {
-                        "tag_name": "tag1",
-                        "last_offset": 1000,
-                        "last_line": 10,
-                        "last_run": 1000000,
-                        "critical_count": 10,
-                        "warning_count": 10,
-                        "exec_count": 10
-                    },                       
-                    "tag2": {
-                        "tag_name": "tag2",
-                        "last_offset": 1000,
-                        "last_line": 10,
-                        "last_run": 1000000,
-                        "critical_count": 10,
-                        "warning_count": 10,
-                        "exec_count": 10
-                    }
-                }
-            },
-            "/etc/hosts.allow": {
-                "path": "/etc/hosts.allow",
-                "compressed": false, 
-                "signature": {
-                    "inode": 799671,
-                    "dev": 28
-                },
-                "run_data": {
-                    "tag3": {
-                        "tag_name": "tag3",
-                        "last_offset": 1000,
-                        "last_line": 10,
-                        "last_run": 1000000,
-                        "critical_count": 10,
-                        "warning_count": 10,
-                        "exec_count": 10
-                    },
-                    "tag4": {
-                        "tag_name": "tag3",
-                        "last_offset": 1500,
-                        "last_line": 10,
-                        "last_run": 1000000,
-                        "critical_count": 10,
-                        "warning_count": 10,
-                        "exec_count": 10
-                    }
-                }
-            }
-        }
-    }
-    "#;
+    use crate::testing::{data::*, setup::*};
 
     #[test]
     fn load() {
-        let data: Snapshot = serde_json::from_str(JSON).unwrap();
+        let data: Snapshot = serde_json::from_str(SNAPSHOT_SAMPLE).unwrap();
 
         let keys: Vec<_> = data.snapshot.keys().collect();
 
@@ -201,7 +137,7 @@ mod tests {
     #[test]
     #[cfg(target_family = "unix")]
     fn logfile_mut() {
-        let mut data: Snapshot = serde_json::from_str(JSON).unwrap();
+        let mut data: Snapshot = serde_json::from_str(SNAPSHOT_SAMPLE).unwrap();
         assert!(data.snapshot.contains_key(&PathBuf::from("/usr/bin/zip")));
         assert!(data
             .snapshot
