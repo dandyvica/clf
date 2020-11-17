@@ -1,10 +1,9 @@
 //! An executable to read compressed files using compression methods defined in the crate
-use std::io::BufRead;
 use std::path::PathBuf;
 
 use clap::{App, Arg};
 
-use clf::logfile::compression::CompressionScheme;
+use clf::logfile::logreader::LogReader;
 
 fn main() {
     let matches = App::new("Uncompress gzip, bzip2, xz files")
@@ -24,16 +23,23 @@ fn main() {
     // get file name
     let path = PathBuf::from(matches.value_of("file").unwrap());
 
-    // get file extension
-    let extension = path.extension().map(|x| x.to_string_lossy().to_string());
+    // our read buffer
+    let mut buffer = Vec::with_capacity(1024);
 
     // create extension scheme and reader
-    let scheme = CompressionScheme::from(extension.as_deref());
-    let mut reader = scheme.reader(&path).unwrap();
+    let mut reader = LogReader::from_path(&path).unwrap();
 
-    // just print out every line
-    for line in reader.lines() {
-        println!("{}", line.unwrap());
+    loop {
+        let ret = reader.read_until(b'\n', &mut buffer);
+        if let Ok(bytes_read) = ret {
+            if bytes_read == 0 {
+                break;
+            }
+        }
+
+        let line = String::from_utf8_lossy(&buffer);
+        print!("{}", line);
+
+        buffer.clear();
     }
-
 }

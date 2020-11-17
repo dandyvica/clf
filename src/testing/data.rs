@@ -127,5 +127,3 @@ pub const SNAPSHOT_SAMPLE: &'static str = r#"
         }
     }
 "#;
-
-

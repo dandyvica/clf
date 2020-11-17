@@ -1,5 +1,8 @@
 use serde::Deserialize;
-use std::io::{Error, ErrorKind};
+use std::io::{BufReader, Cursor, Error, ErrorKind, Read};
+
+use flate2::bufread::GzEncoder;
+use flate2::Compression;
 
 use super::data::JSONStream;
 
@@ -31,4 +34,16 @@ pub fn get_json_from_stream<T: std::io::Read>(
 
     let json: JSONStream = serde_json::from_str(&s).unwrap();
     Ok(json)
+}
+
+// compress data with a compressor
+pub fn gzip_data(data: &str) -> Vec<u8> {
+    let cursor = Cursor::new(data);
+
+    let bufreader = BufReader::new(cursor);
+    let mut gz = GzEncoder::new(bufreader, Compression::fast());
+    let mut buffer = Vec::new();
+    gz.read_to_end(&mut buffer).expect("unable to gzip");
+
+    buffer
 }

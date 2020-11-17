@@ -5,4 +5,5 @@
 pub mod data;
 
 #[cfg(test)]
+#[allow(dead_code)]
 pub mod setup;

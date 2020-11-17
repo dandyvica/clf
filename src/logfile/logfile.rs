@@ -2,19 +2,12 @@
 //! coming from the processing of the log file, every time it's read to look for patterns.
 use log::{debug, error, info, trace};
 use std::collections::HashMap;
-use std::fs::File;
-use std::io::{BufRead, BufReader, Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
-use flate2::read::GzDecoder;
 use serde::{Deserialize, Serialize};
 
-use crate::misc::{
-    error::{AppCustomErrorKind, AppError},
-    nagios::HitCounter,
-    util::Cons,
-};
+use crate::misc::{error::AppError, nagios::HitCounter, util::Cons};
 
 use crate::config::{
     callback::{CallbackHandle, ChildData},
@@ -25,10 +18,38 @@ use crate::config::{
 
 use crate::logfile::{
     compression::CompressionScheme,
-    signature::{GetSignature, Signature},
+    logreader::LogReader,
+    //seeker::Seeker,
+    signature::{FileIdentification, Signature},
 };
 
 use crate::var;
+
+/// Utility wrapper to pass all necessary references to the lookup methods.
+#[derive(Debug)]
+pub struct Wrapper<'a> {
+    pub global: &'a GlobalOptions,
+    pub tag: &'a Tag,
+    pub vars: &'a mut Variables,
+    pub logfile_counter: &'a mut HitCounter,
+}
+
+impl<'a> Wrapper<'a> {
+    /// Simple helper for creating a new wrapper
+    pub fn new(
+        global: &'a GlobalOptions,
+        tag: &'a Tag,
+        vars: &'a mut Variables,
+        logfile_counter: &'a mut HitCounter,
+    ) -> Self {
+        Wrapper {
+            global,
+            tag,
+            vars,
+            logfile_counter,
+        }
+    }
+}
 
 /// A wrapper to store log file processing data.
 #[derive(Debug, Serialize, Deserialize, Default)]
@@ -122,6 +143,13 @@ impl LogFile {
         })
     }
 
+    /// Recalculate the signature 
+    pub fn has_changed(&self) -> Result<bool, AppError> {
+        // get most recent signature
+        let signature = self.path.signature()?;
+        Ok(self.signature == signature)
+    }
+
     /// Returns the list of tags of this `LogFile`.
     #[cfg(test)]
     pub fn tags(&self) -> Vec<&str> {
@@ -151,108 +179,14 @@ impl LogFile {
     pub fn rundata_mut(&mut self) -> &mut HashMap<String, RunData> {
         &mut self.run_data
     }
-
-    /// True is file is compressed.
-    #[inline(always)]
-    fn is_compressed(&self) -> bool {
-        self.compression.is_compressed()
-    }
 }
-
-/// Trait which provides a seek function, and is implemented for all
-/// `BufReader<T>` types used in `Lookup` trait.
-pub trait Seeker {
-    /// Simulates the `seek`method for all used `BufReader<R>`.
-    fn set_offset(&mut self, offset: u64) -> Result<u64, AppError>;
-}
-
-impl Seeker for BufReader<File> {
-    #[inline(always)]
-    fn set_offset(&mut self, offset: u64) -> Result<u64, AppError> {
-        self.seek(SeekFrom::Start(offset)).map_err(AppError::Io)
-    }
-}
-
-/// Implementing for T: Read helps testing wuth `Cursor` type.
-impl<T> Seeker for BufReader<GzDecoder<T>>
-where
-    T: Read,
-{
-    fn set_offset(&mut self, offset: u64) -> Result<u64, AppError> {
-        // if 0, nothing to do
-        if offset == 0 {
-            return Ok(0);
-        }
-
-        let pos = match self.by_ref().bytes().nth((offset - 1) as usize) {
-            None => {
-                return Err(AppError::new(
-                    AppCustomErrorKind::SeekPosBeyondEof,
-                    &format!("tried to set offset beyond EOF, at offset: {}", offset),
-                ))
-            }
-            Some(x) => x,
-        };
-        Ok(pos.unwrap() as u64)
-    }
-}
-
-/// Utility wrapper to pass all necessary references to the lookup methods.
-#[derive(Debug)]
-pub struct Wrapper<'a> {
-    pub global: &'a GlobalOptions,
-    pub tag: &'a Tag,
-    pub vars: &'a mut Variables,
-    pub logfile_counter: &'a mut HitCounter,
-}
-
-impl<'a> Wrapper<'a> {
-    /// Simple helper for creating a new wrapper
-    pub fn new(
-        global: &'a GlobalOptions,
-        tag: &'a Tag,
-        vars: &'a mut Variables,
-        logfile_counter: &'a mut HitCounter,
-    ) -> Self {
-        Wrapper {
-            global,
-            tag,
-            vars,
-            logfile_counter,
-        }
-    }
-}
-
-/// Return type for all `Lookup` methods.
-//pub type LookupRet = Result<Vec<ChildData>, AppError>;
 
 /// Trait, implemented by `LogFile` to search patterns.
 pub trait Lookup {
     fn lookup(&mut self, wrapper: &mut Wrapper) -> Result<Vec<ChildData>, AppError>;
-    fn lookup_from_reader<R: BufRead + Seeker>(
-        &mut self,
-        reader: R,
-        wrapper: &mut Wrapper,
-    ) -> Result<Vec<ChildData>, AppError>;
 }
 
 impl Lookup for LogFile {
-    ///Just a wrapper function for a file.
-    fn lookup(&mut self, wrapper: &mut Wrapper) -> Result<Vec<ChildData>, AppError> {
-        // open target file
-        let file = File::open(&self.path)?;
-
-        // if file is compressed, we need to call a specific reader
-        if self.is_compressed() {
-            let decoder = GzDecoder::new(file);
-            let reader = BufReader::new(decoder);
-            self.lookup_from_reader(reader, wrapper)
-        } else {
-            let reader = BufReader::new(file);
-            self.lookup_from_reader(reader, wrapper)
-        }
-    }
-
     /// The main function of the whole process. Reads a logfile and tests for each line if it matches the regexes.
     ///
     /// Detailed design:
@@ -276,11 +210,7 @@ impl Lookup for LogFile {
     ///         - add rumtime variables, only related to the current line, pattern etc
     ///         - if a script is defined to be called, call the script and save the `Child` return structure
 
-    fn lookup_from_reader<R: BufRead + Seeker>(
-        &mut self,
-        mut reader: R,
-        wrapper: &mut Wrapper,
-    ) -> Result<Vec<ChildData>, AppError> {
+    fn lookup(&mut self, wrapper: &mut Wrapper) -> Result<Vec<ChildData>, AppError> {
         //------------------------------------------------------------------------------------
         // 1. initialize local variables
         //------------------------------------------------------------------------------------
@@ -289,6 +219,9 @@ impl Lookup for LogFile {
             self.path.display(),
             wrapper.tag.name()
         );
+
+        // create new reader
+        let mut reader = LogReader::from_path(&self.path)?;
 
         // uses the same buffer
         let mut buffer = Vec::with_capacity(Cons::DEFAULT_STRING_CAPACITY);
@@ -530,112 +463,35 @@ mod tests {
     #[test]
     #[cfg(target_os = "linux")]
     fn new() {
-        let mut lf_ok = LogFile::new("/usr/bin/zip").unwrap();
-        assert_eq!(lf_ok.path.to_str(), Some("/usr/bin/zip"));
-        assert!(lf_ok.extension.is_none());
+        let mut logfile = LogFile::new("/var/log/kern.log").unwrap();
+        assert_eq!(logfile.path.to_str(), Some("/var/log/kern.log"));
+        assert_eq!(logfile.directory.unwrap(), PathBuf::from("/var/log"));
+        assert_eq!(logfile.extension.unwrap(), "log");
+        assert_eq!(logfile.compression, CompressionScheme::Uncompressed);
+        assert_eq!(logfile.run_data.len(), 0);
 
-        lf_ok = LogFile::new("/etc/hosts.allow").unwrap();
-        assert_eq!(lf_ok.path.to_str(), Some("/etc/hosts.allow"));
-        assert_eq!(lf_ok.extension.unwrap(), "allow");
+        logfile = LogFile::new("/etc/hosts").unwrap();
+        assert_eq!(logfile.path.to_str(), Some("/etc/hosts"));
+        assert!(logfile.extension.is_none());
+        assert_eq!(logfile.compression, CompressionScheme::Uncompressed);
     }
 
     #[test]
     #[cfg(target_os = "windows")]
     fn new() {
-        let mut lf_ok = LogFile::new(r"C:\Windows\System32\cmd.exe").unwrap();
-        //assert_eq!(lf_ok.path.as_os_str(), std::ffi::OsStr::new(r"C:\Windows\System32\cmd.exe"));
-        assert_eq!(lf_ok.extension.unwrap(), "exe");
+        let mut logfile = LogFile::new(r"C:\Windows\System32\cmd.exe").unwrap();
+        //assert_eq!(logfile.path.as_os_str(), std::ffi::OsStr::new(r"C:\Windows\System32\cmd.exe"));
+        assert_eq!(logfile.extension.unwrap(), "exe");
+        assert_eq!(
+            logfile.directory.unwrap(),
+            PathBuf::from(r"C:\Windows\System32")
+        );
+        assert_eq!(logfile.compression, CompressionScheme::Uncompressed);
+        assert_eq!(logfile.run_data.len(), 0);
 
-        lf_ok = LogFile::new(r"c:\windows\system32\drivers\etc\hosts").unwrap();
-        //assert_eq!(lf_ok.path.as_os_str(), std::ffi::OsStr::new(r"C:\Windows\System32\cmd.exe"));
-        assert!(lf_ok.extension.is_none());
+        logfile = LogFile::new(r"c:\windows\system32\drivers\etc\hosts").unwrap();
+        assert!(logfile.extension.is_none());
     }
-    // #[test]
-    // fn deserialize() {
-    //     let mut json: HashMap<PathBuf, LogFile> = load_json(&SNAPSHOT_SAMPLE);
-
-    //     assert!(json.contains_key(&PathBuf::from("/usr/bin/zip")));
-    //     assert!(json.contains_key(&PathBuf::from("/etc/hosts.allow")));
-
-    //     {
-    //         let logfile1 = json.get_mut(&PathBuf::from("/usr/bin/zip")).unwrap();
-    //         assert_eq!(logfile1.run_data.len(), 2);
-    //         assert!(logfile1.contains_key("tag1"));
-    //         assert!(logfile1.contains_key("tag2"));
-    //     }
-
-    //     {
-    //         let logfile2 = json.get_mut(&PathBuf::from("/etc/hosts.allow")).unwrap();
-    //         assert_eq!(logfile2.run_data.len(), 2);
-    //         assert!(logfile2.contains_key("tag3"));
-    //         assert!(logfile2.contains_key("tag4"));
-    //     }
-    // }
-
-    // #[test]
-    // fn rundata() {
-    //     let mut json: HashMap<PathBuf, LogFile> = load_json(&SNAPSHOT_SAMPLE);
-
-    //     {
-    //         let rundata1 = json
-    //             .get_mut(&PathBuf::from("/usr/bin/zip"))
-    //             .unwrap()
-    //             .rundata("another_tag");
-
-    //         assert_eq!(rundata1.tag_name, "another_tag");
-    //     }
-
-    //     let logfile1 = json.get_mut(&PathBuf::from("/usr/bin/zip")).unwrap();
-    //     let mut tags = logfile1.tags();
-    //     tags.sort();
-    //     assert_eq!(tags, vec!["another_tag", "tag1", "tag2"]);
-
-    //     assert!(logfile1.contains_key("tag1"));
-    //     assert!(!logfile1.contains_key("tag3"));
-    // }
-
-    fn get_compressed_reader() -> BufReader<GzDecoder<File>> {
-        let file = File::open("tests/logfiles/clftest.txt.gz")
-            .expect("unable to open compressed test file");
-        let decoder = GzDecoder::new(file);
-        let reader = BufReader::new(decoder);
-
-        reader
-    }
-
-    #[test]
-    fn set_offset() {
-        let mut buffer = [0; 1];
-
-        let mut reader = get_compressed_reader();
-        let mut offset = reader.set_offset(1);
-        assert!(offset.is_ok());
-        reader.read_exact(&mut buffer).unwrap();
-        assert_eq!(buffer[0], 'B' as u8);
-
-        reader = get_compressed_reader();
-        offset = reader.set_offset(0);
-        assert!(offset.is_ok());
-        reader.read_exact(&mut buffer).unwrap();
-        assert_eq!(buffer[0], 'A' as u8);
-
-        reader = get_compressed_reader();
-        offset = reader.set_offset(26);
-        assert!(offset.is_ok());
-        reader.read_exact(&mut buffer).unwrap();
-        assert_eq!(buffer[0], '\n' as u8);
-
-        reader = get_compressed_reader();
-        offset = reader.set_offset(25);
-        assert!(offset.is_ok());
-        reader.read_exact(&mut buffer).unwrap();
-        assert_eq!(buffer[0], 'Z' as u8);
-
-        reader = get_compressed_reader();
-        offset = reader.set_offset(10000);
-        assert!(offset.is_err());
-    }
-
     #[test]
     fn from_reader() {
         let opts = GlobalOptions::from_str("path: /usr/bin").expect("unable to read YAML");

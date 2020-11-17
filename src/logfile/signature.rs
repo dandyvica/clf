@@ -28,11 +28,12 @@ pub struct Signature {
 //     }
 // }
 
-pub trait GetSignature {
+pub trait FileIdentification {
     fn signature(&self) -> Result<Signature, AppError>;
+    // fn has_changed(&self, other: &Signature) -> Result<bool, AppError>;
 }
 
-impl GetSignature for PathBuf {
+impl FileIdentification for PathBuf {
     // get inode and dev from file
     #[cfg(target_family = "unix")]
     fn signature(&self) -> Result<Signature, AppError> {
@@ -48,4 +49,9 @@ impl GetSignature for PathBuf {
     fn signature(&self) -> Result<Signature, AppError> {
         unimplemented!("Signature trait not yet implemented for Windows");
     }
+
+    // fn has_changed(&self, other: &Signature) -> Result<bool, AppError> {
+    //     let sign = PathBuf::signature(self)?;
+    //     Ok(sign == *other)
+    // }
 }

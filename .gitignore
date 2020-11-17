@@ -10,3 +10,4 @@ clf.log
 /examples
 /tests/tmp
 /huge
+/tests/local/clf_snapshot.json

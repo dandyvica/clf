@@ -1,14 +1,5 @@
 //! Manage different types of compression for a logfile
-use std::fs::File;
-use std::io::{BufRead, BufReader};
-use std::path::PathBuf;
-
-use bzip2::read::BzDecoder;
-use flate2::read::GzDecoder;
 use serde::{Deserialize, Serialize};
-use xz2::read::XzDecoder;
-
-use crate::misc::error::AppError;
 
 #[serde(rename_all = "lowercase")]
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
@@ -21,38 +12,10 @@ pub enum CompressionScheme {
 
 impl CompressionScheme {
     /// True if not compressed
+    #[allow(dead_code)]
     #[inline(always)]
     pub fn is_compressed(&self) -> bool {
         self != &CompressionScheme::Uncompressed
-    }
-
-    /// Creates a new reader depending on the compression. This reader can be used as a regular `BufReader` struct.
-    pub fn reader(&self, path: &PathBuf) -> Result<Box<dyn BufRead>, AppError> {
-        // open target file
-        let file = File::open(&path)?;
-
-        // create a specific reader for each compression scheme
-        match &self {
-            CompressionScheme::Gzip => {
-                let decoder = GzDecoder::new(file);
-                let reader = BufReader::new(decoder);
-                Ok(Box::new(reader))
-            }
-            CompressionScheme::Bzip2 => {
-                let decoder = BzDecoder::new(file);
-                let reader = BufReader::new(decoder);
-                Ok(Box::new(reader))
-            }
-            CompressionScheme::Xz => {
-                let decoder = XzDecoder::new(file);
-                let reader = BufReader::new(decoder);
-                Ok(Box::new(reader))
-            }
-            CompressionScheme::Uncompressed => {
-                let reader = BufReader::new(file);
-                Ok(Box::new(reader))
-            }
-        }
     }
 }
 
@@ -69,5 +32,32 @@ impl From<Option<&str>> for CompressionScheme {
                 _ => CompressionScheme::Uncompressed,
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn compression() {
+        assert_eq!(
+            CompressionScheme::from(None),
+            CompressionScheme::Uncompressed
+        );
+        assert_eq!(
+            CompressionScheme::from(Some("foo")),
+            CompressionScheme::Uncompressed
+        );
+        assert_eq!(
+            CompressionScheme::from(Some("")),
+            CompressionScheme::Uncompressed
+        );
+        assert_eq!(CompressionScheme::from(Some("gz")), CompressionScheme::Gzip);
+        assert_eq!(CompressionScheme::from(Some("xz")), CompressionScheme::Xz);
+        assert_eq!(
+            CompressionScheme::from(Some("bz2")),
+            CompressionScheme::Bzip2
+        );
     }
 }
