@@ -2,7 +2,7 @@
 use serde::{Deserialize, Serialize};
 
 #[serde(rename_all = "lowercase")]
-#[derive(Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
 pub enum CompressionScheme {
     Gzip,
     Bzip2,

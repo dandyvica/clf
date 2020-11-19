@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 use crate::misc::error::AppError;
 
 // Combination a an inod and a dev
-#[derive(Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
 pub struct Signature {
     inode: u64,
     dev: u64,

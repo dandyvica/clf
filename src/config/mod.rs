@@ -3,5 +3,6 @@
 #[macro_use]
 pub mod callback;
 pub mod config;
+pub mod options;
 pub mod pattern;
 pub mod variables;

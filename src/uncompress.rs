@@ -1,9 +1,15 @@
 //! An executable to read compressed files using compression methods defined in the crate
+use std::fs::File;
+use std::io::{BufRead, BufReader};
 use std::path::PathBuf;
 
 use clap::{App, Arg};
 
-use clf::logfile::logreader::LogReader;
+use bzip2::read::BzDecoder;
+use flate2::read::GzDecoder;
+use xz2::read::XzDecoder;
+
+use clf::logfile::compression::CompressionScheme;
 
 fn main() {
     let matches = App::new("Uncompress gzip, bzip2, xz files")
@@ -22,12 +28,39 @@ fn main() {
 
     // get file name
     let path = PathBuf::from(matches.value_of("file").unwrap());
+    let file = File::open(&path).expect(&format!("unable to open file {:?}", &path));
 
-    // our read buffer
-    let mut buffer = Vec::with_capacity(1024);
+    // get file extension
+    let extension = path.extension().map(|x| x.to_string_lossy().to_string());
+    let scheme = CompressionScheme::from(extension.as_deref());
 
     // create extension scheme and reader
-    let mut reader = LogReader::from_path(&path).unwrap();
+    match scheme {
+        CompressionScheme::Gzip => {
+            let decoder = GzDecoder::new(file);
+            let reader = BufReader::new(decoder);
+            read_file(reader);
+        }
+        CompressionScheme::Bzip2 => {
+            let decoder = BzDecoder::new(file);
+            let reader = BufReader::new(decoder);
+            read_file(reader);
+        }
+        CompressionScheme::Xz => {
+            let decoder = XzDecoder::new(file);
+            let reader = BufReader::new(decoder);
+            read_file(reader);
+        }
+        CompressionScheme::Uncompressed => {
+            let reader = BufReader::new(file);
+            read_file(reader);
+        }
+    };
+}
+
+fn read_file<R: BufRead>(mut reader: R) {
+    // our read buffer
+    let mut buffer = Vec::with_capacity(1024);
 
     loop {
         let ret = reader.read_until(b'\n', &mut buffer);

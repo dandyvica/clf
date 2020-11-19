@@ -2,10 +2,15 @@
 //! coming from the processing of the log file, every time it's read to look for patterns.
 use log::{debug, error, info, trace};
 use std::collections::HashMap;
+use std::fs::File;
+use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
+use bzip2::read::BzDecoder;
+use flate2::read::GzDecoder;
 use serde::{Deserialize, Serialize};
+use xz2::read::XzDecoder;
 
 use crate::misc::{error::AppError, nagios::HitCounter, util::Cons};
 
@@ -18,8 +23,8 @@ use crate::config::{
 
 use crate::logfile::{
     compression::CompressionScheme,
-    logreader::LogReader,
-    //seeker::Seeker,
+    //logreader::LogReader,
+    seeker::Seeker,
     signature::{FileIdentification, Signature},
 };
 
@@ -52,7 +57,7 @@ impl<'a> Wrapper<'a> {
 }
 
 /// A wrapper to store log file processing data.
-#[derive(Debug, Serialize, Deserialize, Default)]
+#[derive(Debug, Serialize, Deserialize, Default, Clone)]
 pub struct RunData {
     /// tag name
     tag_name: String,
@@ -91,10 +96,10 @@ impl RunData {
 }
 
 /// A wrapper to get logfile information and its related attributes.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct LogFile {
     /// File & path as a `PathBuf`.
-    path: PathBuf,
+    pub path: PathBuf,
 
     /// Directory part or `None` if not existing.
     directory: Option<PathBuf>,
@@ -143,7 +148,7 @@ impl LogFile {
         })
     }
 
-    /// Recalculate the signature 
+    /// Recalculate the signature to check whether it has changed
     pub fn has_changed(&self) -> Result<bool, AppError> {
         // get most recent signature
         let signature = self.path.signature()?;
@@ -179,14 +184,37 @@ impl LogFile {
     pub fn rundata_mut(&mut self) -> &mut HashMap<String, RunData> {
         &mut self.run_data
     }
-}
 
-/// Trait, implemented by `LogFile` to search patterns.
-pub trait Lookup {
-    fn lookup(&mut self, wrapper: &mut Wrapper) -> Result<Vec<ChildData>, AppError>;
-}
+    ///Just a wrapper function for a file.
+    pub fn lookup(&mut self, wrapper: &mut Wrapper) -> Result<Vec<ChildData>, AppError> {
+        // open target file
+        let file = File::open(&self.path)?;
 
-impl Lookup for LogFile {
+        // if file is compressed, we need to call a specific reader
+        // create a specific reader for each compression scheme
+        match self.compression {
+            CompressionScheme::Gzip => {
+                let decoder = GzDecoder::new(file);
+                let reader = BufReader::new(decoder);
+                self.lookup_from_reader(reader, wrapper)
+            }
+            CompressionScheme::Bzip2 => {
+                let decoder = BzDecoder::new(file);
+                let reader = BufReader::new(decoder);
+                self.lookup_from_reader(reader, wrapper)
+            }
+            CompressionScheme::Xz => {
+                let decoder = XzDecoder::new(file);
+                let reader = BufReader::new(decoder);
+                self.lookup_from_reader(reader, wrapper)
+            }
+            CompressionScheme::Uncompressed => {
+                let reader = BufReader::new(file);
+                self.lookup_from_reader(reader, wrapper)
+            }
+        }
+    }
+
     /// The main function of the whole process. Reads a logfile and tests for each line if it matches the regexes.
     ///
     /// Detailed design:
@@ -210,7 +238,11 @@ impl Lookup for LogFile {
     ///         - add rumtime variables, only related to the current line, pattern etc
     ///         - if a script is defined to be called, call the script and save the `Child` return structure
 
-    fn lookup(&mut self, wrapper: &mut Wrapper) -> Result<Vec<ChildData>, AppError> {
+    fn lookup_from_reader<R: BufRead + Seeker>(
+        &mut self,
+        mut reader: R,
+        wrapper: &mut Wrapper,
+    ) -> Result<Vec<ChildData>, AppError> {
         //------------------------------------------------------------------------------------
         // 1. initialize local variables
         //------------------------------------------------------------------------------------
@@ -221,7 +253,7 @@ impl Lookup for LogFile {
         );
 
         // create new reader
-        let mut reader = LogReader::from_path(&self.path)?;
+        //let mut reader = LogReader::from_path(&self.path)?;
 
         // uses the same buffer
         let mut buffer = Vec::with_capacity(Cons::DEFAULT_STRING_CAPACITY);
@@ -452,8 +484,6 @@ impl Lookup for LogFile {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashMap;
-    use std::path::PathBuf;
     use std::str::FromStr;
 
     use super::*;

@@ -3,7 +3,8 @@
 #[macro_use]
 pub mod logfile;
 pub mod compression;
-pub mod logreader;
-//pub mod seeker;
+pub mod logqueue;
+//pub mod logreader;
+pub mod seeker;
 pub mod signature;
 pub mod snapshot;

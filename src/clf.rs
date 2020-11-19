@@ -14,7 +14,7 @@ mod config;
 use config::{callback::ChildData, variables::Variables};
 
 mod logfile;
-use logfile::logfile::{Lookup, Wrapper};
+use logfile::logfile::Wrapper;
 
 mod misc;
 use misc::{
@@ -120,41 +120,71 @@ fn main() {
         }
         let snapshot_logfile = logfile.unwrap();
 
-        // compare snapshot_logfile with config_logfile
-        // if not the same signature, snapshot_logfile has been rotated =>
-        //       get rotated file name
-        //
+        // test
 
-        debug!("calling or_insert() at line {}", line!());
+        // manage log rotation: we'll use a simple 2-element container were the first could be the logfile struct
+        // corresponding to the rotated log, and the next one is the one coming from snapshot. Need to manage
+        // both in a row because we need to get the counts from the rorated log first, and then process the
+        // brand new one        
+        use crate::logfile::logqueue::LogQueue;
+        //let mut rotated_logfile = snapshot_logfile.clone();
 
-        // for each tag, search inside logfile for those we need to process (having process tag == true)
-        for tag in search.tags.iter().filter(|t| t.process()) {
-            debug!("searching for tag: {}", &tag.name());
+        let mut queue = LogQueue::new(snapshot_logfile);
 
-            // wraps all structures into a helper struct
-            let mut wrapper = Wrapper::new(config.global(), &tag, &mut vars, &mut hit_counter);
+        //queue.set_rotated(&mut rotated_logfile);
 
-            // now we can search for the pattern and save the child handle if a script was called
-            match snapshot_logfile.lookup(&mut wrapper) {
-                // script might be started, giving back a `Child` structure with process features like pid etc
-                Ok(mut children) => {
-                    // merge list of children
-                    if children.len() != 0 {
-                        children_list.append(&mut children);
+        // if snapshot_logfile.has_changed().unwrap() {
+        //     // get rotated file path (full directory) = create a new PathBuf corresponding to the rotated file
+        //     // TODO: delete pub path
+        //     let mut rotated_path = snapshot_logfile.path.clone();
+        //     rotated_path.set_extension("gz");
+
+        //     // duplicate snapshot_logfile => rotated_logfile: use clone()
+        //     let mut rotated_logfile = snapshot_logfile.clone();
+
+        //     // set LogFile struct path & directory fields to those corresponding to rotated_logfile because
+        //     // it has the old ones
+        //     rotated_logfile.path = rotated_path;
+
+        //     // insert this new struct into our queue
+        //     queue.set_rotated(&rotated_logfile);
+
+        //     // reset snapshot_logfile last_offset & last_line for each tag present in run_data
+        // }
+
+        // test
+
+        // loop on either (rotated, snapshot) logfiles, or just snapshot
+        while let Some(logfile) = queue.next() {
+            // for each tag, search inside logfile for those we need to process (having process tag == true)
+            for tag in search.tags.iter().filter(|t| t.process()) {
+                debug!("searching for tag: {}", &tag.name());
+
+                // wraps all structures into a helper struct
+                let mut wrapper = Wrapper::new(config.global(), &tag, &mut vars, &mut hit_counter);
+
+                // now we can search for the pattern and save the child handle if a script was called
+                match logfile.lookup(&mut wrapper) {
+                    // script might be started, giving back a `Child` structure with process features like pid etc
+                    Ok(mut children) => {
+                        // merge list of children
+                        if children.len() != 0 {
+                            children_list.append(&mut children);
+                        }
                     }
-                }
 
-                // otherwise, an error when opening (most likely) the file and then report an error on counters
-                Err(e) => {
-                    error!(
-                        "error: {} when searching logfile: {} for tag: {}",
-                        e,
-                        search.logfile.display(),
-                        &tag.name()
-                    );
+                    // otherwise, an error when opening (most likely) the file and then report an error on counters
+                    Err(e) => {
+                        error!(
+                            "error: {} when searching logfile: {} for tag: {}",
+                            e,
+                            search.logfile.display(),
+                            &tag.name()
+                        );
 
-                    // set error for this logfile
-                    hit_counter.set_error(e);
+                        // set error for this logfile
+                        hit_counter.set_error(e);
+                    }
                 }
             }
         }
