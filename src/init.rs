@@ -5,13 +5,13 @@ use std::path::PathBuf;
 use simplelog::*;
 
 use crate::args::CliOptions;
-use crate::config::config::{Config, LogSource};
+use crate::config::config::Config;
 use crate::logfile::snapshot::Snapshot;
 use crate::misc::nagios::Nagios;
 
 /// Create a new config struct
-pub fn init_config(options: &CliOptions) -> Config<PathBuf> {
-    let _config = Config::<LogSource>::from_file(&options.config_file);
+pub fn init_config(options: &CliOptions) -> Config {
+    let _config = Config::from_file(&options.config_file);
 
     // check for loading errors
     if let Err(ref e) = _config {
@@ -21,10 +21,8 @@ pub fn init_config(options: &CliOptions) -> Config<PathBuf> {
         ));
     }
 
-    // replace, if any, "loglist" by "logfile"
-    let config = Config::<PathBuf>::from(_config.unwrap());
+    let config = Config::from(_config.unwrap());
     config
-    //debug!("{:#?}", config);
 }
 
 /// Create new logger and optionally delete logfile is bigger than cli value

@@ -86,20 +86,16 @@ fn main() {
     //---------------------------------------------------------------------------------------------------
     for search in &config.searches {
         // log some useful info
-        info!(
-            "------------ searching into logfile: {}",
-            search.logfile.display()
-        );
+        info!("------------ searching into logfile: {}", search.logfile);
 
         // get counter corresponding to the logfile
-        let mut hit_counter = &mut logfile_counter.or_default(&search.logfile);
+        let mut hit_counter = &mut logfile_counter.or_default(&search.logfile());
 
         // checks if logfile is accessible. If not, no need to move further, just record last error
-        if let Err(e) = search.logfile.is_usable() {
+        if let Err(e) = search.logfile().is_usable() {
             error!(
                 "logfile: {} is not a file or is not accessible, error: {}",
-                search.logfile.display(),
-                e
+                search.logfile, e
             );
 
             // this is a error for this logfile which boils down to a Nagios unknown error
@@ -109,7 +105,7 @@ fn main() {
         }
 
         // create a LogFile struct or get it from snapshot
-        let logfile = snapshot.logfile_mut(&search.logfile);
+        let logfile = snapshot.logfile_mut(&search.logfile());
         if let Err(ref e) = logfile {
             Nagios::exit_critical(&format!(
                 "unexpected error {:?}, file:{}, line{}",
@@ -125,7 +121,7 @@ fn main() {
         // manage log rotation: we'll use a simple 2-element container were the first could be the logfile struct
         // corresponding to the rotated log, and the next one is the one coming from snapshot. Need to manage
         // both in a row because we need to get the counts from the rorated log first, and then process the
-        // brand new one        
+        // brand new one
         use crate::logfile::logqueue::LogQueue;
         //let mut rotated_logfile = snapshot_logfile.clone();
 
@@ -178,7 +174,7 @@ fn main() {
                         error!(
                             "error: {} when searching logfile: {} for tag: {}",
                             e,
-                            search.logfile.display(),
+                            search.logfile,
                             &tag.name()
                         );
 

@@ -3,7 +3,7 @@ use std::fs::File;
 use std::path::PathBuf;
 use std::process::Command;
 
-//use regex::Regex;
+use log::trace;
 
 use crate::misc::error::{AppCustomErrorKind, AppError};
 
@@ -114,7 +114,7 @@ impl Util {
             Some(_args) => Command::new(&cmd).args(_args).output()?,
         };
 
-        //debug!("output={:?}", output);
+        trace!("cmd={}, args={:?}: returned files={:?}", cmd, args, output);
         let output_as_str = std::str::from_utf8(&output.stdout)?;
 
         Ok(output_as_str

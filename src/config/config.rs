@@ -12,12 +12,14 @@
 //!
 
 use std::collections::HashMap;
+use std::fmt::Display;
 use std::fs::File;
 use std::path::{Path, PathBuf};
 
 use log::{debug, error, info};
 use regex::Regex;
-use serde::Deserialize;
+use serde::{de, Deserialize, Deserializer};
+use serde_yaml::Value;
 
 use crate::config::{
     callback::{Callback, CallbackHandle, ChildData},
@@ -113,13 +115,34 @@ impl Default for GlobalOptions {
 #[derive(Debug, Deserialize, Clone)]
 pub enum LogSource {
     #[serde(rename = "logfile")]
-    LogFile(String),
+    LogFile(PathBuf),
 
     #[serde(rename = "loglist")]
     LogList {
         cmd: String,
         args: Option<Vec<String>>,
     },
+}
+
+impl LogSource {
+    pub const fn is_logfile(&self) -> bool {
+        matches!(*self, LogSource::LogFile(_))
+        // match self {
+        //     LogSource::LogFile(_) => true,
+        //     LogSource::LogList { cmd: _, args: _ } => false,
+        // }
+    }
+}
+
+impl Display for LogSource {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            LogSource::LogFile(logfile) => write!(f, "{}", logfile.display()),
+            LogSource::LogList { cmd: _, args: _ } => {
+                unimplemented!("LogSource::LogList not permitted !")
+            }
+        }
+    }
 }
 
 /// This is the core structure which handles data used to search into the logfile. These are
@@ -198,16 +221,16 @@ pub struct Rotation {
     /// the logfile name to check
     archive_dir: String,
     archive_ext: String,
-    //archive_regex: 
+    //archive_regex:
 }
 
 /// This is the structure mapping exactly search data coming from the configuration YAML file. The 'flatten' serde field
 /// attribute allows to either use a logfile name or a command.
 #[derive(Debug, Deserialize, Clone)]
-pub struct Search<T: Clone> {
+pub struct Search {
     /// the logfile name to check
     #[serde(flatten)]
-    pub logfile: T,
+    pub logfile: LogSource,
 
     /// log rotation settings
     //pub rotation: Option<Rotation>,
@@ -216,21 +239,14 @@ pub struct Search<T: Clone> {
     pub tags: Vec<Tag>,
 }
 
-/// This conversion utility is meant to convert to a 'regular' configuration file a configuration file
-/// using the `logfile` YAML tag with a command.
-impl From<Search<LogSource>> for Search<PathBuf> {
-    fn from(search_logsource: Search<LogSource>) -> Self {
-        // if LogSource::Logfile, just copy. Otherwise, it's unimplemented
-        let logfile = match search_logsource.logfile {
-            LogSource::LogFile(lf) => PathBuf::from(lf),
-            //LogSource::LogList { cmd: _, args: _ } => PathBuf::from(""),
-            _ => unimplemented!("this could not occur"),
-        };
-
-        Search {
-            logfile: logfile.clone(),
-            //rotation: rotation.clone(),
-            tags: search_logsource.tags.clone(),
+impl Search {
+    /// Returns the `LogSource::LogFile` variant which corresponds to a logfile
+    pub fn logfile(&self) -> &PathBuf {
+        match &self.logfile {
+            LogSource::LogFile(logfile) => &logfile,
+            LogSource::LogList { cmd: _, args: _ } => {
+                unimplemented!("LogSource::LogList not permitted !")
+            }
         }
     }
 }
@@ -239,16 +255,17 @@ impl From<Search<LogSource>> for Search<PathBuf> {
 /// the YAML file found in the command line argument (or from stdin). This configuration can include a list
 /// of logfiles (given either by name or by starting an external command) to lookup and for each logfile, a list of regexes to match.
 #[derive(Debug, Deserialize, Default)]
-pub struct Config<T: Clone> {
+pub struct Config {
     /// List of global options, which apply for all searches.
     #[serde(default = "GlobalOptions::default")]
     global: GlobalOptions,
 
     /// list of searches.
-    pub searches: Vec<Search<T>>,
+    #[serde(deserialize_with = "fill_log")]
+    pub searches: Vec<Search>,
 }
 
-impl<T: Clone> Config<T> {
+impl Config {
     /// Returns a reference on `global` fields.
     #[inline(always)]
     pub fn global(&self) -> &GlobalOptions {
@@ -280,16 +297,16 @@ impl<T: Clone> Config<T> {
 }
 
 // Auto-implement FromStr
-fromstr!(Config<LogSource>);
+fromstr!(Config);
 
-impl Config<LogSource> {
+impl Config {
     /// Loads a YAML configuration file as a `Config` struct.
-    pub fn from_file<P: AsRef<Path>>(file_name: P) -> Result<Config<LogSource>, AppError> {
+    pub fn from_file<P: AsRef<Path>>(file_name: P) -> Result<Config, AppError> {
         // open YAML file
         let file = File::open(file_name)?;
 
         // load YAML data
-        let yaml: Config<LogSource> = serde_yaml::from_reader(file)?;
+        let yaml: Config = serde_yaml::from_reader(file)?;
 
         debug!(
             "sucessfully loaded YAML configuration file, nb_searches={}",
@@ -299,70 +316,64 @@ impl Config<LogSource> {
     }
 }
 
-impl From<Config<LogSource>> for Config<PathBuf> {
-    /// This conversion utility is meant to add, for each search when used with a command, the tag data defined.
-    fn from(config_logsource: Config<LogSource>) -> Self {
-        // initialize a default Config structure
-        let mut config_pathbuf = Config::<PathBuf>::default();
+/// Replace the `logsource` YAML tag with the result of the script command
+fn fill_log<'de, D>(deserializer: D) -> Result<Vec<Search>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    // get the YAML `Value` from serde. See https://docs.serde.rs/serde_yaml/enum.Value.html
+    let yaml_value: Value = Deserialize::deserialize(deserializer)?;
 
-        // copy global options
-        config_pathbuf.global = config_logsource.global.clone();
+    // transform this value into our struct
+    let vec_yaml: Result<Vec<Search>, _> =
+        serde_yaml::from_value(yaml_value).map_err(de::Error::custom);
+    if vec_yaml.is_err() {
+        return vec_yaml;
+    }
+    let mut vec_search = vec_yaml.unwrap();
 
-        // for each Search, clone if LogSource::logfile, or replace by list of files is LogSource::loglist
-        for search in &config_logsource.searches {
-            match &search.logfile {
-                // we found a logfile tag: just copy everything to the new structure
-                LogSource::LogFile(_) => {
-                    let search_pathbuf = Search::<PathBuf>::from(search.clone());
-                    config_pathbuf.searches.push(search_pathbuf);
-                }
+    // this vector wil hold new logfiles from the list returned from the script execution
+    let mut vec_loglist: Vec<Search> = Vec::new();
 
-                // we found a logslist tag: get the list of files, and for each one, copy everything
-                LogSource::LogList {
-                    cmd: _cmd,
-                    args: _args,
-                } => {
-                    // get optional arguments
-                    let script_args = _args.as_ref().map(|f| f.as_slice());
+    for search in &vec_search {
+        match &search.logfile {
+            // we found a logfile tag: just copy everything to the new structure
+            LogSource::LogFile(_) => continue,
 
-                    // get list of files from command or script
-                    let files = match Util::get_list(_cmd, script_args) {
-                        Ok(file_list) => {
-                            if file_list.is_empty() {
-                                info!(
-                                    "no files returned by command: {}, with args: {:?}",
-                                    _cmd, _args
-                                );
-                            }
-                            file_list
-                        }
-                        Err(e) => {
-                            error!(
-                                "error: {} when executing command: {}, args: {:?}",
-                                e, _cmd, _args
-                            );
-                            break;
-                        }
+            // we found a logslist tag: get the list of files, and for each one, copy everything
+            LogSource::LogList {
+                cmd: _cmd,
+                args: _args,
+            } => {
+                // get optional arguments
+                let script_args = _args.as_ref().map(|f| f.as_slice());
+
+                // get list of files from command or script
+                let files = Util::get_list(_cmd, script_args).unwrap();
+
+                //println!("returned files: {:?}", files);
+
+                // create Search structure with the files we found, and a clone of all tags
+                for file in &files {
+                    // create a new Search structure based on the file we just found
+                    let search_pathbuf = Search {
+                        logfile: LogSource::LogFile(file.to_path_buf()),
+                        tags: search.tags.clone(),
                     };
-                    debug!("returned files: {:?}", files);
 
-                    // create Search structure with the files we found, and a clone of all tags
-                    for file in &files {
-                        // create a new Search structure based on the file we just found
-                        let search_pathbuf = Search::<PathBuf> {
-                            logfile: file.clone(),
-                            tags: search.tags.clone(),
-                        };
-
-                        // now use this structure and add it to config_pathbuf
-                        config_pathbuf.searches.push(search_pathbuf);
-                    }
+                    // now use this structure and add it to config_pathbuf
+                    vec_loglist.push(search_pathbuf);
                 }
             }
         }
-
-        config_pathbuf
     }
+
+    // add all those new logfiles we found
+    vec_search.extend(vec_loglist);
+
+    // keep only valid logfiles, not logsources
+    vec_search.retain(|x| x.logfile.is_logfile());
+    Ok(vec_search)
 }
 
 #[cfg(test)]
@@ -487,8 +498,8 @@ patterns:
                     ]
                   }        
         "#;
-        let _config = Config::<LogSource>::from_str(yaml).expect("unable to read YAML");
-        let config = Config::<PathBuf>::from(_config);
+        let _config = Config::from_str(yaml).expect("unable to read YAML");
+        let config = Config::from(_config);
 
         assert_eq!(
             &config.global.path,
@@ -544,8 +555,8 @@ patterns:
 
         let search = config.searches.first().unwrap();
         assert_eq!(
-            search.logfile,
-            PathBuf::from("tests/logfiles/small_access.log")
+            search.logfile(),
+            &PathBuf::from("tests/logfiles/small_access.log")
         );
         assert_eq!(search.tags.len(), 1);
 

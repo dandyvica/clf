@@ -21,7 +21,7 @@ searches:
 
         # a script or command to be called, every time a hit is found.
         callback: { 
-          path: "tests/scripts/echovars.py",
+          script: "tests/scripts/echovars.py",
           args: ['arg1', 'arg2', 'arg3']
         }
 
