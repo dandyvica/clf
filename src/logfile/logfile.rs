@@ -1,6 +1,7 @@
 //! A structure representing a logfile, with all its related attributes. Those attributes are
 //! coming from the processing of the log file, every time it's read to look for patterns.
 
+use std::borrow::Cow;
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
@@ -185,6 +186,21 @@ impl LogFile {
         &mut self.run_data
     }
 
+    /// Either delete \n or \r\n for end of line if line is ending by these
+    fn purge_line(line: &mut Cow<str>) {
+        if let Some(last_char) = line.chars().last() {
+            if last_char == '\n' {
+                line.to_mut().pop();
+            }
+        }
+        #[cfg(target_family = "windows")]
+        if let Some(last_char) = line.chars().last() {
+            if last_char == '\r' {
+                line.to_mut().pop();
+            }
+        }        
+    }
+
     ///Just a wrapper function for a file.
     pub fn lookup(&mut self, wrapper: &mut Wrapper) -> Result<Vec<ChildData>, AppError> {
         // open target file
@@ -315,18 +331,21 @@ impl LogFile {
             //wrapper.vars.retain_logfile();
             wrapper.vars.retain(&[&var!("LOGFILE"), &var!("TAG")]);
 
-            // read until \n (which is included in the buffer)
+            // read until '\n' (which is included in the buffer)
             let ret = reader.read_until(b'\n', &mut buffer);
 
             // to deal with UTF-8 conversion problems, use the lossy method. It will replace non-UTF-8 chars with ?
             let mut line = String::from_utf8_lossy(&buffer);
 
             // remove newline
-            line.to_mut().pop();
+            //line.to_mut().pop();
+
+            // delete '\n' or '\r\n' form the eol
+            LogFile::purge_line(&mut line);
 
             // and line feed for Windows platforms
-            #[cfg(target_family = "windows")]
-            line.to_mut().pop();
+            // #[cfg(target_family = "windows")]
+            // line.to_mut().pop();
 
             // read_line() returns a Result<usize>
             match ret {
@@ -489,6 +508,14 @@ mod tests {
     use super::*;
 
     use crate::testing::{data::*, setup::*};
+
+    #[test]
+    fn purge_line() {
+        let s = "this an example\n";
+        let mut cow: Cow<str> = Cow::Borrowed(s);
+        LogFile::purge_line(&mut cow);
+        assert_eq!(cow.into_owned(), "this an example");
+    }
 
     #[test]
     #[cfg(target_os = "linux")]
