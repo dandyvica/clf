@@ -14,7 +14,7 @@ mod config;
 use config::{callback::ChildData, variables::Variables};
 
 mod logfile;
-use logfile::logfile::Wrapper;
+use logfile::logfile::{LogFile, Wrapper};
 
 mod misc;
 use misc::{
@@ -29,6 +29,8 @@ mod testing;
 
 mod init;
 use init::*;
+
+//use clf::exit_or_unwrap;
 
 fn main() {
     // tick time
@@ -105,50 +107,115 @@ fn main() {
         }
 
         // create a LogFile struct or get it from snapshot
-        let logfile = snapshot.logfile_mut(&search.logfile());
-        if let Err(ref e) = logfile {
-            Nagios::exit_critical(&format!(
-                "unexpected error {:?}, file:{}, line{}",
-                e,
-                file!(),
-                line!()
-            ));
-        }
-        let snapshot_logfile = logfile.unwrap();
+        // let _logfile = snapshot.logfile_mut(&search.logfile());
+        // if let Err(ref e) = _logfile {
+        //     error(
+        //         "error fetching logfile {} from snapshot, error: {}",
+        //         e,
+        //     );
 
-        // test
+        //     continue;
+        // }
+        // let snapshot_logfile = _logfile.unwrap();
+
+        let snapshot_logfile = {
+            let temp = snapshot.logfile_mut(&search.logfile());
+            if let Err(e) = temp {
+                error!(
+                    "error fetching logfile {} from snapshot: {}",
+                    search.logfile().display(),
+                    e,
+                );
+
+                // this is a error for this logfile which boils down to a Nagios unknown error
+                hit_counter.set_error(e);
+
+                continue;
+            }
+            temp.unwrap()
+        };
 
         // manage log rotation: we'll use a simple 2-element container were the first could be the logfile struct
         // corresponding to the rotated log, and the next one is the one coming from snapshot. Need to manage
         // both in a row because we need to get the counts from the rorated log first, and then process the
         // brand new one
         use crate::logfile::logqueue::LogQueue;
-        //let mut rotated_logfile = snapshot_logfile.clone();
 
+        // no archive for the moment
+        let mut archived_logfile: Option<LogFile> = None;
+
+        // check if the rotation occured. This means the logfile signature has changed
+        let snapshot_has_changed = {
+            let temp = snapshot_logfile.has_changed();
+            if let Err(e) = temp {
+                error!(
+                    "error on fetching metadata on logfile {}: {}",
+                    snapshot_logfile.path().display(),
+                    e
+                );
+
+                // this is a error for this logfile which boils down to a Nagios unknown error
+                hit_counter.set_error(e);
+
+                continue;
+            }
+            temp.unwrap()
+        };
+
+        if snapshot_has_changed {
+            info!("logfile has changed, probably archived and rotated");
+
+            // first, check if an archive tag has been defined in the YAML config for this search
+            if search.archive.is_none() {
+                error!("logfile {} has been moved or archived but no archive settings defined in the configuration file", snapshot_logfile.path.display());
+                continue;
+            }
+
+            // get archived log file name. Now it's safe to unwrap
+            let archived_path = search
+                .archive
+                .as_ref()
+                .unwrap()
+                .archived_path(&snapshot_logfile.path);
+
+            if archived_path.is_none() {
+                error!(
+                    "can't determine archived logfile for {}",
+                    snapshot_logfile.path.display()
+                );
+                continue;
+            }
+
+            // create a new instance of the logfile with the archived file
+            let mut _archived_logfile = {
+                let temp = LogFile::from_path(&archived_path.unwrap());
+                if let Err(e) = temp {
+                    error!(
+                        "error on creating logfile for path {}: {}",
+                        snapshot_logfile.path().display(),
+                        e
+                    );
+
+                    // this is a error for this logfile which boils down to a Nagios unknown error
+                    hit_counter.set_error(e);
+
+                    continue;
+                }
+                temp.unwrap()
+            };
+
+            // duplicate rundata from the original logfile
+            _archived_logfile.set_rundata(&snapshot_logfile.rundata());
+
+            // finally, the archive logfile is ready to be processed
+            archived_logfile = Some(_archived_logfile);
+        }
+
+        // build a new queue to manage archve & brand new file
         let mut queue = LogQueue::new(snapshot_logfile);
-
-        //queue.set_rotated(&mut rotated_logfile);
-
-        // if snapshot_logfile.has_changed().unwrap() {
-        //     // get rotated file path (full directory) = create a new PathBuf corresponding to the rotated file
-        //     // TODO: delete pub path
-        //     let mut rotated_path = snapshot_logfile.path.clone();
-        //     rotated_path.set_extension("gz");
-
-        //     // duplicate snapshot_logfile => rotated_logfile: use clone()
-        //     let mut rotated_logfile = snapshot_logfile.clone();
-
-        //     // set LogFile struct path & directory fields to those corresponding to rotated_logfile because
-        //     // it has the old ones
-        //     rotated_logfile.path = rotated_path;
-
-        //     // insert this new struct into our queue
-        //     queue.set_rotated(&rotated_logfile);
-
-        //     // reset snapshot_logfile last_offset & last_line for each tag present in run_data
-        // }
-
-        // test
+        if archived_logfile.is_some() {
+            queue.set_rotated(archived_logfile.as_mut())
+        }
 
         // loop on either (rotated, snapshot) logfiles, or just snapshot
         while let Some(logfile) = queue.next() {
@@ -210,7 +277,7 @@ fn main() {
 
     let exit_code = nagios_output(&logfile_counter, &options.nagios_version);
     info!("exiting process pid:{}, exit code:{:?}", id(), exit_code);
-    Nagios::exit(exit_code);
+    Nagios::exit_with(exit_code);
 }
 
 /// Lookup data from tags

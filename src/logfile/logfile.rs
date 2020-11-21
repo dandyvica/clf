@@ -14,7 +14,11 @@ use log::{debug, error, info, trace};
 use serde::{Deserialize, Serialize};
 use xz2::read::XzDecoder;
 
-use crate::misc::{error::AppError, nagios::HitCounter, util::Cons};
+use crate::misc::{
+    error::{AppCustomErrorKind, AppError},
+    nagios::HitCounter,
+    util::Cons,
+};
 
 use crate::config::{
     callback::{CallbackHandle, ChildData},
@@ -123,9 +127,18 @@ impl LogFile {
     /// like file *inode* or *dev*. The file path is checked for accessibility and is canonicalized. It also
     /// contains run time data, which correspond to the data created each time a logfile instance is searched
     /// for patterns.
-    pub fn new<P: AsRef<Path>>(file_name: P) -> Result<LogFile, AppError> {
+    pub fn from_path<P: AsRef<Path>>(file_name: P) -> Result<LogFile, AppError> {
         // check if we can really use the file
         let path = PathBuf::from(file_name.as_ref());
+
+        // logfiles should have an absolute path
+        // if !path.is_absolute() {
+        //     return Err(AppError::new(
+        //         AppCustomErrorKind::FilePathNotAbsolute,
+        //         "path {} is not absolute",
+        //     ));
+        // }
+
         let directory = path.parent().map(|p| p.to_path_buf());
         let extension = path.extension().map(|x| x.to_string_lossy().to_string());
 
@@ -147,6 +160,26 @@ impl LogFile {
             signature,
             run_data: HashMap::new(),
         })
+    }
+
+    // /// Insert rundata into the actual ones
+    // pub fn insert_rundata(&mut self, other: &HashMap<String, RunData>) {
+    //     self.run_data.into_iter().map(|(k, v)| other.insert(k, v));
+    // }
+
+    /// Return the path
+    pub fn path(&self) -> &PathBuf {
+        &self.path
+    }
+
+    /// Return the rundata
+    pub fn rundata(&self) -> &HashMap<String, RunData> {
+        &self.run_data
+    }
+
+    /// Set all rundata from another hashmap
+    pub fn set_rundata(&mut self, other_rundata: &HashMap<String, RunData>) {
+        self.run_data = other_rundata.clone();
     }
 
     /// Recalculate the signature to check whether it has changed
@@ -173,7 +206,7 @@ impl LogFile {
 
     /// Returns an Option on a reference of a `RunData`, mapping the first
     /// tag name passed in argument.
-    pub fn rundata(&mut self, name: &str) -> &mut RunData {
+    pub fn rundata_for_tag(&mut self, name: &str) -> &mut RunData {
         self.run_data.entry(name.to_string()).or_insert(RunData {
             tag_name: name.to_string(),
             ..Default::default()
@@ -198,7 +231,7 @@ impl LogFile {
             if last_char == '\r' {
                 line.to_mut().pop();
             }
-        }        
+        }
     }
 
     ///Just a wrapper function for a file.
@@ -253,7 +286,6 @@ impl LogFile {
     ///         - test if thresholds are reached. If not loop
     ///         - add rumtime variables, only related to the current line, pattern etc
     ///         - if a script is defined to be called, call the script and save the `Child` return structure
-
     fn lookup_from_reader<R: BufRead + Seeker>(
         &mut self,
         mut reader: R,
@@ -287,6 +319,11 @@ impl LogFile {
         // sometimes, early return due to callback errors or I/O errors
         let mut early_ret: Option<AppError> = None;
 
+        // test
+        let mut vars = Variables::default();
+        let re = regex::Regex::new(r"^(?P<one>.*)b550m (?P<two>[\w\[\]\d]*):(?P<three>.*)$").unwrap();
+        // test
+
         //------------------------------------------------------------------------------------
         // 2. reset `RunData` fields depending on local options
         //------------------------------------------------------------------------------------
@@ -300,7 +337,7 @@ impl LogFile {
         wrapper.vars.insert("TAG", wrapper.tag.name());
 
         // get run_data corresponding to tag name, or insert that new one if not yet in the snapshot file
-        let mut run_data = self.rundata(&wrapper.tag.name());
+        let mut run_data = self.rundata_for_tag(&wrapper.tag.name());
         trace!(
             "tagname: {:?}, run_data:{:?}\n\n",
             &wrapper.tag.name(),
@@ -366,6 +403,16 @@ impl LogFile {
                     }
 
                     trace!("====> line#={}, line={}", line_number, line);
+
+                    //test
+                    let caps = re.captures(&line).unwrap();
+                    for cap in re.capture_names() {
+                        if cap.is_some() {
+                            let c = cap.unwrap();
+                            vars.insert(c, caps.name(c).unwrap().as_str());
+                        }
+                    }
+                    //test
 
                     // is there a match, regarding also exceptions?
                     if let Some(re) = wrapper.tag.is_match(&line) {
@@ -520,14 +567,14 @@ mod tests {
     #[test]
     #[cfg(target_os = "linux")]
     fn new() {
-        let mut logfile = LogFile::new("/var/log/kern.log").unwrap();
+        let mut logfile = LogFile::from_path("/var/log/kern.log").unwrap();
         assert_eq!(logfile.path.to_str(), Some("/var/log/kern.log"));
         assert_eq!(logfile.directory.unwrap(), PathBuf::from("/var/log"));
         assert_eq!(logfile.extension.unwrap(), "log");
         assert_eq!(logfile.compression, CompressionScheme::Uncompressed);
         assert_eq!(logfile.run_data.len(), 0);
 
-        logfile = LogFile::new("/etc/hosts").unwrap();
+        logfile = LogFile::from_path("/etc/hosts").unwrap();
         assert_eq!(logfile.path.to_str(), Some("/etc/hosts"));
         assert!(logfile.extension.is_none());
         assert_eq!(logfile.compression, CompressionScheme::Uncompressed);
@@ -536,7 +583,7 @@ mod tests {
     #[test]
     #[cfg(target_os = "windows")]
     fn new() {
-        let mut logfile = LogFile::new(r"C:\Windows\System32\cmd.exe").unwrap();
+        let mut logfile = LogFile::from_path(r"C:\Windows\System32\cmd.exe").unwrap();
         //assert_eq!(logfile.path.as_os_str(), std::ffi::OsStr::new(r"C:\Windows\System32\cmd.exe"));
         assert_eq!(logfile.extension.unwrap(), "exe");
         assert_eq!(
@@ -546,7 +593,7 @@ mod tests {
         assert_eq!(logfile.compression, CompressionScheme::Uncompressed);
         assert_eq!(logfile.run_data.len(), 0);
 
-        logfile = LogFile::new(r"c:\windows\system32\drivers\etc\hosts").unwrap();
+        logfile = LogFile::from_path(r"c:\windows\system32\drivers\etc\hosts").unwrap();
         assert!(logfile.extension.is_none());
     }
     #[test]
@@ -586,7 +633,7 @@ mod tests {
 
         let mut w = Wrapper::new(&opts, &tag, &mut vars, &mut logfile_counter);
 
-        let mut logfile = LogFile::new("tests/logfiles/adhoc.txt").unwrap();
+        let mut logfile = LogFile::from_path("tests/logfiles/adhoc.txt").unwrap();
 
         // create a very simple TCP server: wait for data and test them
         let child = std::thread::spawn(move || {

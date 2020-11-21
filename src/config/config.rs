@@ -217,11 +217,35 @@ fromstr!(Tag);
 
 /// This structure keeps everything related to log rotation
 #[derive(Debug, Deserialize, Clone)]
-pub struct Rotation {
+pub struct LogArchive {
     /// the logfile name to check
-    archive_dir: String,
-    archive_ext: String,
-    //archive_regex:
+    dir: Option<PathBuf>,
+    ext: String, //archive_regex:
+}
+
+impl LogArchive {
+    pub fn archived_path<P: AsRef<Path>>(&self, path: P) -> Option<PathBuf> {
+        // if we don't specify a directory for archive, it'll use the same as path
+        if self.dir.is_none() {
+            let mut new_path = path.as_ref().to_path_buf();
+            new_path.push(&self.ext);
+
+            Some(new_path)
+        }
+        // otherwise use it
+        else {
+            if let Some(file_name) = path.as_ref().file_name() {
+                let mut new_path = PathBuf::new();
+                new_path.push(self.dir.as_ref().unwrap());
+                new_path.push(file_name);
+                new_path.set_extension(self.ext.clone());
+
+                Some(new_path)
+            } else {
+                None
+            }
+        }
+    }
 }
 
 /// This is the structure mapping exactly search data coming from the configuration YAML file. The 'flatten' serde field
@@ -233,7 +257,7 @@ pub struct Search {
     pub logfile: LogSource,
 
     /// log rotation settings
-    //pub rotation: Option<Rotation>,
+    pub archive: Option<LogArchive>,
 
     /// a unique identifier for this search
     pub tags: Vec<Tag>,
@@ -358,6 +382,7 @@ where
                     // create a new Search structure based on the file we just found
                     let search_pathbuf = Search {
                         logfile: LogSource::LogFile(file.to_path_buf()),
+                        archive: search.archive.clone(),
                         tags: search.tags.clone(),
                     };
 
@@ -380,6 +405,18 @@ where
 mod tests {
     use super::*;
     use std::str::FromStr;
+
+    #[test]
+    fn archived_path() {
+        let rot = LogArchive {
+            dir: Some(PathBuf::from("/tmp")),
+            ext: String::from("gz"),
+        };
+
+        let path = rot.archived_path("/var/log/kern.log");
+        assert!(path.is_some());
+        assert_eq!(path.unwrap(), PathBuf::from("/tmp/kern.log.gz"));
+    }
 
     #[test]
     #[cfg(target_family = "unix")]

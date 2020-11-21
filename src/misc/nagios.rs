@@ -13,7 +13,7 @@ macro_rules! create_exit {
     ($name:ident, $code:expr) => {
         #[allow(dead_code)]
         pub fn $name(msg: &str) {
-            Nagios::_exit(msg, $code);
+            Nagios::exit(msg, $code);
         }
     };
 }
@@ -22,7 +22,7 @@ pub struct Nagios;
 
 impl Nagios {
     #[inline(always)]
-    fn _exit(msg: &str, code: NagiosError) {
+    pub fn exit(msg: &str, code: NagiosError) {
         println!("{} - {}", String::from(&code), msg);
         std::process::exit(code as i32);
     }
@@ -33,7 +33,7 @@ impl Nagios {
     create_exit!(exit_unknown, NagiosError::UNKNOWN);
 
     #[inline(always)]
-    pub fn exit(code: NagiosError) {
+    pub fn exit_with(code: NagiosError) {
         std::process::exit(code as i32);
     }
 }

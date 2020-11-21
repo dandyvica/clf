@@ -11,6 +11,7 @@ pub enum AppCustomErrorKind {
     UnsupportedPatternType,
     FileNotUsable,
     NotAFile,
+    FilePathNotAbsolute,
     UnsupportedSearchOption,
     OsStringConversionError,
 }

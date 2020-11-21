@@ -18,8 +18,8 @@ impl<'a> LogQueue<'a> {
     }
 
     // assign & calculate rotated logfile
-    pub fn set_rotated(&mut self, rotated: &'a mut LogFile) {
-        self.rotated = Some(rotated);
+    pub fn set_rotated(&mut self, rotated: Option<&'a mut LogFile>) {
+        self.rotated = rotated;
     }
 
     /// Returns the number of elements which is either 1 or 2
@@ -58,8 +58,8 @@ mod tests {
 
     #[test]
     fn iter() {
-        let mut a = LogFile::new("/var/log/kern.log").unwrap();
-        let mut b = LogFile::new("/var/log/boot.log").unwrap();
+        let mut a = LogFile::from_path("/var/log/kern.log").unwrap();
+        let mut b = LogFile::from_path("/var/log/boot.log").unwrap();
 
         let mut queue = LogQueue::new(&mut a);
         while let Some(x) = queue.next() {
@@ -69,7 +69,7 @@ mod tests {
         assert_eq!(queue.count(), 1);
 
         queue = LogQueue::new(&mut a);
-        queue.set_rotated(&mut b);
+        queue.set_rotated(Some(&mut b));
         assert_eq!(queue.count(), 2);
 
         while let Some(x) = queue.next() {

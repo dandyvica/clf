@@ -97,7 +97,7 @@ impl Snapshot {
         // is logfile already in the snapshot ?
         if !self.snapshot.contains_key(path) {
             // create a new LogFile
-            let logfile = LogFile::new(&path)?;
+            let logfile = LogFile::from_path(&path)?;
             let opt = self.snapshot.insert(path.clone().to_path_buf(), logfile);
             debug_assert!(opt.is_none());
             debug_assert!(self.snapshot.contains_key(path));
