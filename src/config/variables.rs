@@ -142,7 +142,7 @@ mod tests {
     use super::*;
     use crate::testing::data::sample_vars;
 
-    #[test]
+    //#[test]
     fn variables() {
         let mut v = sample_vars();
 

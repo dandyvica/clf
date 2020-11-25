@@ -1,3 +1,10 @@
+// TODO:
+// - create a reader for JSON files
+// - serialize/deserialize date correctly: done
+// - add Tera/Jinja2 templating
+// - delete tag_name is snapshot: done
+// - add log rotation facility
+
 use log::{debug, info};
 use std::io::ErrorKind;
 use std::process::id;
@@ -11,10 +18,13 @@ extern crate simplelog;
 use wait_timeout::ChildExt;
 
 mod config;
-use config::{callback::ChildData, variables::Variables};
+use config::callback::ChildData;
 
 mod logfile;
-use logfile::logfile::{LogFile, Wrapper};
+use logfile::{
+    logfile::{LogFile, Wrapper},
+    lookup::ReaderCallType,
+};
 
 mod misc;
 use misc::{
@@ -57,6 +67,11 @@ fn main() {
     init_log(&options);
 
     //---------------------------------------------------------------------------------------------------
+    // which kind or reader do we want ?
+    //---------------------------------------------------------------------------------------------------
+    let reader_type = &options.reader_type;
+
+    //---------------------------------------------------------------------------------------------------
     // load configuration file as specified from the command line
     //---------------------------------------------------------------------------------------------------
     let mut config = init_config(&options);
@@ -80,8 +95,8 @@ fn main() {
     //---------------------------------------------------------------------------------------------------
     // create initial variables, both user & runtime
     //---------------------------------------------------------------------------------------------------
-    let mut vars = Variables::default();
-    vars.insert_uservars(config.user_vars());
+    // let mut user_vars = Variables::default();
+    // vars.insert_uservars(config.user_vars());
 
     //---------------------------------------------------------------------------------------------------
     // loop through all searches
@@ -142,7 +157,7 @@ fn main() {
         use crate::logfile::logqueue::LogQueue;
 
         // no archive for the moment
-        let mut archived_logfile: Option<LogFile> = None;
+        let archived_logfile: Option<LogFile> = None;
 
         // check if the rotation occured. This means the logfile signature has changed
         let snapshot_has_changed = {
@@ -162,60 +177,60 @@ fn main() {
             temp.unwrap()
         };
 
-        if snapshot_has_changed {
-            info!("logfile has changed, probably archived and rotated");
+        //if snapshot_has_changed {
+        //     info!("logfile has changed, probably archived and rotated");
 
-            // first, check if an archive tag has been defined in the YAML config for this search
-            if search.archive.is_none() {
-                error!("logfile {} has been moved or archived but no archive settings defined in the configuration file", snapshot_logfile.path.display());
-                continue;
-            }
+        //     // first, check if an archive tag has been defined in the YAML config for this search
+        //     if search.archive.is_none() {
+        //         error!("logfile {} has been moved or archived but no archive settings defined in the configuration file", snapshot_logfile.path.display());
+        //         continue;
+        //     }
 
-            // get archived log file name. Now it's safe to unwrap
-            let archived_path = search
-                .archive
-                .as_ref()
-                .unwrap()
-                .archived_path(&snapshot_logfile.path);
+        //     // get archived log file name. Now it's safe to unwrap
+        //     let archived_path = search
+        //         .archive
+        //         .as_ref()
+        //         .unwrap()
+        //         .archived_path(&snapshot_logfile.path);
 
-            if archived_path.is_none() {
-                error!(
-                    "can't determine archived logfile for {}",
-                    snapshot_logfile.path.display()
-                );
-                continue;
-            }
+        //     if archived_path.is_none() {
+        //         error!(
+        //             "can't determine archived logfile for {}",
+        //             snapshot_logfile.path.display()
+        //         );
+        //         continue;
+        //     }
 
-            // create a new instance of the logfile with the archived file
-            let mut _archived_logfile = {
-                let temp = LogFile::from_path(&archived_path.unwrap());
-                if let Err(e) = temp {
-                    error!(
-                        "error on creating logfile for path {}: {}",
-                        snapshot_logfile.path().display(),
-                        e
-                    );
+        //     // create a new instance of the logfile with the archived file
+        //     let mut _archived_logfile = {
+        //         let temp = LogFile::from_path(&archived_path.unwrap());
+        //         if let Err(e) = temp {
+        //             error!(
+        //                 "error on creating logfile for path {}: {}",
+        //                 snapshot_logfile.path().display(),
+        //                 e
+        //             );
 
-                    // this is a error for this logfile which boils down to a Nagios unknown error
-                    hit_counter.set_error(e);
+        //             // this is a error for this logfile which boils down to a Nagios unknown error
+        //             hit_counter.set_error(e);
 
-                    continue;
-                }
-                temp.unwrap()
-            };
+        //             continue;
+        //         }
+        //         temp.unwrap()
+        //     };
 
-            // duplicate rundata from the original logfile
-            _archived_logfile.set_rundata(&snapshot_logfile.rundata());
+        //     // duplicate rundata from the original logfile
+        //     _archived_logfile.set_rundata(&snapshot_logfile.rundata());
 
-            // finally, the archive logfile is ready to be processed
-            archived_logfile = Some(_archived_logfile);
-        }
+        //     // finally, the archive logfile is ready to be processed
+        //     archived_logfile = Some(_archived_logfile);
+        // }
 
-        // build a new queue to manage archve & brand new file
+        // // build a new queue to manage archve & brand new file
         let mut queue = LogQueue::new(snapshot_logfile);
-        if archived_logfile.is_some() {
-            queue.set_rotated(archived_logfile.as_mut())
-        }
+        // if archived_logfile.is_some() {
+        //     queue.set_rotated(archived_logfile.as_mut())
+        // }
 
         // loop on either (rotated, snapshot) logfiles, or just snapshot
         while let Some(logfile) = queue.next() {
@@ -224,10 +239,10 @@ fn main() {
                 debug!("searching for tag: {}", &tag.name());
 
                 // wraps all structures into a helper struct
-                let mut wrapper = Wrapper::new(config.global(), &tag, &mut vars, &mut hit_counter);
+                let mut wrapper = Wrapper::new(config.global(), &tag, &mut hit_counter);
 
                 // now we can search for the pattern and save the child handle if a script was called
-                match logfile.lookup(&mut wrapper) {
+                match logfile.lookup(&mut wrapper, reader_type) {
                     // script might be started, giving back a `Child` structure with process features like pid etc
                     Ok(mut children) => {
                         // merge list of children
@@ -251,6 +266,11 @@ fn main() {
                 }
             }
         }
+    }
+
+    // just exit if the --no-call option was used
+    if reader_type == &ReaderCallType::BypassReaderCall {
+        Nagios::exit_ok("read complete");
     }
 
     // save snapshot and optionally delete old entries

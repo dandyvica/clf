@@ -15,7 +15,7 @@ impl Cons {
     pub const DEFAULT_RETENTION: u64 = 86000 * 7;
 
     /// Variable name prefix to be inserted for each variable.
-    pub const VAR_PREFIX: &'static str = "CLF_";
+    //pub const VAR_PREFIX: &'static str = "CLF_";
 
     /// Default capacity for all `Vec` or `HashMap` pre-allocations
     pub const DEFAULT_CONTAINER_CAPACITY: usize = 30;

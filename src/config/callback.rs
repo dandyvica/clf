@@ -1,4 +1,5 @@
 //! Useful wrapper on the `Command` Rust standard library structure.
+use std::borrow::Cow;
 use std::cell::RefCell;
 use std::convert::TryFrom;
 use std::io::Write;
@@ -15,7 +16,7 @@ use log::debug;
 use serde::Deserialize;
 use serde_json::json;
 
-use crate::config::variables::Variables;
+use crate::config::vars::{RuntimeVars, UserVars};
 use crate::fromstr;
 use crate::misc::{error::AppError, util::Cons};
 
@@ -71,7 +72,8 @@ impl Callback {
     pub fn call(
         &self,
         env_path: Option<&str>,
-        vars: &Variables,
+        user_vars: &Option<UserVars>,
+        runtime_vars: &RuntimeVars,
         handle: &mut CallbackHandle,
     ) -> Result<Option<ChildData>, AppError> {
         debug!(
@@ -79,7 +81,7 @@ impl Callback {
             &self.callback,
             self.args,
             env_path,
-            vars,
+            runtime_vars,
             std::env::current_dir()
                 .map_err(|e| format!("unable to fetch current directory, error={}", e))
         );
@@ -93,8 +95,8 @@ impl Callback {
                 let mut cmd = Command::new(path.as_ref().unwrap());
 
                 // user vars don't change so we can add them right now
-                if let Some(uservars) = vars.user_vars() {
-                    cmd.envs(uservars);
+                if let Some(uservars) = user_vars {
+                    cmd.envs(uservars.inner());
                 }
 
                 // add arguments if any
@@ -106,7 +108,12 @@ impl Callback {
                 debug!("creating Command for: {:?}", path.as_ref().unwrap());
 
                 // runtime variables are always there.
-                cmd.envs(vars.runtime_vars());
+                for (var, value) in runtime_vars.inner() {
+                    match var {
+                        Cow::Borrowed(s) => cmd.env(s, &value),
+                        Cow::Owned(s) => cmd.env(s, &value),
+                    };
+                }
 
                 // update PATH variable if any
                 if let Some(path) = env_path {
@@ -138,7 +145,8 @@ impl Callback {
                 // create a dedicated JSON structure
                 let mut json = json!({
                     "args": &self.args,
-                    "vars": vars
+                    "user": user_vars,
+                    "vars": runtime_vars
                 })
                 .to_string();
 
@@ -171,7 +179,8 @@ impl Callback {
                 // create a dedicated JSON structure
                 let mut json = json!({
                     "args": &self.args,
-                    "vars": vars
+                    "user": user_vars,
+                    "vars": runtime_vars
                 })
                 .to_string();
 
@@ -231,50 +240,12 @@ impl ChildData {
 #[cfg(test)]
 pub mod tests {
     use super::*;
-    //use regex::Regex;
-    use std::io::prelude::*;
+    use regex::Regex;
+    use std::borrow::Cow;
     use std::str::FromStr;
 
-    use crate::config::variables::Variables;
-    //use crate::misc::error::AppError;
-    use crate::testing::data::sample_vars;
-
-    #[derive(Deserialize)]
-    struct JSON {
-        args: Vec<String>,
-        vars: Variables,
-    }
-
-    // utility fn to receive JSON from a stream
-    fn get_json<T: Read>(socket: &mut T) -> JSON {
-        // read size first
-        let mut size_buffer = [0; std::mem::size_of::<u16>()];
-        socket.read_exact(&mut size_buffer).unwrap();
-        let json_size = u16::from_be_bytes(size_buffer);
-        //assert_eq!(json_size, 211);
-
-        // read JSON raw data
-        let mut json_buffer = vec![0; json_size as usize];
-        socket.read_exact(&mut json_buffer).unwrap();
-
-        // get JSON
-        let s = std::str::from_utf8(&json_buffer).unwrap();
-
-        let json: JSON = serde_json::from_str(&s).unwrap();
-        json
-    }
-
-    // helper fn to create a dummy Variables struct
-    // fn dummy_vars() -> Variables {
-    //     // create dummy variables
-    //     let re = Regex::new(r"^([a-z\s]+) (\w+) (\w+) (?P<LASTNAME>\w+)").unwrap();
-    //     let text = "my name is john fitzgerald kennedy, president of the USA";
-
-    //     let mut vars = Variables::default();
-    //     vars.insert_captures(&re, text);
-
-    //     vars
-    // }
+    use crate::config::vars::Vars;
+    use crate::testing::setup::get_json_from_stream;
 
     #[test]
     #[cfg(target_family = "unix")]
@@ -290,11 +261,15 @@ pub mod tests {
         assert_eq!(cb.args.as_ref().unwrap().len(), 3);
 
         // create dummy variables
-        let vars = sample_vars();
+        let re = Regex::new(r"^([a-z\s]+) (\w+) (\w+) (?P<LASTNAME>\w+)").unwrap();
+        let text = "my name is john fitzgerald kennedy, president of the USA";
+
+        let mut vars = Vars::<Cow<str>, &str>::default();
+        vars.insert_captures(&re, text);
 
         // call script
         let mut handle = CallbackHandle::default();
-        let data = cb.call(None, &vars, &mut handle).unwrap();
+        let data = cb.call(None, &None, &vars, &mut handle).unwrap();
         assert!(data.is_some());
 
         // safe to unwrap
@@ -323,7 +298,8 @@ pub mod tests {
             let listener = std::net::TcpListener::bind(&addr).unwrap();
             match listener.accept() {
                 Ok((mut socket, _addr)) => {
-                    let json = get_json(&mut socket);
+                    let json = get_json_from_stream(&mut socket)
+                        .expect("unable to get JSON data from stream");
 
                     assert_eq!(json.args, vec!["one", "two", "three"]);
 
@@ -341,11 +317,15 @@ pub mod tests {
         std::thread::sleep(ten_millis);
 
         // create dummy variables
-        let vars = sample_vars();
+        let re = Regex::new(r"^([a-z\s]+) (\w+) (\w+) (?P<LASTNAME>\w+)").unwrap();
+        let text = "my name is john fitzgerald kennedy, president of the USA";
+
+        let mut vars = Vars::<Cow<str>, &str>::default();
+        vars.insert_captures(&re, text);
 
         // some work here
         let mut handle = CallbackHandle::default();
-        let data = cb.call(None, &vars, &mut handle).unwrap();
+        let data = cb.call(None, &None, &vars, &mut handle).unwrap();
         assert!(data.is_none());
 
         let _res = child.join();
@@ -372,7 +352,8 @@ pub mod tests {
             let listener = std::os::unix::net::UnixListener::bind(addr).unwrap();
             match listener.accept() {
                 Ok((mut socket, _addr)) => {
-                    let json = get_json(&mut socket);
+                    let json = get_json_from_stream(&mut socket)
+                        .expect("unable to get JSON data from stream");
 
                     assert_eq!(json.args, vec!["one", "two", "three"]);
 
@@ -390,11 +371,15 @@ pub mod tests {
         std::thread::sleep(ten_millis);
 
         // create dummy variables
-        let mut vars = sample_vars();
+        let re = Regex::new(r"^([a-z\s]+) (\w+) (\w+) (?P<LASTNAME>\w+)").unwrap();
+        let text = "my name is john fitzgerald kennedy, president of the USA";
+
+        let mut vars = Vars::<Cow<str>, &str>::default();
+        vars.insert_captures(&re, text);
 
         // some work here
         let mut handle = CallbackHandle::default();
-        let data = cb.call(None, &mut vars, &mut handle).unwrap();
+        let data = cb.call(None, &None, &mut vars, &mut handle).unwrap();
         assert!(data.is_none());
 
         //cb.call(None, &vars).unwrap();

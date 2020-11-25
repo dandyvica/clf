@@ -4,6 +4,7 @@
 pub mod logfile;
 pub mod compression;
 pub mod logqueue;
+pub mod lookup;
 pub mod seeker;
 pub mod signature;
 pub mod snapshot;

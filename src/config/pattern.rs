@@ -148,6 +148,16 @@ impl From<PatternType> for String {
     }
 }
 
+// impl From<&'static str> for PatternType {
+//     fn from(pattern_type: &'static str) -> Self {
+//         match pattern_type {
+//             "critical" => PatternType::critical,
+//             "warning" => PatternType::warning,
+//             "ok" => PatternType::ok,
+//         }
+//     }
+// }
+
 /// A structure combining patterns into 3 categories: *critical*, *warning* and *ok*.
 #[derive(Debug, Deserialize, Clone)]
 pub struct PatternSet {
@@ -156,15 +166,29 @@ pub struct PatternSet {
     pub(in crate) ok: Option<Pattern>,
 }
 
+pub struct PatternMatchResult<'a> {
+    pub pattern_type: PatternType,
+    pub regex: &'a Regex,
+}
+
+impl<'a> PatternMatchResult<'a> {
+    fn new(pattern_type: PatternType, regex: &'a Regex) -> Self {
+        PatternMatchResult {
+            pattern_type,
+            regex,
+        }
+    }
+}
+
 impl PatternSet {
     /// Returns whether a critical or warning regex is involved in the match, provided no exception is matched.
-    pub fn is_match(&self, text: &str) -> Option<(PatternType, &Regex)> {
+    pub fn is_match(&self, text: &str) -> Option<PatternMatchResult> {
         // try to match critical pattern first
         if let Some(critical) = &self.critical {
             trace!("critical pattern is tried");
             let ret = critical
                 .is_match(text)
-                .map(|re| (PatternType::critical, re));
+                .map(|re| PatternMatchResult::new(PatternType::critical, re));
             if ret.is_some() {
                 return ret;
             }
@@ -173,10 +197,10 @@ impl PatternSet {
         // and then warning
         if let Some(warning) = &self.warning {
             trace!("warning pattern is tried");
-            let ret = warning.is_match(text).map(|re| (PatternType::warning, re));
+            let ret = warning
+                .is_match(text)
+                .map(|re| PatternMatchResult::new(PatternType::warning, re));
             if ret.is_some() {
-                // dbg!(&ret);
-                // dbg!(text);
                 return ret;
             }
         }
@@ -184,7 +208,9 @@ impl PatternSet {
         // and finally ok
         if let Some(ok) = &self.ok {
             trace!("ok pattern is tried");
-            let ret = ok.is_match(text).map(|re| (PatternType::ok, re));
+            let ret = ok
+                .is_match(text)
+                .map(|re| PatternMatchResult::new(PatternType::ok, re));
             if ret.is_some() {
                 return ret;
             }
@@ -193,6 +219,41 @@ impl PatternSet {
         None
     }
 }
+// impl PatternSet {
+//     /// Returns whether a critical or warning regex is involved in the match, provided no exception is matched.
+//     pub fn is_match(&self, text: &str) -> Option<(PatternType, &Regex)> {
+//         // try to match critical pattern first
+//         if let Some(critical) = &self.critical {
+//             trace!("critical pattern is tried");
+//             let ret = critical
+//                 .is_match(text)
+//                 .map(|re| (PatternType::critical, re));
+//             if ret.is_some() {
+//                 return ret;
+//             }
+//         }
+
+//         // and then warning
+//         if let Some(warning) = &self.warning {
+//             trace!("warning pattern is tried");
+//             let ret = warning.is_match(text).map(|re| (PatternType::warning, re));
+//             if ret.is_some() {
+//                 return ret;
+//             }
+//         }
+
+//         // and finally ok
+//         if let Some(ok) = &self.ok {
+//             trace!("ok pattern is tried");
+//             let ret = ok.is_match(text).map(|re| (PatternType::ok, re));
+//             if ret.is_some() {
+//                 return ret;
+//             }
+//         }
+
+//         None
+//     }
+// }
 
 // Auto-implement FromStr
 fromstr!(PatternSet);
@@ -273,19 +334,19 @@ mod tests {
 
         // critical
         let match_text = p.is_match("ERROR: core dump ").unwrap();
-        assert_eq!(match_text.0, PatternType::critical);
-        assert_eq!(match_text.1.as_str(), "^ERROR");
+        assert_eq!(match_text.pattern_type, PatternType::critical);
+        assert_eq!(match_text.regex.as_str(), "^ERROR");
         assert!(p.is_match("SLIGHT_ERROR: core dump ").is_none());
 
         // warning
         let match_text = p.is_match("this is an ERROR").unwrap();
-        assert_eq!(match_text.0, PatternType::warning);
-        assert_eq!(match_text.1.as_str(), "ERROR$");
+        assert_eq!(match_text.pattern_type, PatternType::warning);
+        assert_eq!(match_text.regex.as_str(), "ERROR$");
         assert!(p.is_match("MINOR_ERROR: not a core dump ").is_none());
 
         // ok
         let match_text = p.is_match("RESET_ERROR: error is reset").unwrap();
-        assert_eq!(match_text.0, PatternType::ok);
-        assert_eq!(match_text.1.as_str(), "^RESET_ERROR");
+        assert_eq!(match_text.pattern_type, PatternType::ok);
+        assert_eq!(match_text.regex.as_str(), "^RESET_ERROR");
     }
 }

@@ -1,32 +1,15 @@
 // A module for setting up data for unit tests
-use regex::Regex;
+//use regex::Regex;
 use serde::Deserialize;
 
-use crate::config::{
-    callback::{CallbackHandle, ChildData},
-    config::{GlobalOptions, Tag},
-    pattern::PatternType,
-    variables::Variables,
-};
+use crate::config::vars::Vars;
 
-//pub use config::variables::Variables as Variables;
+//pub use config::vars::RuntimeVars as Variables;
 
 #[derive(Debug, Deserialize)]
 pub struct JSONStream {
     pub args: Vec<String>,
-    pub vars: Variables,
-}
-
-// helper fn to create a dummy Variables struct
-pub fn sample_vars() -> Variables {
-    // create dummy variables
-    let re = Regex::new(r"^([a-z\s]+) (\w+) (\w+) (?P<LASTNAME>\w+)").unwrap();
-    let text = "my name is john fitzgerald kennedy, president of the USA";
-
-    let mut vars = Variables::default();
-    vars.insert_captures(&re, text);
-
-    vars
+    pub vars: Vars<String, String>,
 }
 
 // help for generating a simple config

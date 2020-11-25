@@ -22,6 +22,7 @@ flate2 = "1.0.19"
 serde_yaml = "0.8.14"
 bzip2 = "0.4.1"
 xz2 = "0.1.6"
+chrono = "0.4.19"
 
 [[bin]]
 name = "clf"

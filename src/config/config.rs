@@ -11,21 +11,20 @@
 //!
 //!
 
-use std::collections::HashMap;
 use std::fmt::Display;
 use std::fs::File;
 use std::path::{Path, PathBuf};
 
-use log::{debug, error, info};
-use regex::Regex;
+use log::debug;
+//use regex::Regex;
 use serde::{de, Deserialize, Deserializer};
 use serde_yaml::Value;
 
 use crate::config::{
     callback::{Callback, CallbackHandle, ChildData},
     options::SearchOptions,
-    pattern::{PatternSet, PatternType},
-    variables::Variables,
+    pattern::{PatternMatchResult, PatternSet},
+    vars::{RuntimeVars, UserVars},
 };
 
 use crate::misc::{
@@ -67,13 +66,19 @@ pub struct GlobalOptions {
     snapshot_retention: u64,
 
     /// A list of user variables if any.
-    user_vars: Option<HashMap<String, String>>,
+    user_vars: Option<UserVars>,
 }
 
 impl GlobalOptions {
     #[inline(always)]
     pub fn path(&self) -> &str {
         &self.path
+    }
+
+    // Returns the user variables if any. Clone of the original HashMap.
+    #[inline(always)]
+    pub fn user_vars(&self) -> &Option<UserVars> {
+        &self.user_vars
     }
 }
 
@@ -188,7 +193,7 @@ impl Tag {
     }
 
     /// Returns the regex involved in a match, if any, along with associated the pattern type.
-    pub fn is_match(&self, text: &str) -> Option<(PatternType, &Regex)> {
+    pub fn is_match(&self, text: &str) -> Option<PatternMatchResult> {
         self.patterns.is_match(text)
     }
 
@@ -201,11 +206,15 @@ impl Tag {
     pub fn callback_call(
         &self,
         path: Option<&str>,
-        vars: &mut Variables,
+        user_vars: &Option<UserVars>,
+        runtime_vars: &RuntimeVars,
         handle: &mut CallbackHandle,
     ) -> Result<Option<ChildData>, AppError> {
         if self.callback.is_some() {
-            self.callback.as_ref().unwrap().call(path, vars, handle)
+            self.callback
+                .as_ref()
+                .unwrap()
+                .call(path, user_vars, runtime_vars, handle)
         } else {
             Ok(None)
         }
@@ -305,12 +314,6 @@ impl Config {
     #[inline(always)]
     pub fn snapshot_file(&self) -> &PathBuf {
         &self.global.snapshot_file
-    }
-
-    // Returns the user variables if any. Clone of the original HashMap.
-    #[inline(always)]
-    pub fn user_vars(&self) -> Option<HashMap<String, String>> {
-        self.global.user_vars.clone()
     }
 
     /// Returns the snapshot retention

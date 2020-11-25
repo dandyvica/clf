@@ -5,6 +5,7 @@ use clap::{value_t, App, Arg};
 use simplelog::LevelFilter;
 
 //use crate::error::AppExitCode;
+use crate::logfile::lookup::ReaderCallType;
 use crate::misc::{
     nagios::{Nagios, NagiosVersion},
     util::Cons,
@@ -22,6 +23,7 @@ pub struct CliOptions {
     pub show_options: bool,
     pub nagios_version: NagiosVersion,
     pub snapshot_file: Option<PathBuf>,
+    pub reader_type: ReaderCallType,
 }
 
 /// Implements `Default` trait for `CliOptions`.
@@ -41,6 +43,7 @@ impl Default for CliOptions {
             show_options: false,
             nagios_version: NagiosVersion::Nrpe3,
             snapshot_file: None,
+            reader_type: ReaderCallType::FullReaderCall,
         }
     }
 }
@@ -123,6 +126,14 @@ impl CliOptions {
                     .takes_value(true),
             )
             .arg(
+                Arg::with_name("no-call")
+                    .short("a")
+                    .long("no-call")
+                    .required(false)
+                    .help("Don't run any callback, just read all logfiles in the configuration file. Used to check whether regexes are correct.")
+                    .takes_value(false),
+            )
+            .arg(
                 Arg::with_name("snapfile")
                     .short("p")
                     .long("snapfile")
@@ -150,6 +161,11 @@ impl CliOptions {
         // optional logger file
         if matches.is_present("clflog") {
             options.clf_logger = PathBuf::from(matches.value_of("clflog").unwrap());
+        }
+
+        // optional check for reading
+        if matches.is_present("no-call") {
+            options.reader_type = ReaderCallType::BypassReaderCall;
         }
 
         // other options too
