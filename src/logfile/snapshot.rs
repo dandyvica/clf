@@ -81,7 +81,7 @@ impl Snapshot {
         debug!("checking retention time for snapshot");
         for logfile in self.snapshot.values_mut() {
             let run_data = logfile.rundata_mut();
-            run_data.retain(|_, v| time.as_secs_f64() - v.lastrun() < snapshot_retention as f64);
+            run_data.retain(|_, v| time.as_secs() - v.lastrun_secs() < snapshot_retention);
         }
 
         // then just saves this file.

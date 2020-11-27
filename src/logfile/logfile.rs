@@ -23,6 +23,7 @@ use crate::config::{
 
 use crate::logfile::{
     compression::CompressionScheme,
+    lookup::Lookup,
     lookup::ReaderCallType,
     signature::{FileIdentification, Signature},
 };
@@ -62,9 +63,12 @@ pub struct RunData {
     /// last line number during the last search
     pub(super) last_line: u64,
 
-    /// last time logfile is processed
-    #[serde(serialize_with = "timestamp_to_string")]
+    /// last time logfile were processed: printable date/time
+    #[serde(serialize_with = "timestamp_to_string", skip_deserializing)]
     pub(super) last_run: f64,
+
+    /// last time logfile were processed in seconds: used to check retention
+    pub(super) last_run_secs: u64,
 
     /// ongoing critical count
     pub(super) critical_count: u64,
@@ -84,9 +88,7 @@ where
     // frational part = number of nanoseconds
     let secs = value.trunc();
     let nanos = value.fract();
-    println!("secs={}, nanos={}", secs, nanos);
     let utc_tms = Utc.timestamp(secs as i64, (nanos * 1_000_000_000f64) as u32);
-    println!("{}", utc_tms.format("%Y-%m-%d %H:%M:%S.%f"));
     format!("{}", utc_tms.format("%Y-%m-%d %H:%M:%S.%f")).serialize(serializer)
 }
 
@@ -99,8 +101,8 @@ impl RunData {
 
     /// Returns the `last_run` field value.
     #[inline(always)]
-    pub fn lastrun(&self) -> f64 {
-        self.last_run
+    pub fn lastrun_secs(&self) -> u64 {
+        self.last_run_secs
     }
 }
 
@@ -108,7 +110,7 @@ impl RunData {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct LogFile {
     /// File & path as a `PathBuf`.
-    pub(super) path: PathBuf,
+    pub(crate) path: PathBuf,
 
     /// Directory part or `None` if not existing.
     directory: Option<PathBuf>,
@@ -190,7 +192,7 @@ impl LogFile {
     pub fn has_changed(&self) -> Result<bool, AppError> {
         // get most recent signature
         let signature = self.path.signature()?;
-        Ok(self.signature == signature)
+        Ok(self.signature != signature && self.signature != Signature::default())
     }
 
     // /// Returns the list of tags of this `LogFile`.
@@ -238,12 +240,53 @@ impl LogFile {
         }
     }
 
+    //Just a wrapper function for a file.
+    // pub fn lookup(
+    //     &mut self,
+    //     wrapper: &mut Wrapper,
+    //     reader_type: &ReaderCallType,
+    // ) -> Result<Vec<ChildData>, AppError> {
+    //     // open target file
+    //     let file = File::open(&self.path)?;
+
+    //     // if file is compressed, we need to call a specific reader
+    //     // create a specific reader for each compression scheme
+    //     match self.compression {
+    //         CompressionScheme::Gzip => {
+    //             let decoder = GzDecoder::new(file);
+    //             let reader = BufReader::new(decoder);
+    //             //self.lookup_from_reader(reader, wrapper)
+    //             reader_type.call(self, reader, wrapper)
+    //         }
+    //         CompressionScheme::Bzip2 => {
+    //             let decoder = BzDecoder::new(file);
+    //             let reader = BufReader::new(decoder);
+    //             //self.lookup_from_reader(reader, wrapper)
+    //             reader_type.call(self, reader, wrapper)
+    //         }
+    //         CompressionScheme::Xz => {
+    //             let decoder = XzDecoder::new(file);
+    //             let reader = BufReader::new(decoder);
+    //             //self.lookup_from_reader(reader, wrapper)
+    //             reader_type.call(self, reader, wrapper)
+    //         }
+    //         CompressionScheme::Uncompressed => {
+    //             let reader = BufReader::new(file);
+    //             //self.lookup_from_reader(reader, wrapper)
+    //             reader_type.call(self, reader, wrapper)
+    //         }
+    //     }
+    // }
+
     ///Just a wrapper function for a file.
-    pub fn lookup(
+    pub fn lookup<T>(
         &mut self,
         wrapper: &mut Wrapper,
         reader_type: &ReaderCallType,
-    ) -> Result<Vec<ChildData>, AppError> {
+    ) -> Result<Vec<ChildData>, AppError>
+    where
+        Self: Lookup<T>,
+    {
         // open target file
         let file = File::open(&self.path)?;
 
@@ -254,24 +297,67 @@ impl LogFile {
                 let decoder = GzDecoder::new(file);
                 let reader = BufReader::new(decoder);
                 //self.lookup_from_reader(reader, wrapper)
-                reader_type.call(self, reader, wrapper)
+                Lookup::<T>::reader(self, reader, wrapper)
             }
             CompressionScheme::Bzip2 => {
                 let decoder = BzDecoder::new(file);
                 let reader = BufReader::new(decoder);
                 //self.lookup_from_reader(reader, wrapper)
-                reader_type.call(self, reader, wrapper)
+                Lookup::<T>::reader(self, reader, wrapper)
             }
             CompressionScheme::Xz => {
                 let decoder = XzDecoder::new(file);
                 let reader = BufReader::new(decoder);
                 //self.lookup_from_reader(reader, wrapper)
-                reader_type.call(self, reader, wrapper)
+                Lookup::<T>::reader(self, reader, wrapper)
             }
             CompressionScheme::Uncompressed => {
                 let reader = BufReader::new(file);
                 //self.lookup_from_reader(reader, wrapper)
-                reader_type.call(self, reader, wrapper)
+                Lookup::<T>::reader(self, reader, wrapper)
+            }
+        }
+    }
+
+    // Search for each tag in the search
+    pub fn lookup_tags<T>(
+        &mut self,
+        global_opts: &GlobalOptions,
+        tags: &[Tag],
+        hit_counter: &mut HitCounter,
+        reader_type: &ReaderCallType,
+        children_list: &mut Vec<ChildData>,
+    ) where
+        Self: Lookup<T>,
+    {
+        for tag in tags.iter().filter(|t| t.process()) {
+            debug!("searching for tag: {}", &tag.name());
+
+            // wraps all structures into a helper struct
+            let mut wrapper = Wrapper::new(global_opts, &tag, hit_counter);
+
+            // now we can search for the pattern and save the child handle if a script was called
+            match self.lookup::<T>(&mut wrapper, reader_type) {
+                // script might be started, giving back a `Child` structure with process features like pid etc
+                Ok(mut children) => {
+                    // merge list of children
+                    if children.len() != 0 {
+                        children_list.append(&mut children);
+                    }
+                }
+
+                // otherwise, an error when opening (most likely) the file and then report an error on counters
+                Err(e) => {
+                    error!(
+                        "error: {} when searching logfile: {} for tag: {}",
+                        e,
+                        self.path.display(),
+                        &tag.name()
+                    );
+
+                    // set error for this logfile
+                    hit_counter.set_error(e);
+                }
             }
         }
     }
@@ -283,7 +369,7 @@ mod tests {
 
     use super::*;
 
-    use crate::logfile::lookup::ReaderCallType;
+    use crate::logfile::lookup::{FullReader, ReaderCallType};
     use crate::testing::setup::*;
 
     #[test]
@@ -424,7 +510,7 @@ mod tests {
         let ten_millis = std::time::Duration::from_millis(10);
         std::thread::sleep(ten_millis);
 
-        let _ret = logfile.lookup(&mut w, &ReaderCallType::FullReaderCall);
+        let _ret = logfile.lookup::<FullReader>(&mut w, &ReaderCallType::FullReaderCall);
         let _res = child.join();
     }
 }

@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 use crate::misc::error::AppError;
 
 // Combination a an inod and a dev
-#[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Clone, Default)]
 pub struct Signature {
     inode: u64,
     dev: u64,
@@ -49,9 +49,4 @@ impl FileIdentification for PathBuf {
     fn signature(&self) -> Result<Signature, AppError> {
         unimplemented!("Signature trait not yet implemented for Windows");
     }
-
-    // fn has_changed(&self, other: &Signature) -> Result<bool, AppError> {
-    //     let sign = PathBuf::signature(self)?;
-    //     Ok(sign == *other)
-    // }
 }

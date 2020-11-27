@@ -90,13 +90,13 @@ pub enum NagiosVersion {
 
 /// Used from cli options.
 impl FromStr for NagiosVersion {
-    type Err = ();
+    type Err = &'static str;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
             "2" => Ok(NagiosVersion::Nrpe2),
             "3" => Ok(NagiosVersion::Nrpe3),
-            _ => panic!("unknow Nagios NRPE protocol version"),
+            _ => Err("unknow Nagios version"),
         }
     }
 }

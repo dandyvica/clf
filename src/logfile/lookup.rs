@@ -30,10 +30,10 @@ pub trait Lookup<T> {
 }
 
 // In this case, the logfile is only read and callback not called at all
-struct BypassReader;
+pub struct BypassReader;
 
 // The regular reader
-struct FullReader;
+pub struct FullReader;
 
 // this will call the relevant reader
 #[derive(Debug, PartialEq)]
@@ -313,6 +313,7 @@ impl Lookup<FullReader> for LogFile {
         // and last run
         let time = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH)?;
         run_data.last_run = time.as_secs_f64();
+        run_data.last_run_secs = time.as_secs();
 
         info!("number of callback execution: {}", run_data.exec_count);
         trace!("logfile_counter: {:?}", &wrapper.logfile_counter);

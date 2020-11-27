@@ -1,33 +1,5 @@
 {
   "snapshot": {
-    "/var/log/syslog": {
-      "path": "/var/log/syslog",
-      "directory": "/var/log",
-      "extension": null,
-      "compression": "uncompressed",
-      "signature": {
-        "inode": 1070054,
-        "dev": 28
-      },
-      "run_data": {
-        "nokernel": {
-          "last_offset": 132048,
-          "last_line": 1079,
-          "last_run": "2020-11-25 16:50:22.558666229",
-          "critical_count": 0,
-          "warning_count": 0,
-          "exec_count": 1025
-        },
-        "kernel": {
-          "last_offset": 132048,
-          "last_line": 1079,
-          "last_run": "2020-11-25 16:50:22.638196468",
-          "critical_count": 0,
-          "warning_count": 0,
-          "exec_count": 54
-        }
-      }
-    },
     "/var/log/kern.log": {
       "path": "/var/log/kern.log",
       "directory": "/var/log",
@@ -39,20 +11,52 @@
       },
       "run_data": {
         "kernel": {
-          "last_offset": 396804,
-          "last_line": 3951,
-          "last_run": "2020-11-25 16:50:24.890139579",
+          "last_offset": 671249,
+          "last_line": 6623,
+          "last_run": "2020-11-27 18:00:47.483875751",
+          "last_run_secs": 1606500047,
           "critical_count": 0,
           "warning_count": 0,
           "exec_count": 10
         },
         "nokernel": {
-          "last_offset": 396804,
-          "last_line": 3951,
-          "last_run": "2020-11-25 16:50:24.260718584",
+          "last_offset": 671249,
+          "last_line": 6623,
+          "last_run": "2020-11-27 18:00:46.464831590",
+          "last_run_secs": 1606500046,
           "critical_count": 0,
           "warning_count": 0,
-          "exec_count": 3927
+          "exec_count": 6587
+        }
+      }
+    },
+    "/var/log/syslog": {
+      "path": "/var/log/syslog",
+      "directory": "/var/log",
+      "extension": null,
+      "compression": "uncompressed",
+      "signature": {
+        "inode": 1092048,
+        "dev": 28
+      },
+      "run_data": {
+        "nokernel": {
+          "last_offset": 133361,
+          "last_line": 1058,
+          "last_run": "2020-11-27 18:00:43.725908994",
+          "last_run_secs": 1606500043,
+          "critical_count": 0,
+          "warning_count": 0,
+          "exec_count": 941
+        },
+        "kernel": {
+          "last_offset": 133361,
+          "last_line": 1058,
+          "last_run": "2020-11-27 18:00:43.918193578",
+          "last_run_secs": 1606500043,
+          "critical_count": 0,
+          "warning_count": 0,
+          "exec_count": 117
         }
       }
     }

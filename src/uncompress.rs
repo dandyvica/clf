@@ -17,12 +17,11 @@ fn main() {
     .author("Alain Viguier dandyvica@gmail.com")
     .about(r#"An executable to read compressed files using compression methods defined in the crate"#)
     .arg(
-        Arg::with_name("file")
-            .long_help("Mandatory argument. The name and path of the YAML configuration file, containing logfiles to search for and patterns to match.")
-            .short("f")
+        Arg::new("file")
+            .long_about("Name of the file to read.")
+            .short('f')
             .long("file")
             .required(true)
-            .help("Name of compresse file.")
             .takes_value(true),
     )            .get_matches();
 

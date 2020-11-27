@@ -60,7 +60,7 @@ pub const SNAPSHOT_SAMPLE: &'static str = r#"
                         "tag_name": "tag1",
                         "last_offset": 1000,
                         "last_line": 10,
-                        "last_run": 1000000,
+                        "last_run_secs": 1000000,
                         "critical_count": 10,
                         "warning_count": 10,
                         "exec_count": 10
@@ -69,7 +69,7 @@ pub const SNAPSHOT_SAMPLE: &'static str = r#"
                         "tag_name": "tag2",
                         "last_offset": 1000,
                         "last_line": 10,
-                        "last_run": 1000000,
+                        "last_run_secs": 1000000,
                         "critical_count": 10,
                         "warning_count": 10,
                         "exec_count": 10
@@ -90,7 +90,7 @@ pub const SNAPSHOT_SAMPLE: &'static str = r#"
                         "tag_name": "tag3",
                         "last_offset": 1000,
                         "last_line": 10,
-                        "last_run": 1000000,
+                        "last_run_secs": 1000000,
                         "critical_count": 10,
                         "warning_count": 10,
                         "exec_count": 10
@@ -100,7 +100,7 @@ pub const SNAPSHOT_SAMPLE: &'static str = r#"
                         "tag_name": "tag4",
                         "last_offset": 1000,
                         "last_line": 10,
-                        "last_run": 1000000,
+                        "last_run_secs": 1000000,
                         "critical_count": 10,
                         "warning_count": 10,
                         "exec_count": 10

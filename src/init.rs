@@ -6,7 +6,7 @@ use simplelog::*;
 
 use crate::args::CliOptions;
 use crate::config::config::Config;
-use crate::logfile::snapshot::Snapshot;
+use crate::logfile::{logfile::LogFile, snapshot::Snapshot};
 use crate::misc::nagios::Nagios;
 
 /// Create a new config struct
@@ -126,32 +126,5 @@ pub fn save_snapshot(snapshot: &mut Snapshot, snapfile: &PathBuf, retention: u64
     }
 }
 
-// let _config = if options.config_file == PathBuf::from("-") {
-//     let mut buffer = String::with_capacity(Cons::DEFAULT_STRING_CAPACITY);
-//     let stdin = stdin();
-//     let mut handle = stdin.lock();
-
-//     if let Err(e) = handle.read_to_string(&mut buffer) {
-//         eprintln!("error reading stdin: {}", e);
-//         exit(AppExitCode::STDIN_ERROR as i32);
-//     }
-//     Config::<LogSource>::from_str(&buffer)
-// } else {
-//     Config::<LogSource>::from_file(&options.config_file)
-// };
-// let _config = Config::<LogSource>::from_file(&options.config_file);
-
-// // check for loading errors
-// if let Err(error) = _config {
-//     eprintln!(
-//         "error loading config file: {:?}, error: {}",
-//         &options.config_file, error
-//     );
-
-//     // break down errors
-//     match error.get_ioerror() {
-//         Some(_) => exit(AppExitCode::CONFIG_IO_ERROR as i32),
-//         None => exit(AppExitCode::CONFIG_ERROR as i32),
-//     };
-//     //exit(AppExitCode::CONFIG_ERROR as i32);
-// }
+// Manage the case where a rotation occured
+//pub fn manage_rotation(logfile: &mut LogFile) ->  {}
