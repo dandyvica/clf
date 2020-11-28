@@ -1,5 +1,35 @@
 {
   "snapshot": {
+    "/var/log/syslog": {
+      "path": "/var/log/syslog",
+      "directory": "/var/log",
+      "extension": null,
+      "compression": "uncompressed",
+      "signature": {
+        "inode": 1099783,
+        "dev": 28
+      },
+      "run_data": {
+        "kernel": {
+          "last_offset": 119558,
+          "last_line": 942,
+          "last_run": "2020-11-28 17:22:47.476784706",
+          "last_run_secs": 1606584167,
+          "critical_count": 0,
+          "warning_count": 0,
+          "exec_count": 93
+        },
+        "nokernel": {
+          "last_offset": 119558,
+          "last_line": 942,
+          "last_run": "2020-11-28 17:22:47.324510097",
+          "last_run_secs": 1606584167,
+          "critical_count": 0,
+          "warning_count": 0,
+          "exec_count": 849
+        }
+      }
+    },
     "/var/log/kern.log": {
       "path": "/var/log/kern.log",
       "directory": "/var/log",
@@ -10,53 +40,23 @@
         "dev": 28
       },
       "run_data": {
+        "nokernel": {
+          "last_offset": 111,
+          "last_line": 1,
+          "last_run": "2020-11-28 17:22:47.477872610",
+          "last_run_secs": 1606584167,
+          "critical_count": 0,
+          "warning_count": 0,
+          "exec_count": 0
+        },
         "kernel": {
-          "last_offset": 671249,
-          "last_line": 6623,
-          "last_run": "2020-11-27 18:00:47.483875751",
-          "last_run_secs": 1606500047,
+          "last_offset": 812186,
+          "last_line": 7941,
+          "last_run": "2020-11-28 17:22:48.733733892",
+          "last_run_secs": 1606584168,
           "critical_count": 0,
           "warning_count": 0,
           "exec_count": 10
-        },
-        "nokernel": {
-          "last_offset": 671249,
-          "last_line": 6623,
-          "last_run": "2020-11-27 18:00:46.464831590",
-          "last_run_secs": 1606500046,
-          "critical_count": 0,
-          "warning_count": 0,
-          "exec_count": 6587
-        }
-      }
-    },
-    "/var/log/syslog": {
-      "path": "/var/log/syslog",
-      "directory": "/var/log",
-      "extension": null,
-      "compression": "uncompressed",
-      "signature": {
-        "inode": 1092048,
-        "dev": 28
-      },
-      "run_data": {
-        "nokernel": {
-          "last_offset": 133361,
-          "last_line": 1058,
-          "last_run": "2020-11-27 18:00:43.725908994",
-          "last_run_secs": 1606500043,
-          "critical_count": 0,
-          "warning_count": 0,
-          "exec_count": 941
-        },
-        "kernel": {
-          "last_offset": 133361,
-          "last_line": 1058,
-          "last_run": "2020-11-27 18:00:43.918193578",
-          "last_run_secs": 1606500043,
-          "critical_count": 0,
-          "warning_count": 0,
-          "exec_count": 117
         }
       }
     }

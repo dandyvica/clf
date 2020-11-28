@@ -356,41 +356,20 @@ impl Lookup<BypassReader> for LogFile {
 
             // is there a match ?
             if let Some(pattern_match) = wrapper.tag.is_match(&text) {
-                // print out also captures: this helps to verify regexes
-                // TODO: add captures
-                let caps = pattern_match.regex.captures(&text).unwrap();
-
-                // we'll store here all captures with their matched text
-                let mut dict: HashMap<String, &str> = HashMap::new();
-
-                // now loop and get text corresponding to either name or position
-                for (i, cg_name) in pattern_match.regex.capture_names().enumerate() {
-                    match cg_name {
-                        None => {
-                            if let Some(m) = caps.get(i) {
-                                // variable will be: CLF_CAPTURE2 (example)
-                                dict.insert(format!("cap{}", i), m.as_str());
-                            }
-                        }
-                        Some(cap_name) => {
-                            if let Some(m) = caps.name(cap_name) {
-                                // variable will be: CLF_FOO (example)
-                                dict.insert(cap_name.to_string(), m.as_str());
-                            }
-                        }
-                    }
-                }
+                // print out also captures
+                let mut vars = RuntimeVars::default();
+                vars.insert_captures(pattern_match.regex, &text);
 
                 // cap0 is the whole match, no need to keep it as the full line is printed anyway
-                dict.retain(|k, _| k != &String::from("cap0"));
+                vars.retain(|k, _| k != &String::from("CLF_CAPTURE0"));
 
                 eprintln!(
-                    "<{}>:<{}>:<{}>:<{}>:<{:?}>:<{}>",
+                    "{}:{}:{}:{}:[{}]:{}",
                     &self.path.display(),
                     &wrapper.tag.name(),
                     String::from(pattern_match.pattern_type),
                     line_number,
-                    dict,
+                    vars,
                     text
                 );
             }

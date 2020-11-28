@@ -126,9 +126,9 @@ impl CliOptions {
                     .takes_value(true),
             )
             .arg(
-                Arg::new("no-call")
+                Arg::new("no-callback")
                     .short('a')
-                    .long("no-call")
+                    .long("no-callback")
                     .required(false)
                     .long_about("Don't run any callback, just read all logfiles in the configuration file. Used to check whether regexes are correct.")
                     .takes_value(false),
@@ -164,7 +164,7 @@ impl CliOptions {
         }
 
         // optional check for reading
-        if matches.is_present("no-call") {
+        if matches.is_present("no-callback") {
             options.reader_type = ReaderCallType::BypassReaderCall;
         }
 

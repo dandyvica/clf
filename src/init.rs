@@ -11,7 +11,7 @@ use crate::misc::nagios::Nagios;
 
 /// Create a new config struct
 pub fn init_config(options: &CliOptions) -> Config {
-    let _config = Config::from_file(&options.config_file);
+    let _config = Config::from_path(&options.config_file);
 
     // check for loading errors
     if let Err(ref e) = _config {

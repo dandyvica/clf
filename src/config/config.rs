@@ -328,7 +328,7 @@ fromstr!(Config);
 
 impl Config {
     /// Loads a YAML configuration file as a `Config` struct.
-    pub fn from_file<P: AsRef<Path>>(file_name: P) -> Result<Config, AppError> {
+    pub fn from_path<P: AsRef<Path>>(file_name: P) -> Result<Config, AppError> {
         // open YAML file
         let file = File::open(file_name)?;
 

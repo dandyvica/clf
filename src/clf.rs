@@ -1,10 +1,12 @@
 // TODO:
 // - create a reader for JSON files
-// - serialize/deserialize date correctly: done FIXME: check retention process
-// - add Tera/Jinja2 templating => add context
+// - serialize/deserialize date correctly: done
+// - add Tera/Jinja2 templating => add context argument
 // - delete tag_name is snapshot: done
 // - add log rotation facility
 // - simplify/analyze args.rs: done
+// - enhance BypassReader display: done
+// - use Config::from_path iso Config::from_file: done
 
 use log::{debug, info};
 use std::io::ErrorKind;

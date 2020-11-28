@@ -7,4 +7,4 @@ log=~/projects/clf/tests/local/clf.log
 snapshot=~/projects/clf/tests/local/clf_snapshot.json
 
 # launch clf
-$clf --config $config --logger $log  --loglevel Debug --snapshot $snapshot --delete-snapshot
+$clf --config $config --logger $log  --loglevel Debug --snapshot $snapshot --delete-snapshot $@

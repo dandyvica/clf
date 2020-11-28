@@ -2,6 +2,7 @@
 //!
 use std::borrow::Cow;
 use std::collections::HashMap;
+use std::fmt::Display;
 use std::hash::Hash;
 use std::ops::{Deref, DerefMut};
 
@@ -41,6 +42,20 @@ pub type UserVars = Vars<String, String>;
 impl<K: Hash + Eq, V> Default for Vars<K, V> {
     fn default() -> Self {
         Vars(HashMap::with_capacity(Cons::DEFAULT_CONTAINER_CAPACITY))
+    }
+}
+
+// Display is using when using the BypassReader to print out all capture groups
+impl<K: Hash + Eq + Display, V: Display> Display for Vars<K, V> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut output = String::with_capacity(80);
+
+        for (k, v) in &self.0 {
+            output += &format!("{}:{}", k, v);
+        }
+
+        // write final output to formatter
+        write!(f, "{}", output)
     }
 }
 
