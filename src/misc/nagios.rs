@@ -6,6 +6,7 @@ use std::str::FromStr;
 
 use serde::Deserialize;
 
+use crate::logfile::logfile::RunData;
 use crate::misc::{error::AppError, util::Cons};
 
 // Helper macro to define all Nagios exit functions
@@ -104,139 +105,168 @@ impl FromStr for NagiosVersion {
 /// This will count critical & warning errors, and reported as the plugin output.
 /// Or en IO error when dealing with the logfile
 #[derive(Debug, Default)]
-pub struct HitCounter {
+pub struct NagiosExit {
     /// Number of matches triggered by a critical pattern.
-    pub critical_count: u16,
+    pub critical_count: u64,
 
     /// Number of matches triggered by a warning pattern.
-    pub warning_count: u16,
+    pub warning_count: u64,
 
     /// Number of unknowns due to errors reading logfiles.
-    pub unknown_count: u16,
+    pub unknown_count: u64,
 
     /// Optional error if an error occured reading file
-    pub error: Option<AppError>,
+    pub error_msg: Option<String>,
 }
 
-impl HitCounter {
-    // store error which corresponds to an unknown Nagios count also
-    pub fn set_error(&mut self, e: AppError) {
-        self.unknown_count += 1;
-        self.error = Some(e);
+// impl NagiosExit {
+//     // store error which corresponds to an unknown Nagios count also
+//     pub fn set_error(&mut self, e: AppError) {
+//         self.unknown_count += 1;
+//         self.error = Some(e);
+//     }
+// }
+
+impl From<&RunData> for NagiosExit {
+    fn from(run_data: &RunData) -> Self {
+        let mut nagios_exit = NagiosExit::default();
+
+        nagios_exit.critical_count = run_data.counters.critical_count;
+        nagios_exit.warning_count = run_data.counters.warning_count;
+        if run_data.last_error.is_some() {
+            nagios_exit.unknown_count = 1;
+            let error_msg = format!("{}", run_data.last_error.as_ref().unwrap());
+            nagios_exit.error_msg = Some(error_msg);
+        } else {
+            nagios_exit.error_msg = None;
+        }
+        nagios_exit
     }
 }
 
-/// Get the exit code from the HitCounter
-impl From<&HitCounter> for NagiosError {
-    fn from(m: &HitCounter) -> Self {
+/// Get the exit code from the NagiosExit
+impl From<&NagiosExit> for NagiosError {
+    fn from(m: &NagiosExit) -> Self {
         match m {
             // neither errors nor warnings
-            HitCounter {
+            NagiosExit {
                 critical_count: 0,
                 warning_count: 0,
                 unknown_count: 0,
-                error: _,
+                error_msg: _,
             } => NagiosError::OK,
 
             // unkowns only
-            HitCounter {
+            NagiosExit {
                 critical_count: 0,
                 warning_count: 0,
                 unknown_count: _,
-                error: _,
+                error_msg: _,
             } => NagiosError::UNKNOWN,
 
             // only warnings errors
-            HitCounter {
+            NagiosExit {
                 critical_count: 0,
                 warning_count: _,
                 unknown_count: _,
-                error: _,
+                error_msg: _,
             } => NagiosError::WARNING,
 
             // critical errors
-            HitCounter {
+            NagiosExit {
                 critical_count: _,
                 warning_count: _,
                 unknown_count: _,
-                error: _,
+                error_msg: _,
             } => NagiosError::CRITICAL,
         }
     }
 }
 
 /// Formatted string used to output to NRPE
-impl fmt::Display for HitCounter {
+impl fmt::Display for NagiosExit {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         // get error code from counters
         let nagios_err = NagiosError::from(self);
 
-        // output is similar for all errors
-        write!(
-            f,
-            "{:?} - (errors:{}, warnings:{}, unknowns:{})",
-            nagios_err, self.critical_count, self.warning_count, self.unknown_count
-        )
+        // output is depending whether we found an error
+        if self.error_msg.is_none() {
+            write!(
+                f,
+                "{:?} - (errors:{}, warnings:{}, unknowns:{})",
+                nagios_err, self.critical_count, self.warning_count, self.unknown_count
+            )
+        } else {
+            write!(
+                f,
+                "{:?} - (errors:{}, warnings:{}, unknowns:{}) - error: {}",
+                nagios_err,
+                self.critical_count,
+                self.warning_count,
+                self.unknown_count,
+                self.error_msg.as_ref().unwrap()
+            )
+        }
     }
 }
 
 /// This will hold error counters for each logfile processed.
-#[derive(Debug)]
-pub struct LogfileHitCounter(HashMap<PathBuf, HitCounter>);
+// #[derive(Debug)]
+// pub struct LogfileNagiosExit(HashMap<PathBuf, NagiosExit>);
 
-impl Default for LogfileHitCounter {
-    fn default() -> Self {
-        LogfileHitCounter(HashMap::with_capacity(Cons::DEFAULT_CONTAINER_CAPACITY))
-    }
-}
+// impl Default for LogfileNagiosExit {
+//     fn default() -> Self {
+//         LogfileNagiosExit(HashMap::with_capacity(Cons::DEFAULT_CONTAINER_CAPACITY))
+//     }
+// }
 
-impl LogfileHitCounter {
-    /// If calling this method, we know we're using only the enum `Stats` branch.
-    pub fn or_default(&mut self, path: &PathBuf) -> &mut HitCounter {
-        self.0.entry(path.clone()).or_default()
-    }
+// impl LogfileNagiosExit {
+//     /// If calling this method, we know we're using only the enum `Stats` branch.
+//     pub fn or_default(&mut self, path: &PathBuf) -> &mut NagiosExit {
+//         self.0.entry(path.clone()).or_default()
+//     }
 
-    /// Calculates the global counter by summation of all counters
-    pub fn global(&self) -> HitCounter {
-        let mut global = HitCounter::default();
+//     /// Calculates the global counter by summation of all counters
+//     pub fn global(&self) -> NagiosExit {
+//         let mut global = NagiosExit::default();
 
-        self.0.iter().for_each(|(_, x)| {
-            global.critical_count += x.critical_count;
-            global.warning_count += x.warning_count;
-            global.unknown_count += x.unknown_count;
-        });
+//         self.0.iter().for_each(|(_, x)| {
+//             global.critical_count += x.critical_count;
+//             global.warning_count += x.warning_count;
+//             global.unknown_count += x.unknown_count;
+//         });
 
-        global
-    }
+//         global
+//     }
 
-    /// A fast way to iterate through internal field.
-    #[cfg(test)]
-    pub fn iter(&self) -> std::collections::hash_map::Iter<PathBuf, HitCounter> {
-        self.0.iter()
-    }
+//     /// A fast way to iterate through internal field.
+//     #[cfg(test)]
+//     pub fn iter(&self) -> std::collections::hash_map::Iter<PathBuf, NagiosExit> {
+//         self.0.iter()
+//     }
 
-    /// Checks whether the underlying hashmap contains an error
-    #[cfg(test)]
-    pub fn is_error(&self) -> bool {
-        self.0.iter().any(|(_, v)| v.error.is_some())
-    }
-}
+//     /// Checks whether the underlying hashmap contains an error
+//     #[cfg(test)]
+//     pub fn is_error(&self) -> bool {
+//         self.0.iter().any(|(_, v)| v.error.is_some())
+//     }
+// }
 
 /// Formatted string used for plugin output
-impl fmt::Display for LogfileHitCounter {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let mut s = String::with_capacity(Cons::DEFAULT_STRING_CAPACITY);
+// impl fmt::Display for LogfileNagiosExit {
+//     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+//         let mut s = String::with_capacity(Cons::DEFAULT_STRING_CAPACITY);
 
-        for (path, counter) in self.0.iter() {
-            match &counter.error {
-                None => s.push_str(&format!("{}: {}\n", path.display(), counter)),
-                Some(error) => s.push_str(&format!("{}: {}\n", path.display(), error)),
-            }
-        }
+//         for (path, counter) in self.0.iter() {
+//             match &counter.error {
+//                 None => s.push_str(&format!("{}: {}\n", path.display(), counter)),
+//                 Some(error) => s.push_str(&format!("{}: {}\n", path.display(), error)),
+//             }
+//         }
 
-        write!(f, "{}", s)
-    }
-}
+//         write!(f, "{}", s)
+//     }
+// }
 
 #[cfg(test)]
 mod tests {
@@ -246,7 +276,7 @@ mod tests {
 
     #[test]
     fn display() {
-        let mut m = HitCounter {
+        let mut m = NagiosExit {
             critical_count: 10,
             warning_count: 100,
             unknown_count: 0,
@@ -266,7 +296,7 @@ mod tests {
 
     #[test]
     fn from_matcher() {
-        let mut m = HitCounter {
+        let mut m = NagiosExit {
             critical_count: 0,
             warning_count: 0,
             unknown_count: 0,
@@ -298,7 +328,7 @@ mod tests {
 
     #[test]
     fn logfile_matcher() {
-        let mut m = LogfileHitCounter::default();
+        let mut m = LogfileNagiosExit::default();
         let mut a = m.or_default(&PathBuf::from("/usr/bin/gzip"));
         a.error = Some(AppError::new(
             crate::misc::error::AppCustomErrorKind::UnsupportedPatternType,

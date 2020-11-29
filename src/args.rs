@@ -1,5 +1,4 @@
 use std::path::PathBuf;
-use std::str::FromStr;
 
 use clap::{App, Arg};
 use simplelog::LevelFilter;

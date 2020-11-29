@@ -10,76 +10,52 @@ use std::path::{Path, PathBuf};
 use bzip2::read::BzDecoder;
 use chrono::prelude::*;
 use flate2::read::GzDecoder;
-use log::{debug, error, info, trace};
+use log::{debug, error};
 use serde::{Deserialize, Serialize, Serializer};
 use xz2::read::XzDecoder;
 
-use crate::misc::{error::AppError, nagios::HitCounter};
+use crate::misc::error::AppError;
 
 use crate::config::{
     callback::ChildData,
     config::{GlobalOptions, Tag},
+    pattern::{PatternCounters, PatternType},
 };
 
 use crate::logfile::{
     compression::CompressionScheme,
     lookup::Lookup,
-    lookup::ReaderCallType,
     signature::{FileIdentification, Signature},
 };
-
-/// Utility wrapper to pass all necessary references to the lookup methods.
-#[derive(Debug)]
-pub struct Wrapper<'a> {
-    pub global: &'a GlobalOptions,
-    pub tag: &'a Tag,
-    pub logfile_counter: &'a mut HitCounter,
-}
-
-impl<'a> Wrapper<'a> {
-    /// Simple helper for creating a new wrapper
-    pub fn new(
-        global: &'a GlobalOptions,
-        tag: &'a Tag,
-        logfile_counter: &'a mut HitCounter,
-    ) -> Self {
-        Wrapper {
-            global,
-            tag,
-            logfile_counter,
-        }
-    }
-}
 
 /// A wrapper to store log file processing data.
 #[derive(Debug, Serialize, Deserialize, Default, Clone)]
 pub struct RunData {
     /// tag name
-    //pub(super) tag_name: String,
+    //pub tag_name: String,
 
     /// position of the last run. Used to seek the file pointer to this point.
-    pub(super) last_offset: u64,
+    pub last_offset: u64,
 
     /// last line number during the last search
-    pub(super) last_line: u64,
+    pub last_line: u64,
 
     /// last time logfile were processed: printable date/time
     #[serde(serialize_with = "timestamp_to_string", skip_deserializing)]
-    pub(super) last_run: f64,
+    pub last_run: f64,
 
     /// last time logfile were processed in seconds: used to check retention
-    pub(super) last_run_secs: u64,
+    pub last_run_secs: u64,
 
-    /// ongoing critical count
-    pub(super) critical_count: u64,
+    /// keep all counters here
+    pub counters: PatternCounters,
 
-    /// ongoing warning count
-    pub(super) warning_count: u64,
-
-    /// number of script execution so far
-    pub(super) exec_count: u16,
+    /// last error when reading a logfile
+    #[serde(serialize_with = "error_to_string", skip_deserializing)]
+    pub last_error: Option<AppError>,
 }
 
+/// Converts the timestamp to a human readable string in the snapshot
 pub fn timestamp_to_string<S>(value: &f64, serializer: S) -> Result<S::Ok, S::Error>
 where
     S: Serializer,
@@ -92,17 +68,56 @@ where
     format!("{}", utc_tms.format("%Y-%m-%d %H:%M:%S.%f")).serialize(serializer)
 }
 
-impl RunData {
-    /// Returns the `tag_name` field value.
-    // #[inline(always)]
-    // pub fn get_tagname(&self) -> &str {
-    //     &self.tag_name
-    // }
+/// Converts the error to string
+pub fn error_to_string<S>(value: &Option<AppError>, serializer: S) -> Result<S::Ok, S::Error>
+where
+    S: Serializer,
+{
+    if value.is_none() {
+        "None".to_string().serialize(serializer)
+    } else {
+        format!("{}", value.as_ref().unwrap()).serialize(serializer)
+    }
+}
 
+impl RunData {
     /// Returns the `last_run` field value.
     #[inline(always)]
     pub fn lastrun_secs(&self) -> u64 {
         self.last_run_secs
+    }
+
+    /// Return `true` if counters reach thresholds
+    pub fn is_threshold_reached(
+        &mut self,
+        pattern_type: &PatternType,
+        critical_threshold: u64,
+        warning_threshold: u64,
+    ) -> bool {
+        // increments thresholds and compare with possible defined limits and accumulate counters for plugin output
+        match pattern_type {
+            PatternType::critical => {
+                self.counters.critical_count += 1;
+                if self.counters.critical_count < critical_threshold {
+                    return false;
+                }
+            }
+            PatternType::warning => {
+                self.counters.warning_count += 1;
+                if self.counters.warning_count < warning_threshold {
+                    return false;
+                }
+            }
+            // this special Ok pattern resets counters
+            PatternType::ok => {
+                self.counters.critical_count = 0;
+                self.counters.warning_count = 0;
+
+                // no need to process further: don't call a script
+                return true;
+            }
+        }
+        true
     }
 }
 
@@ -110,7 +125,7 @@ impl RunData {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct LogFile {
     /// File & path as a `PathBuf`.
-    pub(crate) path: PathBuf,
+    pub path: PathBuf,
 
     /// Directory part or `None` if not existing.
     directory: Option<PathBuf>,
@@ -125,7 +140,7 @@ pub struct LogFile {
     signature: Signature,
 
     /// Run time data that are stored each time a logfile is searched for patterns.
-    run_data: HashMap<String, RunData>,
+    pub run_data: HashMap<String, RunData>,
 }
 
 impl LogFile {
@@ -168,24 +183,9 @@ impl LogFile {
         })
     }
 
-    // /// Insert rundata into the actual ones
-    // pub fn insert_rundata(&mut self, other: &HashMap<String, RunData>) {
-    //     self.run_data.into_iter().map(|(k, v)| other.insert(k, v));
-    // }
-
     /// Return the path
-    pub fn path(&self) -> &PathBuf {
-        &self.path
-    }
-
-    /// Return the rundata
-    pub fn rundata(&self) -> &HashMap<String, RunData> {
-        &self.run_data
-    }
-
-    /// Set all rundata from another hashmap
-    // pub fn set_rundata(&mut self, other_rundata: &HashMap<String, RunData>) {
-    //     self.run_data = other_rundata.clone();
+    // pub fn path(&self) -> &PathBuf {
+    //     &self.path
     // }
 
     /// Recalculate the signature to check whether it has changed
@@ -195,28 +195,12 @@ impl LogFile {
         Ok(self.signature != signature && self.signature != Signature::default())
     }
 
-    // /// Returns the list of tags of this `LogFile`.
-    // #[cfg(test)]
-    // pub fn tags(&self) -> Vec<&str> {
-    //     self.run_data
-    //         .keys()
-    //         .map(|x| x.as_str())
-    //         .collect::<Vec<&str>>()
-    // }
-
-    // /// Returns `true` if `name` is found in this `LogFile`.
-    // #[cfg(test)]
-    // pub fn contains_key(&self, name: &str) -> bool {
-    //     self.run_data.contains_key(name)
-    // }
-
     /// Returns an Option on a reference of a `RunData`, mapping the first
     /// tag name passed in argument.
     pub fn rundata_for_tag(&mut self, name: &str) -> &mut RunData {
-        self.run_data.entry(name.to_string()).or_insert(RunData {
-            //tag_name: name.to_string(),
-            ..Default::default()
-        })
+        self.run_data
+            .entry(name.to_string())
+            .or_insert(RunData::default())
     }
 
     /// Returns a reference on `Rundata`.
@@ -240,49 +224,22 @@ impl LogFile {
         }
     }
 
-    //Just a wrapper function for a file.
-    // pub fn lookup(
-    //     &mut self,
-    //     wrapper: &mut Wrapper,
-    //     reader_type: &ReaderCallType,
-    // ) -> Result<Vec<ChildData>, AppError> {
-    //     // open target file
-    //     let file = File::open(&self.path)?;
+    /// Sum all counters from `rundata` for all tags
+    pub fn sum_counters(&self) -> PatternCounters {
+        self.run_data.values().map(|x| &x.counters).sum()
+    }
 
-    //     // if file is compressed, we need to call a specific reader
-    //     // create a specific reader for each compression scheme
-    //     match self.compression {
-    //         CompressionScheme::Gzip => {
-    //             let decoder = GzDecoder::new(file);
-    //             let reader = BufReader::new(decoder);
-    //             //self.lookup_from_reader(reader, wrapper)
-    //             reader_type.call(self, reader, wrapper)
-    //         }
-    //         CompressionScheme::Bzip2 => {
-    //             let decoder = BzDecoder::new(file);
-    //             let reader = BufReader::new(decoder);
-    //             //self.lookup_from_reader(reader, wrapper)
-    //             reader_type.call(self, reader, wrapper)
-    //         }
-    //         CompressionScheme::Xz => {
-    //             let decoder = XzDecoder::new(file);
-    //             let reader = BufReader::new(decoder);
-    //             //self.lookup_from_reader(reader, wrapper)
-    //             reader_type.call(self, reader, wrapper)
-    //         }
-    //         CompressionScheme::Uncompressed => {
-    //             let reader = BufReader::new(file);
-    //             //self.lookup_from_reader(reader, wrapper)
-    //             reader_type.call(self, reader, wrapper)
-    //         }
-    //     }
-    // }
+    /// Last error occuring when reading this logfile
+    pub fn set_error(&mut self, error: AppError, tag_name: &str) {
+        debug_assert!(self.run_data.contains_key(tag_name));
+        self.run_data.get_mut(tag_name).unwrap().last_error = Some(error);
+    }
 
     ///Just a wrapper function for a file.
     pub fn lookup<T>(
         &mut self,
-        wrapper: &mut Wrapper,
-        reader_type: &ReaderCallType,
+        tag: &Tag,
+        global_options: &GlobalOptions,
     ) -> Result<Vec<ChildData>, AppError>
     where
         Self: Lookup<T>,
@@ -297,24 +254,24 @@ impl LogFile {
                 let decoder = GzDecoder::new(file);
                 let reader = BufReader::new(decoder);
                 //self.lookup_from_reader(reader, wrapper)
-                Lookup::<T>::reader(self, reader, wrapper)
+                Lookup::<T>::reader(self, reader, tag, global_options)
             }
             CompressionScheme::Bzip2 => {
                 let decoder = BzDecoder::new(file);
                 let reader = BufReader::new(decoder);
                 //self.lookup_from_reader(reader, wrapper)
-                Lookup::<T>::reader(self, reader, wrapper)
+                Lookup::<T>::reader(self, reader, tag, global_options)
             }
             CompressionScheme::Xz => {
                 let decoder = XzDecoder::new(file);
                 let reader = BufReader::new(decoder);
                 //self.lookup_from_reader(reader, wrapper)
-                Lookup::<T>::reader(self, reader, wrapper)
+                Lookup::<T>::reader(self, reader, tag, global_options)
             }
             CompressionScheme::Uncompressed => {
                 let reader = BufReader::new(file);
                 //self.lookup_from_reader(reader, wrapper)
-                Lookup::<T>::reader(self, reader, wrapper)
+                Lookup::<T>::reader(self, reader, tag, global_options)
             }
         }
     }
@@ -322,22 +279,17 @@ impl LogFile {
     // Search for each tag in the search
     pub fn lookup_tags<T>(
         &mut self,
-        global_opts: &GlobalOptions,
+        global_options: &GlobalOptions,
         tags: &[Tag],
-        hit_counter: &mut HitCounter,
-        reader_type: &ReaderCallType,
         children_list: &mut Vec<ChildData>,
     ) where
         Self: Lookup<T>,
     {
         for tag in tags.iter().filter(|t| t.process()) {
-            debug!("searching for tag: {}", &tag.name());
-
-            // wraps all structures into a helper struct
-            let mut wrapper = Wrapper::new(global_opts, &tag, hit_counter);
+            debug!("searching for tag: {}", &tag.name);
 
             // now we can search for the pattern and save the child handle if a script was called
-            match self.lookup::<T>(&mut wrapper, reader_type) {
+            match self.lookup::<T>(tag, global_options) {
                 // script might be started, giving back a `Child` structure with process features like pid etc
                 Ok(mut children) => {
                     // merge list of children
@@ -352,11 +304,11 @@ impl LogFile {
                         "error: {} when searching logfile: {} for tag: {}",
                         e,
                         self.path.display(),
-                        &tag.name()
+                        &tag.name
                     );
 
                     // set error for this logfile
-                    hit_counter.set_error(e);
+                    self.set_error(e, &tag.name);
                 }
             }
         }
@@ -446,7 +398,7 @@ mod tests {
         let tag = Tag::from_str(yaml).expect("unable to read YAML");
         let mut logfile_counter = HitCounter::default();
 
-        let mut w = Wrapper::new(&opts, &tag, &mut logfile_counter);
+        //let mut w = Wrapper::new(&opts, &tag, &mut logfile_counter);
 
         let mut logfile = LogFile::from_path("tests/logfiles/adhoc.txt").unwrap();
 

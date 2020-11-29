@@ -1,6 +1,5 @@
 //! This is where the main function used to loop and call callback is defined.
 use std::borrow::Cow;
-use std::collections::HashMap;
 use std::io::BufRead;
 use std::time::SystemTime;
 
@@ -10,14 +9,11 @@ use crate::misc::{error::AppError, util::Cons};
 
 use crate::config::{
     callback::{CallbackHandle, ChildData},
-    pattern::PatternType,
+    config::{GlobalOptions, Tag},
     vars::RuntimeVars,
 };
 
-use crate::logfile::{
-    logfile::{LogFile, Wrapper},
-    seeker::Seeker,
-};
+use crate::logfile::{logfile::LogFile, seeker::Seeker};
 
 use crate::prefix_var;
 
@@ -25,7 +21,8 @@ pub trait Lookup<T> {
     fn reader<R: BufRead + Seeker>(
         &mut self,
         reader: R,
-        wrapper: &mut Wrapper,
+        tag: &Tag,
+        global_options: &GlobalOptions,
     ) -> Result<Vec<ChildData>, AppError>;
 }
 
@@ -40,22 +37,6 @@ pub struct FullReader;
 pub enum ReaderCallType {
     BypassReaderCall,
     FullReaderCall,
-}
-
-impl ReaderCallType {
-    pub fn call<R: BufRead + Seeker>(
-        &self,
-        log: &mut LogFile,
-        reader: R,
-        wrapper: &mut Wrapper,
-    ) -> Result<Vec<ChildData>, AppError> {
-        match self {
-            ReaderCallType::BypassReaderCall => {
-                Lookup::<BypassReader>::reader(log, reader, wrapper)
-            }
-            ReaderCallType::FullReaderCall => Lookup::<FullReader>::reader(log, reader, wrapper),
-        }
-    }
 }
 
 impl Lookup<FullReader> for LogFile {
@@ -84,7 +65,8 @@ impl Lookup<FullReader> for LogFile {
     fn reader<R: BufRead + Seeker>(
         &mut self,
         mut reader: R,
-        wrapper: &mut Wrapper,
+        tag: &Tag,
+        global_options: &GlobalOptions,
     ) -> Result<Vec<ChildData>, AppError> {
         //------------------------------------------------------------------------------------
         // 1. initialize local variables
@@ -92,7 +74,7 @@ impl Lookup<FullReader> for LogFile {
         info!(
             "start processing logfile:{} for tag:{}",
             self.path.display(),
-            wrapper.tag.name()
+            tag.name
         );
 
         // create new reader
@@ -120,15 +102,11 @@ impl Lookup<FullReader> for LogFile {
         //------------------------------------------------------------------------------------
 
         // get run_data corresponding to tag name, or insert that new one if not yet in the snapshot file
-        let mut run_data = self.rundata_for_tag(&wrapper.tag.name());
-        trace!(
-            "tagname: {:?}, run_data:{:?}\n\n",
-            &wrapper.tag.name(),
-            run_data
-        );
+        let mut run_data = self.rundata_for_tag(&tag.name);
+        trace!("tagname: {:?}, run_data:{:?}\n\n", &tag.name, run_data);
 
         // if we don't need to read the file from the beginning, adjust counters and set offset
-        if !wrapper.tag.options.rewind {
+        if !tag.options.rewind {
             bytes_count = run_data.last_offset;
             line_number = run_data.last_line;
             reader.set_offset(run_data.last_offset)?;
@@ -140,7 +118,15 @@ impl Lookup<FullReader> for LogFile {
         );
 
         // reset exec count
-        run_data.exec_count = 0;
+        run_data.counters.exec_counter = 0;
+
+        // resets thresholds if requested
+        // this will count number of matches for warning & critical, to see if this matches the thresholds
+        // first is warning, second is critical
+        if !tag.options.savethresholdcount {
+            run_data.counters.critical_count = 0;
+            run_data.counters.warning_count = 0;
+        }
 
         //------------------------------------------------------------------------------------
         // 3. loop to read each line of the file
@@ -148,12 +134,17 @@ impl Lookup<FullReader> for LogFile {
         loop {
             // reset runtime variables because they change for every line read, apart from CLF_LOGFILE
             // which is the same for each log
-            //wrapper.vars.retain(&[&var!("LOGFILE"), &var!("TAG")]);
+            //vars.retain(&[&var!("LOGFILE"), &var!("TAG")]);
             // test
             let mut vars = RuntimeVars::default();
 
             // read until '\n' (which is included in the buffer)
             let ret = reader.read_until(b'\n', &mut buffer);
+
+            // truncate the line if asked
+            if tag.options.truncate != 0 {
+                buffer.truncate(tag.options.truncate);
+            }
 
             // to deal with UTF-8 conversion problems, use the lossy method. It will replace non-UTF-8 chars with ?
             let mut line = String::from_utf8_lossy(&buffer);
@@ -161,7 +152,7 @@ impl Lookup<FullReader> for LogFile {
             // remove newline
             //line.to_mut().pop();
 
-            // delete '\n' or '\r\n' form the eol
+            // delete '\n' or '\r\n' from the eol
             LogFile::purge_line(&mut line);
 
             // and line feed for Windows platforms
@@ -181,7 +172,8 @@ impl Lookup<FullReader> for LogFile {
                     bytes_count += bytes_read as u64;
 
                     // do we just need to go to EOF ?
-                    if wrapper.tag.options.fastforward {
+                    // TODO: implement go to EOF directly
+                    if tag.options.fastforward {
                         buffer.clear();
                         continue;
                     }
@@ -189,57 +181,36 @@ impl Lookup<FullReader> for LogFile {
                     trace!("====> line#={}, line={}", line_number, line);
 
                     // is there a match, regarding also exceptions?
-                    if let Some(pattern_match) = wrapper.tag.is_match(&line) {
+                    if let Some(pattern_match) = tag.is_match(&line) {
                         debug!(
                             "found a match tag={}, line={}, line#={}, re=({:?},{}), warning_count={}, critical_count={}",
-                            wrapper.tag.name(),
+                            tag.name,
                             line.clone(),
                             line_number,
                             pattern_match.pattern_type,
                             pattern_match.regex.as_str(),
-                            run_data.warning_count,
-                            run_data.critical_count
+                            run_data.counters.warning_count,
+                            run_data.counters.critical_count
                         );
 
-                        // increments thresholds and compare with possible defined limits and accumulate counters for plugin output
-                        match pattern_match.pattern_type {
-                            PatternType::critical => {
-                                run_data.critical_count += 1;
-                                if run_data.critical_count < wrapper.tag.options.criticalthreshold {
-                                    buffer.clear();
-                                    continue;
-                                }
-                                //wrapper.global_counter.critical_count += 1;
-                                wrapper.logfile_counter.critical_count += 1;
-                            }
-                            PatternType::warning => {
-                                run_data.warning_count += 1;
-                                if run_data.warning_count < wrapper.tag.options.warningthreshold {
-                                    buffer.clear();
-                                    continue;
-                                }
-                                //wrapper.global_counter.warning_count += 1;
-                                wrapper.logfile_counter.warning_count += 1;
-                            }
-                            // this special Ok pattern resets counters
-                            PatternType::ok => {
-                                run_data.critical_count = 0;
-                                run_data.warning_count = 0;
-
-                                // no need to process further: don't call a script
-                                buffer.clear();
-                                continue;
-                            }
-                        };
+                        // when a threshold is reached, give up
+                        if !run_data.is_threshold_reached(
+                            &pattern_match.pattern_type,
+                            tag.options.criticalthreshold,
+                            tag.options.warningthreshold,
+                        ) {
+                            buffer.clear();
+                            continue;
+                        }
 
                         // if we've been asked to trigger the script, first add relevant variables
-                        if wrapper.tag.options.runcallback {
+                        if tag.options.runcallback {
                             // create variables which will be set as environment variables when script is called
                             vars.insert_var(
                                 prefix_var!("LOGFILE"),
                                 path.to_str().unwrap_or("error converting PathBuf"),
                             );
-                            vars.insert_var(prefix_var!("TAG"), wrapper.tag.name());
+                            vars.insert_var(prefix_var!("TAG"), &tag.name);
                             let ln = format!("{}", line_number);
                             vars.insert_var(prefix_var!("LINE_NUMBER"), &ln);
                             vars.insert_var(prefix_var!("LINE"), &line);
@@ -255,11 +226,11 @@ impl Lookup<FullReader> for LogFile {
                             debug!("added variables: {:?}", vars);
 
                             // now call script if upper run limit is not reached yet
-                            if run_data.exec_count < wrapper.tag.options.runlimit {
+                            if run_data.counters.exec_counter < tag.options.runlimit {
                                 // in case of a callback error, stop iterating and save state here
-                                match wrapper.tag.callback_call(
-                                    Some(&wrapper.global.path()),
-                                    wrapper.global.user_vars(),
+                                match tag.callback_call(
+                                    Some(&global_options.path()),
+                                    global_options.user_vars(),
                                     &vars,
                                     &mut handle,
                                 ) {
@@ -270,13 +241,13 @@ impl Lookup<FullReader> for LogFile {
                                         }
 
                                         // increment number of script executions or number of JSON data sent
-                                        run_data.exec_count += 1;
+                                        run_data.counters.exec_counter += 1;
                                     }
                                     Err(e) => {
                                         error!(
                                             "error <{}> when calling callback <{:#?}>",
                                             e,
-                                            wrapper.tag.callback()
+                                            tag.callback()
                                         );
                                         early_ret = Some(e);
                                         break;
@@ -302,25 +273,19 @@ impl Lookup<FullReader> for LogFile {
         run_data.last_offset = bytes_count;
         run_data.last_line = line_number;
 
-        // resets thresholds if requested
-        // this will count number of matches for warning & critical, to see if this matches the thresholds
-        // first is warning, second is critical
-        if !wrapper.tag.options.savethresholdcount {
-            run_data.critical_count = 0;
-            run_data.warning_count = 0;
-        }
-
         // and last run
         let time = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH)?;
         run_data.last_run = time.as_secs_f64();
         run_data.last_run_secs = time.as_secs();
 
-        info!("number of callback execution: {}", run_data.exec_count);
-        trace!("logfile_counter: {:?}", &wrapper.logfile_counter);
+        info!(
+            "number of callback execution: {}",
+            run_data.counters.exec_counter
+        );
         trace!(
             "========================> end processing logfile:{} for tag:{}",
             self.path.display(),
-            wrapper.tag.name()
+            tag.name
         );
 
         // return error if we got one or the list of children from calling the script
@@ -339,7 +304,8 @@ impl Lookup<BypassReader> for LogFile {
     fn reader<R: BufRead + Seeker>(
         &mut self,
         reader: R,
-        wrapper: &mut Wrapper,
+        tag: &Tag,
+        _global_options: &GlobalOptions,
     ) -> Result<Vec<ChildData>, AppError> {
         for (line_number, line) in reader.lines().enumerate() {
             let text = {
@@ -355,7 +321,7 @@ impl Lookup<BypassReader> for LogFile {
             };
 
             // is there a match ?
-            if let Some(pattern_match) = wrapper.tag.is_match(&text) {
+            if let Some(pattern_match) = tag.is_match(&text) {
                 // print out also captures
                 let mut vars = RuntimeVars::default();
                 vars.insert_captures(pattern_match.regex, &text);
@@ -366,7 +332,7 @@ impl Lookup<BypassReader> for LogFile {
                 eprintln!(
                     "{}:{}:{}:{}:[{}]:{}",
                     &self.path.display(),
-                    &wrapper.tag.name(),
+                    &tag.name,
                     String::from(pattern_match.pattern_type),
                     line_number,
                     vars,

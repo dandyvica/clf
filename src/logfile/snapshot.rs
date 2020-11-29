@@ -10,7 +10,7 @@ use log::debug;
 use serde::{Deserialize, Serialize};
 
 use crate::logfile::logfile::LogFile;
-use crate::misc::error::AppError;
+use crate::misc::{error::AppError, nagios::NagiosExit};
 
 /// This structure will keep all run time information for each logfile searched. This is
 /// a kind of central repository for all searches.
@@ -113,6 +113,23 @@ impl Snapshot {
         let mut snapfile = std::env::temp_dir();
         snapfile.push("clf_snapshot.json");
         snapfile
+    }
+
+    /// Builds the final output message displayed by the plugin
+    pub fn exit_message(&self) {
+        //let exit_msg = String::new();
+
+        // convenient struct to calculate all counters
+
+        // loop through all run data
+        for (path, logfile) in &self.snapshot {
+            for (tag_name, run_data) in &logfile.run_data {
+                let nagios_exit = NagiosExit::from(run_data);
+                println!("{}({}): {}", path.display(), tag_name, nagios_exit);
+            }
+        }
+
+        //exit_msg
     }
 }
 

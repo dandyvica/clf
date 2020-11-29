@@ -6,7 +6,7 @@ use simplelog::*;
 
 use crate::args::CliOptions;
 use crate::config::config::Config;
-use crate::logfile::{logfile::LogFile, snapshot::Snapshot};
+use crate::logfile::snapshot::Snapshot;
 use crate::misc::nagios::Nagios;
 
 /// Create a new config struct

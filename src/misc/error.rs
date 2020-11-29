@@ -1,5 +1,6 @@
 //! All structures involved in error management. It combines a list a Rust standard library
 //! error types, used crates error types and a specific one to the application.
+use std::clone::Clone;
 use std::io::ErrorKind;
 use std::{fmt, io, num};
 
@@ -14,6 +15,7 @@ pub enum AppCustomErrorKind {
     FilePathNotAbsolute,
     UnsupportedSearchOption,
     OsStringConversionError,
+    UnknowError,
 }
 
 /// A specific error type combining all possible error types in the app.
@@ -30,6 +32,12 @@ pub enum AppError {
         err: AppCustomErrorKind,
         msg: String,
     },
+}
+
+impl Clone for AppError {
+    fn clone(&self) -> Self {
+        AppError::new(AppCustomErrorKind::UnknowError, "")
+    }
 }
 
 impl AppError {

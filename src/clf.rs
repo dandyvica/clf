@@ -7,6 +7,10 @@
 // - simplify/analyze args.rs: done
 // - enhance BypassReader display: done
 // - use Config::from_path iso Config::from_file: done
+// - fastforward option: implement Seek(EndOfFile) to move directly to the end of the file
+// - FIXME: if error calling any callback, don't update counters etc (line_number, offset)
+// - implement logfilemissing
+// - implement truncate: done
 
 use log::{debug, info};
 use std::io::ErrorKind;
@@ -24,14 +28,11 @@ mod config;
 use config::callback::ChildData;
 
 mod logfile;
-use logfile::{
-    logfile::{LogFile, Wrapper},
-    lookup::{BypassReader, FullReader, ReaderCallType},
-};
+use logfile::lookup::{BypassReader, FullReader, ReaderCallType};
 
 mod misc;
 use misc::{
-    nagios::{LogfileHitCounter, Nagios, NagiosError, NagiosVersion},
+    nagios::{Nagios, NagiosError, NagiosVersion},
     util::Usable,
 };
 
@@ -59,9 +60,6 @@ fn main() {
 
     // manage arguments from command line
     let options = CliOptions::options();
-
-    // and this for each invididual file
-    let mut logfile_counter = LogfileHitCounter::default();
 
     //---------------------------------------------------------------------------------------------------
     // initialize logger
@@ -100,9 +98,6 @@ fn main() {
         // log some useful info
         info!("------------ searching into logfile: {}", search.logfile);
 
-        // get counter corresponding to the logfile
-        let mut hit_counter = &mut logfile_counter.or_default(&search.logfile());
-
         // checks if logfile is accessible. If not, no need to move further, just record last error
         if let Err(e) = search.logfile().is_usable() {
             error!(
@@ -111,7 +106,7 @@ fn main() {
             );
 
             // this is a error for this logfile which boils down to a Nagios unknown error
-            hit_counter.set_error(e);
+            //hit_counter.set_error(e);
 
             continue;
         }
@@ -127,7 +122,7 @@ fn main() {
                 );
 
                 // this is a error for this logfile which boils down to a Nagios unknown error
-                hit_counter.set_error(e);
+                //hit_counter.set_error(e);
 
                 continue;
             }
@@ -140,12 +135,12 @@ fn main() {
             if let Err(e) = temp {
                 error!(
                     "error on fetching metadata on logfile {}: {}",
-                    snapshot_logfile.path().display(),
+                    snapshot_logfile.path.display(),
                     e
                 );
 
                 // this is a error for this logfile which boils down to a Nagios unknown error
-                hit_counter.set_error(e);
+                //hit_counter.set_error(e);
 
                 continue;
             }
@@ -211,19 +206,23 @@ fn main() {
             snapshot_logfile.lookup_tags::<BypassReader>(
                 config.global(),
                 &search.tags,
-                &mut hit_counter,
-                &reader_type,
                 &mut children_list,
             );
         } else if reader_type == &ReaderCallType::FullReaderCall {
             snapshot_logfile.lookup_tags::<FullReader>(
                 config.global(),
                 &search.tags,
-                &mut hit_counter,
-                &reader_type,
                 &mut children_list,
             );
         }
+
+        // update counters
+        // let sum = snapshot_logfile.sum_counters(); // sum all counters for all tags of the logfile
+        // hit_counter.critical_count = sum.critical_count;
+        // hit_counter.warning_count = sum.warning_count;
+        // if snapshot_logfile.last_error.is_some() {
+        //     hit_counter.set_error(snapshot_logfile.last_error.unwrap())
+        // }
     }
 
     // just exit if the --no-call option was used
@@ -250,48 +249,13 @@ fn main() {
         now.elapsed().as_secs_f32()
     );
 
-    // display output to comply to Nagios plug-in convention
-    debug!("logfile exit counters: {:?}", logfile_counter);
+    // now we can prepare the global hit counters to exit the relevant Nagios code
+    snapshot.exit_message();
 
-    let exit_code = nagios_output(&logfile_counter, &options.nagios_version);
-    info!("exiting process pid:{}, exit code:{:?}", id(), exit_code);
-    Nagios::exit_with(exit_code);
+    //let exit_code = nagios_output(&logfile_counter, &options.nagios_version);
+    //info!("exiting process pid:{}, exit code:{:?}", id(), exit_code);
+    //Nagios::exit_with(exit_code);
 }
-
-/// Lookup data from tags
-// fn lookup(tags: &[Tag], logile: &LogFile, global: &GlobalOptions, vars: &Variables, hit_counter: &HitCounter) {
-//         // for each tag, search inside logfile for those we need to process (having process tag == true)
-//         for tag in search.tags.iter().filter(|t| t.process()) {
-//             debug!("searching for tag: {}", &tag.name());
-
-//             // wraps all structures into a helper struct
-//             let mut wrapper = Wrapper::new(config.global(), &tag, &mut vars, &mut hit_counter);
-
-//             // now we can search for the pattern and save the child handle if a script was called
-//             match snapshot_logfile.lookup(&mut wrapper) {
-//                 // script might be started, giving back a `Child` structure with process features like pid etc
-//                 Ok(mut children) => {
-//                     // merge list of children
-//                     if children.len() != 0 {
-//                         children_list.append(&mut children);
-//                     }
-//                 }
-
-//                 // otherwise, an error when opening (most likely) the file and then report an error on counters
-//                 Err(e) => {
-//                     error!(
-//                         "error: {} when searching logfile: {} for tag: {}",
-//                         e,
-//                         search.logfile.display(),
-//                         &tag.name()
-//                     );
-
-//                     // set error for this logfile
-//                     hit_counter.set_error(e);
-//                 }
-//             }
-//         }
-// }
 
 /// Manage end of all started processes from clf.
 fn wait_children(children_list: Vec<ChildData>) {
@@ -371,24 +335,24 @@ fn wait_children(children_list: Vec<ChildData>) {
     }
 }
 
-/// Manage Nagios output, depending on the NRPE version.
-fn nagios_output(
-    logfile_counter: &LogfileHitCounter,
-    nagios_version: &NagiosVersion,
-) -> NagiosError {
-    // calculate global hits
-    let global = logfile_counter.global();
-    println!("{}", global);
+// Manage Nagios output, depending on the NRPE version.
+// fn nagios_output(
+//     logfile_counter: &LogfileHitCounter,
+//     nagios_version: &NagiosVersion,
+// ) -> NagiosError {
+//     // calculate global hits
+//     let global = logfile_counter.global();
+//     println!("{}", global);
 
-    // plugin output depends on the Nagios version
-    match nagios_version {
-        NagiosVersion::Nrpe3 => {
-            println!("{}", logfile_counter);
-        }
+//     // plugin output depends on the Nagios version
+//     match nagios_version {
+//         NagiosVersion::Nrpe3 => {
+//             println!("{}", logfile_counter);
+//         }
 
-        NagiosVersion::Nrpe2 => {}
-    };
+//         NagiosVersion::Nrpe2 => {}
+//     };
 
-    // return Nagios exit status coming from global hits
-    NagiosError::from(&global)
-}
+//     // return Nagios exit status coming from global hits
+//     NagiosError::from(&global)
+// }

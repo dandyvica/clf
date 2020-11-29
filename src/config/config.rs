@@ -132,10 +132,6 @@ pub enum LogSource {
 impl LogSource {
     pub const fn is_logfile(&self) -> bool {
         matches!(*self, LogSource::LogFile(_))
-        // match self {
-        //     LogSource::LogFile(_) => true,
-        //     LogSource::LogList { cmd: _, args: _ } => false,
-        // }
     }
 }
 
@@ -155,7 +151,7 @@ impl Display for LogSource {
 #[derive(Debug, Deserialize, Clone)]
 pub struct Tag {
     /// A name to identify the tag.
-    name: String,
+    pub name: String,
 
     /// Tells whether we process this tag or not. Useful for testing purposes.
     #[serde(default = "Tag::default_process")]
@@ -174,12 +170,6 @@ pub struct Tag {
 }
 
 impl Tag {
-    /// Returns the tag name
-    #[inline(always)]
-    pub fn name(&self) -> &str {
-        &self.name
-    }
-
     /// Returns the process value
     #[inline(always)]
     pub fn process(&self) -> bool {

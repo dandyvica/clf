@@ -22,7 +22,7 @@ pub struct SearchOptions {
     /// a number which denotes how many lines have to match a pattern until they are considered a critical error
     pub criticalthreshold: u64,
 
-    /// a number which denotes how many lines have to match a pattern until they are considered a warning
+    /// a number which denotes how many lines have to match a pattern until they are considered a warning error
     pub warningthreshold: u64,
 
     // controls whether the matching lines are written to a protocol file for later investigation
@@ -42,7 +42,10 @@ pub struct SearchOptions {
     pub fastforward: bool,
 
     /// The number of times a potential script will be called, at most.
-    pub runlimit: u16,
+    pub runlimit: u64,
+
+    /// truncate the read line at specified value before lookup
+    pub truncate: usize,
 }
 
 /// Convenient macro to add a boolean option
@@ -90,7 +93,7 @@ impl TryFrom<String> for SearchOptions {
         let mut opt = SearchOptions::default();
 
         // runlimit is special
-        opt.runlimit = std::u16::MAX;
+        opt.runlimit = std::u64::MAX;
 
         // convert the input list to a vector
         let opt_list: Vec<_> = option_list.split(',').map(|x| x.trim()).collect();
@@ -135,7 +138,8 @@ impl TryFrom<String> for SearchOptions {
                 add_typed_option!(splitted_options, criticalthreshold, opt, u64);
                 add_typed_option!(splitted_options, warningthreshold, opt, u64);
                 add_typed_option!(splitted_options, sticky, opt, u16);
-                add_typed_option!(splitted_options, runlimit, opt, u16);
+                add_typed_option!(splitted_options, runlimit, opt, u64);
+                add_typed_option!(splitted_options, truncate, opt, usize);
 
                 // special case for this
                 // if key == "logfilemissing" {

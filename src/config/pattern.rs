@@ -2,11 +2,11 @@
 //! regexes structures, which are used to search for a pattern in a text.
 //!
 use std::convert::{From, TryFrom};
+use std::iter::Sum;
 
-use regex::{Regex, RegexSet};
-use serde::Deserialize;
-//use pcre2::Regex;
 use log::{debug, trace};
+use regex::{Regex, RegexSet};
+use serde::{Deserialize, Serialize};
 
 use crate::fromstr;
 use crate::misc::error::{AppCustomErrorKind, AppError};
@@ -73,15 +73,6 @@ pub struct Pattern {
 }
 
 impl Pattern {
-    /// Builds a `Pattern` set form a YAML string. Useful for unit tests, because this structure
-    /// is used by the `Config` structure, directly loading the whole configuration from a YAML
-    /// file.
-    // #[cfg(test)]
-    // fn from_str(yaml: &str) -> Result<Pattern, AppError> {
-    //     let p: Pattern = Pattern::from_str(yaml)?;
-    //     Ok(p)
-    // }
-
     /// Tests if `text` matches any of the regexes in the set.
     fn is_exception(&self, text: &str) -> bool {
         self.exceptions
@@ -107,7 +98,7 @@ impl Pattern {
     }
 }
 
-// Auto-implement FromStr
+// Auto-implement `FromStr`
 fromstr!(Pattern);
 
 #[derive(Debug, Deserialize, PartialEq, Hash, Eq)]
@@ -147,17 +138,6 @@ impl From<PatternType> for String {
         s.to_string()
     }
 }
-
-// impl From<&'static str> for PatternType {
-//     fn from(pattern_type: &'static str) -> Self {
-//         match pattern_type {
-//             "critical" => PatternType::critical,
-//             "warning" => PatternType::warning,
-//             "ok" => PatternType::ok,
-//         }
-//     }
-// }
-
 /// A structure combining patterns into 3 categories: *critical*, *warning* and *ok*.
 #[derive(Debug, Deserialize, Clone)]
 pub struct PatternSet {
@@ -219,44 +199,33 @@ impl PatternSet {
         None
     }
 }
-// impl PatternSet {
-//     /// Returns whether a critical or warning regex is involved in the match, provided no exception is matched.
-//     pub fn is_match(&self, text: &str) -> Option<(PatternType, &Regex)> {
-//         // try to match critical pattern first
-//         if let Some(critical) = &self.critical {
-//             trace!("critical pattern is tried");
-//             let ret = critical
-//                 .is_match(text)
-//                 .map(|re| (PatternType::critical, re));
-//             if ret.is_some() {
-//                 return ret;
-//             }
-//         }
-
-//         // and then warning
-//         if let Some(warning) = &self.warning {
-//             trace!("warning pattern is tried");
-//             let ret = warning.is_match(text).map(|re| (PatternType::warning, re));
-//             if ret.is_some() {
-//                 return ret;
-//             }
-//         }
-
-//         // and finally ok
-//         if let Some(ok) = &self.ok {
-//             trace!("ok pattern is tried");
-//             let ret = ok.is_match(text).map(|re| (PatternType::ok, re));
-//             if ret.is_some() {
-//                 return ret;
-//             }
-//         }
-
-//         None
-//     }
-// }
 
 // Auto-implement FromStr
 fromstr!(PatternSet);
+
+/// Holds, during the search, all counters relative to the pattern type
+#[derive(Debug, Deserialize, Serialize, Default, Clone)]
+pub struct PatternCounters {
+    pub critical_count: u64,
+    pub warning_count: u64,
+    pub ok_counter: u64,
+    pub exec_counter: u64,
+}
+
+/// Sum is used to sum all counters of run data
+impl<'a> Sum<&'a Self> for PatternCounters {
+    fn sum<I>(iter: I) -> Self
+    where
+        I: Iterator<Item = &'a Self>,
+    {
+        iter.fold(Self::default(), |a, b| Self {
+            critical_count: a.critical_count + b.critical_count,
+            warning_count: a.warning_count + b.warning_count,
+            ok_counter: a.ok_counter + b.ok_counter,
+            exec_counter: a.exec_counter + b.exec_counter,
+        })
+    }
+}
 
 #[cfg(test)]
 mod tests {
