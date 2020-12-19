@@ -2,7 +2,8 @@
 # files to search for.
 searches:
   # name & path of the logfile to search
-  - logfile: /var/log/syslo
+  - logfile: 
+      path: /var/log/syslog
 
     # list of tags to refer to
     tags: 
@@ -61,7 +62,8 @@ searches:
           }
 
   # name & path of the logfile to search
-  - logfile: /var/log/kern.log
+  - logfile: 
+      path: /var/log/kern.log
 
     # list of tags to refer to
     tags: 

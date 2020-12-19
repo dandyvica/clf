@@ -3,11 +3,13 @@
 //!
 use std::convert::{From, TryFrom};
 use std::iter::Sum;
+use std::ops::Add;
 
 use log::{debug, trace};
 use regex::{Regex, RegexSet};
 use serde::{Deserialize, Serialize};
 
+use crate::context;
 use crate::fromstr;
 use crate::misc::error::{AppCustomErrorKind, AppError};
 
@@ -34,7 +36,7 @@ impl TryFrom<Vec<String>> for RegexVec {
         let mut v: Vec<Regex> = Vec::new();
         for re in &list {
             // replace
-            v.push(Regex::new(re)?);
+            v.push(Regex::new(re).map_err(|e| context!(e, "error in regex {}", re))?);
         }
         Ok(RegexVec(v))
     }
@@ -50,7 +52,7 @@ impl TryFrom<Vec<String>> for RegexBundle {
     type Error = AppError;
 
     fn try_from(list: Vec<String>) -> Result<Self, Self::Error> {
-        let set = RegexSet::new(list)?;
+        let set = RegexSet::new(&list).map_err(|e| context!(e, "error in regexset {:?}", list))?;
         Ok(RegexBundle(set))
     }
 }
@@ -119,7 +121,7 @@ impl TryFrom<&str> for PatternType {
             "critical" => Ok(PatternType::critical),
             "warning" => Ok(PatternType::warning),
             "ok" => Ok(PatternType::ok),
-            _ => Err(AppError::new(
+            _ => Err(AppError::new_custom(
                 AppCustomErrorKind::UnsupportedPatternType,
                 &format!("{} pattern type is not supported", s),
             )),
@@ -141,9 +143,9 @@ impl From<PatternType> for String {
 /// A structure combining patterns into 3 categories: *critical*, *warning* and *ok*.
 #[derive(Debug, Deserialize, Clone)]
 pub struct PatternSet {
-    pub(in crate) critical: Option<Pattern>,
-    pub(in crate) warning: Option<Pattern>,
-    pub(in crate) ok: Option<Pattern>,
+    pub critical: Option<Pattern>,
+    pub warning: Option<Pattern>,
+    pub ok: Option<Pattern>,
 }
 
 pub struct PatternMatchResult<'a> {
@@ -208,8 +210,8 @@ fromstr!(PatternSet);
 pub struct PatternCounters {
     pub critical_count: u64,
     pub warning_count: u64,
-    pub ok_counter: u64,
-    pub exec_counter: u64,
+    pub ok_count: u64,
+    pub exec_count: u64,
 }
 
 /// Sum is used to sum all counters of run data
@@ -221,9 +223,23 @@ impl<'a> Sum<&'a Self> for PatternCounters {
         iter.fold(Self::default(), |a, b| Self {
             critical_count: a.critical_count + b.critical_count,
             warning_count: a.warning_count + b.warning_count,
-            ok_counter: a.ok_counter + b.ok_counter,
-            exec_counter: a.exec_counter + b.exec_counter,
+            ok_count: a.ok_count + b.ok_count,
+            exec_count: a.exec_count + b.exec_count,
         })
+    }
+}
+
+/// Used in calculation all all counters for Nagios global exit
+impl Add for PatternCounters {
+    type Output = Self;
+
+    fn add(self, other: Self) -> Self {
+        Self {
+            critical_count: self.critical_count + other.critical_count,
+            warning_count: self.warning_count + other.warning_count,
+            ok_count: self.ok_count + other.ok_count,
+            exec_count: self.exec_count + other.exec_count,
+        }
     }
 }
 
@@ -317,5 +333,44 @@ mod tests {
         let match_text = p.is_match("RESET_ERROR: error is reset").unwrap();
         assert_eq!(match_text.pattern_type, PatternType::ok);
         assert_eq!(match_text.regex.as_str(), "^RESET_ERROR");
+    }
+
+    #[test]
+    fn sum_counters() {
+        let p = PatternCounters {
+            critical_count: 1,
+            warning_count: 2,
+            ok_count: 3,
+            exec_count: 4,
+        };
+
+        let v = vec![p; 10];
+        let sum: PatternCounters = v.iter().sum();
+        assert_eq!(sum.critical_count, 10);
+        assert_eq!(sum.warning_count, 20);
+        assert_eq!(sum.ok_count, 30);
+        assert_eq!(sum.exec_count, 40);
+    }
+
+    #[test]
+    fn add_counters() {
+        let p1 = PatternCounters {
+            critical_count: 1,
+            warning_count: 2,
+            ok_count: 3,
+            exec_count: 4,
+        };
+        let p2 = PatternCounters {
+            critical_count: 1,
+            warning_count: 2,
+            ok_count: 3,
+            exec_count: 4,
+        };
+
+        let sum = p1 + p2;
+        assert_eq!(sum.critical_count, 2);
+        assert_eq!(sum.warning_count, 4);
+        assert_eq!(sum.ok_count, 6);
+        assert_eq!(sum.exec_count, 8);
     }
 }

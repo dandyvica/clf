@@ -3,11 +3,10 @@ use std::path::PathBuf;
 use clap::{App, Arg};
 use simplelog::LevelFilter;
 
-//use crate::error::AppExitCode;
 use crate::logfile::lookup::ReaderCallType;
 use crate::misc::{
+    constants::*,
     nagios::{Nagios, NagiosVersion},
-    util::Cons,
 };
 
 /// This structure holds the command line arguments.
@@ -23,6 +22,7 @@ pub struct CliOptions {
     pub nagios_version: NagiosVersion,
     pub snapshot_file: Option<PathBuf>,
     pub reader_type: ReaderCallType,
+    pub tera_context: Option<String>,
 }
 
 /// Implements `Default` trait for `CliOptions`.
@@ -38,11 +38,12 @@ impl Default for CliOptions {
             delete_snapfile: false,
             check_conf: false,
             logger_level: LevelFilter::Info,
-            max_logger_size: Cons::MAX_LOGGER_SIZE * 1024 * 1024,
+            max_logger_size: MAX_LOGGER_SIZE * 1024 * 1024,
             show_options: false,
             nagios_version: NagiosVersion::Nrpe3,
             snapshot_file: None,
             reader_type: ReaderCallType::FullReaderCall,
+            tera_context: None,
         }
     }
 }
@@ -129,7 +130,7 @@ impl CliOptions {
                     .short('a')
                     .long("no-callback")
                     .required(false)
-                    .long_about("Don't run any callback, just read all logfiles in the configuration file. Used to check whether regexes are correct.")
+                    .long_about("Don't run any callback, just read all logfiles in the configuration file and print out matching line. Used to check whether regexes are correct.")
                     .takes_value(false),
             )
             .arg(
@@ -138,6 +139,14 @@ impl CliOptions {
                     .long("snapshot")
                     .required(false)
                     .long_about("Override the snapshot file specified in the configuration file. It will default to the platform-dependent name using the temporary directory if not provided in configuration file or by using this flag.")
+                    .takes_value(true),
+            )
+            .arg(
+                Arg::new("context")
+                    .short('x')
+                    .long("context")
+                    .required(false)
+                    .long_about("A JSON string used to set the Tera context. Only valid if tera feature is enabled")
                     .takes_value(true),
             )
             .get_matches();
@@ -172,16 +181,8 @@ impl CliOptions {
         options.delete_snapfile = matches.is_present("delete-snapshot");
         options.show_options = matches.is_present("show-options");
 
-        // if matches.is_present("loglevel") {
-        //     options.logger_level =
-        //         LevelFilter::from_str(matches.value_of("loglevel").unwrap()).unwrap();
-        // }
         options.logger_level = matches.value_of_t("loglevel").unwrap_or(LevelFilter::Info);
 
-        // if matches.is_present("nagios-version") {
-        //     options.nagios_version =
-        //         NagiosVersion::from_str(matches.value_of("nagios-version").unwrap()).unwrap();
-        // }
         options.nagios_version = matches
             .value_of_t("nagios-version")
             .unwrap_or(NagiosVersion::Nrpe3);
@@ -192,14 +193,7 @@ impl CliOptions {
 
         options.max_logger_size = matches
             .value_of_t("max-logsize")
-            .unwrap_or(Cons::MAX_LOGGER_SIZE * 1024 * 1024);
-
-        // if matches.is_present("max-logsize") {
-        //     options.max_logger_size = value_t!(matches, "max-logsize", u64)
-        //         .unwrap_or(Cons::MAX_LOGGER_SIZE)
-        //         * 1024
-        //         * 1024;
-        // }
+            .unwrap_or(MAX_LOGGER_SIZE * 1024 * 1024);
 
         options.show_options = matches.is_present("show-options");
         if options.show_options {

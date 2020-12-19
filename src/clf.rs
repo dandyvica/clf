@@ -1,20 +1,26 @@
 // TODO:
 // - create a reader for JSON files
-// - serialize/deserialize date correctly: done
-// - add Tera/Jinja2 templating => add context argument
-// - delete tag_name is snapshot: done
-// - add log rotation facility
-// - simplify/analyze args.rs: done
-// - enhance BypassReader display: done
-// - use Config::from_path iso Config::from_file: done
-// - fastforward option: implement Seek(EndOfFile) to move directly to the end of the file
-// - FIXME: if error calling any callback, don't update counters etc (line_number, offset)
 // - implement logfilemissing
-// - implement truncate: done
+// - add missing variables: CLF_HOSTNAME, CLF_IPADDRESS, CLF_TIMESTAMP, CLF_USER
+// - implement a unique ID iso pid. FIXME: check exit message from snapshot
+// - manage errors when logfile is not found
+
+// DONE:
+// - serialize/deserialize date correctly
+// - implement truncate
+// - simplify/analyze args.rspath
+// - enhance BypassReader display
+// - implement prescript/postscript
+// - delete unnecessary getters
+// - implement fastword option
+// - FIXME: if error calling any callback, don't update counters etc (line_number, offset)
+// - add Tera/Jinja2 templating => add context argument
+// - use Config::from_path iso Config::from_file: done FIXME: return code when cmd not working
+// - add log rotation facility: FIXME: test it !
+
 
 use log::{debug, info};
 use std::io::ErrorKind;
-use std::process::id;
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -31,15 +37,10 @@ mod logfile;
 use logfile::lookup::{BypassReader, FullReader, ReaderCallType};
 
 mod misc;
-use misc::{
-    nagios::{Nagios, NagiosError, NagiosVersion},
-    util::Usable,
-};
+use misc::{extension::ReadFs, nagios::Nagios};
 
 mod args;
 use args::CliOptions;
-
-mod testing;
 
 mod init;
 use init::*;
@@ -86,38 +87,65 @@ fn main() {
     // manage snapshot file: overrides the snapshot file is provided as a command line argument
     //---------------------------------------------------------------------------------------------------
     if let Some(snap_file) = &options.snapshot_file {
-        config.set_snapshot_file(&snap_file);
+        config.global.snapshot_file = snap_file.to_path_buf();
     }
 
     let mut snapshot = load_snapshot(&options);
+
+    //---------------------------------------------------------------------------------------------------
+    // start the prescript if any
+    //---------------------------------------------------------------------------------------------------
+    let mut prescript_pid = 0;
+    if config.global.prescript.is_some() {
+        // execute script
+        let prescript = &config.global.prescript.as_ref().unwrap();
+        let result = prescript.spawn();
+
+        // check rc
+        if let Err(e) = &result {
+            error!("error: {} spawning command: {:?}", e, prescript.command);
+            Nagios::exit_critical(&format!(
+                "error: {} spawning command: {:?}",
+                e, prescript.command
+            ));
+        }
+
+        // now it's safe to unwrap to get pid
+        prescript_pid = result.unwrap();
+
+        info!(
+            "prescript command successfully executed, pid={}",
+            prescript_pid
+        );
+    }
 
     //---------------------------------------------------------------------------------------------------
     // loop through all searches
     //---------------------------------------------------------------------------------------------------
     for search in &config.searches {
         // log some useful info
-        info!("------------ searching into logfile: {}", search.logfile);
+        info!("==> searching into logfile: {:?}", &search.logfile.path);
 
         // checks if logfile is accessible. If not, no need to move further, just record last error
-        if let Err(e) = search.logfile().is_usable() {
-            error!(
-                "logfile: {} is not a file or is not accessible, error: {}",
-                search.logfile, e
-            );
+        // if let Err(e) = search.logfile.path().is_usable() {
+        //     error!(
+        //         "logfile: {:?} is not a file or is not accessible, error: {}",
+        //         &search.logfile.path, e
+        //     );
 
-            // this is a error for this logfile which boils down to a Nagios unknown error
-            //hit_counter.set_error(e);
+        //     // this is a error for this logfile which boils down to a Nagios unknown error
+        //     //hit_counter.set_error(e);
 
-            continue;
-        }
+        //     continue;
+        // }
 
         // create a LogFile struct or get it from snapshot
         let snapshot_logfile = {
-            let temp = snapshot.logfile_mut(&search.logfile());
+            let temp = snapshot.logfile_mut(&search.logfile.path(), &search.logfile);
             if let Err(e) = temp {
                 error!(
                     "error fetching logfile {} from snapshot: {}",
-                    search.logfile().display(),
+                    search.logfile.path().display(),
                     e,
                 );
 
@@ -130,7 +158,7 @@ fn main() {
         };
 
         // check if the rotation occured. This means the logfile signature has changed
-        let snapshot_has_changed = {
+        let logfile_is_archived = {
             let temp = snapshot_logfile.has_changed();
             if let Err(e) = temp {
                 error!(
@@ -140,92 +168,65 @@ fn main() {
                 );
 
                 // this is a error for this logfile which boils down to a Nagios unknown error
-                //hit_counter.set_error(e);
+                //snapshot_logfile.set_error(e);
 
                 continue;
             }
             temp.unwrap()
         };
 
-        if snapshot_has_changed {
+        if logfile_is_archived {
             info!("logfile has changed, probably archived and rotated");
 
+            // get archive file name
             // first, check if an archive tag has been defined in the YAML config for this search
-            if search.archive.is_none() {
+            if search.logfile.archive.is_none() {
                 error!("logfile {} has been moved or archived but no archive settings defined in the configuration file", snapshot_logfile.path.display());
-                continue;
+                break;
             }
 
-            //     // get archived log file name. Now it's safe to unwrap
-            //     let archived_path = search
-            //         .archive
-            //         .as_ref()
-            //         .unwrap()
-            //         .archived_path(&snapshot_logfile.path);
+            let archive_path = search.logfile.archive.as_ref().unwrap();
 
-            //     if archived_path.is_none() {
-            //         error!(
-            //             "can't determine archived logfile for {}",
-            //             snapshot_logfile.path.display()
-            //         );
-            //         continue;
-            //     }
+            // clone search and assign archive logfile instead of original logfile
+            let mut archive_snapshot_logfile = snapshot_logfile.clone();
+            archive_snapshot_logfile.update(&archive_path);
 
-            //     // create a new instance of the logfile with the archived file
-            //     let mut _archived_logfile = {
-            //         let temp = LogFile::from_path(&archived_path.unwrap());
-            //         if let Err(e) = temp {
-            //             error!(
-            //                 "error on creating logfile for path {}: {}",
-            //                 snapshot_logfile.path().display(),
-            //                 e
-            //             );
+            // call adequate reader according to command line
+            if reader_type == &ReaderCallType::BypassReaderCall {
+                snapshot_logfile.lookup_tags::<BypassReader>(
+                    &config.global,
+                    &search.tags,
+                    &mut children_list,
+                );
+            } else if reader_type == &ReaderCallType::FullReaderCall {
+                snapshot_logfile.lookup_tags::<FullReader>(
+                    &config.global,
+                    &search.tags,
+                    &mut children_list,
+                );
+            }
 
-            //             // this is a error for this logfile which boils down to a Nagios unknown error
-            //             hit_counter.set_error(e);
-
-            //             continue;
-            //         }
-            //         temp.unwrap()
-            //     };
-
-            //     // duplicate rundata from the original logfile
-            //     _archived_logfile.set_rundata(&snapshot_logfile.rundata());
-
-            //     // finally, the archive logfile is ready to be processed
-            //     archived_logfile = Some(_archived_logfile);
-            // }
-
-            // // build a new queue to manage archve & brand new file
-            //let mut queue = LogQueue::new(snapshot_logfile);
-            // if archived_logfile.is_some() {
-            //     queue.set_rotated(archived_logfile.as_mut())
+            // reset run_data into original search because this is a new file
+            snapshot_logfile.run_data.clear();
         }
 
+        // call adequate reader according to command line
         if reader_type == &ReaderCallType::BypassReaderCall {
             snapshot_logfile.lookup_tags::<BypassReader>(
-                config.global(),
+                &config.global,
                 &search.tags,
                 &mut children_list,
             );
         } else if reader_type == &ReaderCallType::FullReaderCall {
             snapshot_logfile.lookup_tags::<FullReader>(
-                config.global(),
+                &config.global,
                 &search.tags,
                 &mut children_list,
             );
         }
-
-        // update counters
-        // let sum = snapshot_logfile.sum_counters(); // sum all counters for all tags of the logfile
-        // hit_counter.critical_count = sum.critical_count;
-        // hit_counter.warning_count = sum.warning_count;
-        // if snapshot_logfile.last_error.is_some() {
-        //     hit_counter.set_error(snapshot_logfile.last_error.unwrap())
-        // }
     }
 
-    // just exit if the --no-call option was used
+    // just exit if the '--no-callback' option was used
     if reader_type == &ReaderCallType::BypassReaderCall {
         Nagios::exit_ok("read complete");
     }
@@ -233,8 +234,8 @@ fn main() {
     // save snapshot and optionally delete old entries
     save_snapshot(
         &mut snapshot,
-        config.snapshot_file(),
-        config.snapshot_retention(),
+        &config.global.snapshot_file,
+        config.global.snapshot_retention,
     );
 
     // teardown
@@ -244,17 +245,34 @@ fn main() {
     );
     wait_children(children_list);
 
+    // optionally call postscript
+    if config.global.postcript.is_some() {
+        // add the pid to the end of arguments
+        let postcript = &mut config.global.postcript.as_mut().unwrap();
+        postcript.command.push(prescript_pid.to_string());
+
+        // run script
+        let result = postcript.spawn();
+
+        // check rc
+        if let Err(e) = &result {
+            error!("error: {} spawning command: {:?}", e, postcript.command);
+        } else {
+            info!(
+                "postcript command successfully executed, pid={}",
+                prescript_pid
+            )
+        }
+    }
+
     info!(
         "end of searches, elapsed: {} seconds",
         now.elapsed().as_secs_f32()
     );
 
     // now we can prepare the global hit counters to exit the relevant Nagios code
-    snapshot.exit_message();
-
-    //let exit_code = nagios_output(&logfile_counter, &options.nagios_version);
-    //info!("exiting process pid:{}, exit code:{:?}", id(), exit_code);
-    //Nagios::exit_with(exit_code);
+    let exit_code = snapshot.exit_message();
+    Nagios::exit_with(exit_code);
 }
 
 /// Manage end of all started processes from clf.
@@ -334,25 +352,3 @@ fn wait_children(children_list: Vec<ChildData>) {
         };
     }
 }
-
-// Manage Nagios output, depending on the NRPE version.
-// fn nagios_output(
-//     logfile_counter: &LogfileHitCounter,
-//     nagios_version: &NagiosVersion,
-// ) -> NagiosError {
-//     // calculate global hits
-//     let global = logfile_counter.global();
-//     println!("{}", global);
-
-//     // plugin output depends on the Nagios version
-//     match nagios_version {
-//         NagiosVersion::Nrpe3 => {
-//             println!("{}", logfile_counter);
-//         }
-
-//         NagiosVersion::Nrpe2 => {}
-//     };
-
-//     // return Nagios exit status coming from global hits
-//     NagiosError::from(&global)
-// }

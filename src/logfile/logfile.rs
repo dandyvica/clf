@@ -8,136 +8,45 @@ use std::io::BufReader;
 use std::path::{Path, PathBuf};
 
 use bzip2::read::BzDecoder;
-use chrono::prelude::*;
 use flate2::read::GzDecoder;
 use log::{debug, error};
-use serde::{Deserialize, Serialize, Serializer};
+use serde::{Deserialize, Serialize};
 use xz2::read::XzDecoder;
 
-use crate::misc::error::AppError;
+use crate::misc::error::{AppError, AppResult};
 
 use crate::config::{
-    callback::ChildData,
-    config::{GlobalOptions, Tag},
-    pattern::{PatternCounters, PatternType},
+    callback::ChildData, global::GlobalOptions, logfiledef::LogFileDef, pattern::PatternCounters,
+    tag::Tag,
 };
 
-use crate::logfile::{
-    compression::CompressionScheme,
-    lookup::Lookup,
-    signature::{FileIdentification, Signature},
-};
+use crate::logfile::{compression::CompressionScheme, lookup::Lookup, rundata::RunData};
 
-/// A wrapper to store log file processing data.
-#[derive(Debug, Serialize, Deserialize, Default, Clone)]
-pub struct RunData {
-    /// tag name
-    //pub tag_name: String,
+use crate::misc::extension::{ReadFs, Signature};
 
-    /// position of the last run. Used to seek the file pointer to this point.
-    pub last_offset: u64,
-
-    /// last line number during the last search
-    pub last_line: u64,
-
-    /// last time logfile were processed: printable date/time
-    #[serde(serialize_with = "timestamp_to_string", skip_deserializing)]
-    pub last_run: f64,
-
-    /// last time logfile were processed in seconds: used to check retention
-    pub last_run_secs: u64,
-
-    /// keep all counters here
-    pub counters: PatternCounters,
-
-    /// last error when reading a logfile
-    #[serde(serialize_with = "error_to_string", skip_deserializing)]
-    pub last_error: Option<AppError>,
-}
-
-/// Converts the timestamp to a human readable string in the snapshot
-pub fn timestamp_to_string<S>(value: &f64, serializer: S) -> Result<S::Ok, S::Error>
-where
-    S: Serializer,
-{
-    // exract integer part = number of seconds
-    // frational part = number of nanoseconds
-    let secs = value.trunc();
-    let nanos = value.fract();
-    let utc_tms = Utc.timestamp(secs as i64, (nanos * 1_000_000_000f64) as u32);
-    format!("{}", utc_tms.format("%Y-%m-%d %H:%M:%S.%f")).serialize(serializer)
-}
-
-/// Converts the error to string
-pub fn error_to_string<S>(value: &Option<AppError>, serializer: S) -> Result<S::Ok, S::Error>
-where
-    S: Serializer,
-{
-    if value.is_none() {
-        "None".to_string().serialize(serializer)
-    } else {
-        format!("{}", value.as_ref().unwrap()).serialize(serializer)
-    }
-}
-
-impl RunData {
-    /// Returns the `last_run` field value.
-    #[inline(always)]
-    pub fn lastrun_secs(&self) -> u64 {
-        self.last_run_secs
-    }
-
-    /// Return `true` if counters reach thresholds
-    pub fn is_threshold_reached(
-        &mut self,
-        pattern_type: &PatternType,
-        critical_threshold: u64,
-        warning_threshold: u64,
-    ) -> bool {
-        // increments thresholds and compare with possible defined limits and accumulate counters for plugin output
-        match pattern_type {
-            PatternType::critical => {
-                self.counters.critical_count += 1;
-                if self.counters.critical_count < critical_threshold {
-                    return false;
-                }
-            }
-            PatternType::warning => {
-                self.counters.warning_count += 1;
-                if self.counters.warning_count < warning_threshold {
-                    return false;
-                }
-            }
-            // this special Ok pattern resets counters
-            PatternType::ok => {
-                self.counters.critical_count = 0;
-                self.counters.warning_count = 0;
-
-                // no need to process further: don't call a script
-                return true;
-            }
-        }
-        true
-    }
-}
+use crate::context;
 
 /// A wrapper to get logfile information and its related attributes.
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, Default)]
 pub struct LogFile {
     /// File & path as a `PathBuf`.
     pub path: PathBuf,
 
     /// Directory part or `None` if not existing.
-    directory: Option<PathBuf>,
+    pub directory: Option<PathBuf>,
 
     /// Extension or `None` if no extension.
-    extension: Option<String>,
+    pub extension: Option<String>,
 
-    /// `true` if logfile is compressed.
-    compression: CompressionScheme,
+    /// Compression method
+    pub compression: CompressionScheme,
 
     /// Uniquely identifies a logfile
-    signature: Signature,
+    pub signature: Signature,
+
+    /// All other fields from the config file
+    #[serde(skip)]
+    pub definition: LogFileDef,
 
     /// Run time data that are stored each time a logfile is searched for patterns.
     pub run_data: HashMap<String, RunData>,
@@ -148,45 +57,43 @@ impl LogFile {
     /// like file *inode* or *dev*. The file path is checked for accessibility and is canonicalized. It also
     /// contains run time data, which correspond to the data created each time a logfile instance is searched
     /// for patterns.
-    pub fn from_path<P: AsRef<Path>>(file_name: P) -> Result<LogFile, AppError> {
+    pub fn from_path<P: AsRef<Path>>(path: P) -> AppResult<LogFile> {
+        // create a default logfile and update it later. This is used to not duplicate code
+        let mut logfile = LogFile::default();
+
+        logfile.update(path)?;
+
+        Ok(logfile)
+    }
+
+    /// Update some logfile fields with up to date path values
+    pub fn update<P: AsRef<Path>>(&mut self, path: P) -> AppResult<()> {
         // check if we can really use the file
-        let path = PathBuf::from(file_name.as_ref());
-
-        // logfiles should have an absolute path
-        // if !path.is_absolute() {
-        //     return Err(AppError::new(
-        //         AppCustomErrorKind::FilePathNotAbsolute,
-        //         "path {} is not absolute",
-        //     ));
-        // }
-
-        let directory = path.parent().map(|p| p.to_path_buf());
-        let extension = path.extension().map(|x| x.to_string_lossy().to_string());
-
-        //const COMPRESSED_EXT: &[&str] = &["gz", "zip", "xz"];
-        let compression = CompressionScheme::from(extension.as_deref());
+        let log_path = PathBuf::from(path.as_ref());
 
         // canonicalize path: absolute form of the path with all intermediate
         // components normalized and symbolic links resolved.
-        let canon = path.canonicalize()?;
+        let canon = log_path
+            .canonicalize()
+            .map_err(|e| context!(e, "unable to canonicalize file:{:?}", &log_path))?;
+
+        self.directory = canon.parent().map(|p| p.to_path_buf());
+        self.extension = canon.extension().map(|x| x.to_string_lossy().to_string());
+        self.compression = CompressionScheme::from(self.extension.as_deref());
 
         // // get inode & dev ID
-        let signature = path.signature()?;
+        self.signature = canon.signature()?;
 
-        Ok(LogFile {
-            path: canon,
-            directory,
-            extension,
-            compression,
-            signature,
-            run_data: HashMap::new(),
-        })
+        // finally save path
+        self.path = canon;
+
+        Ok(())
     }
 
-    /// Return the path
-    // pub fn path(&self) -> &PathBuf {
-    //     &self.path
-    // }
+    /// Set definition coming from config file
+    pub fn set_definition(&mut self, def: LogFileDef) {
+        self.definition = def;
+    }
 
     /// Recalculate the signature to check whether it has changed
     pub fn has_changed(&self) -> Result<bool, AppError> {
@@ -240,12 +147,13 @@ impl LogFile {
         &mut self,
         tag: &Tag,
         global_options: &GlobalOptions,
-    ) -> Result<Vec<ChildData>, AppError>
+    ) -> AppResult<Vec<ChildData>>
     where
         Self: Lookup<T>,
     {
         // open target file
-        let file = File::open(&self.path)?;
+        let file = File::open(&self.path)
+            .map_err(|e| context!(e, "unable to open file:{:?}", &self.path))?;
 
         // if file is compressed, we need to call a specific reader
         // create a specific reader for each compression scheme
@@ -285,7 +193,7 @@ impl LogFile {
     ) where
         Self: Lookup<T>,
     {
-        for tag in tags.iter().filter(|t| t.process()) {
+        for tag in tags.iter().filter(|t| t.process) {
             debug!("searching for tag: {}", &tag.name);
 
             // now we can search for the pattern and save the child handle if a script was called
@@ -317,14 +225,45 @@ impl LogFile {
 
 #[cfg(test)]
 mod tests {
+    use std::io::{Error, ErrorKind};
     use std::str::FromStr;
 
     use super::*;
 
-    use crate::logfile::lookup::{FullReader, ReaderCallType};
-    use crate::testing::setup::*;
+    use crate::config::vars::Vars;
+    use crate::logfile::lookup::FullReader;
+    #[derive(Debug, Deserialize)]
+    struct JSONStream {
+        pub args: Vec<String>,
+        pub vars: Vars<String, String>,
+    }
 
-    #[test]
+    // utility fn to receive JSON from a stream
+    fn get_json_from_stream<T: std::io::Read>(
+        socket: &mut T,
+    ) -> Result<JSONStream, std::io::Error> {
+        // try to read size first
+        let mut size_buffer = [0; std::mem::size_of::<u16>()];
+        let bytes_read = socket.read(&mut size_buffer)?;
+        //dbg!(bytes_read);
+        if bytes_read == 0 {
+            return Err(Error::new(ErrorKind::Interrupted, "socket closed"));
+        }
+
+        let json_size = u16::from_be_bytes(size_buffer);
+
+        // read JSON raw data
+        let mut json_buffer = vec![0; json_size as usize];
+        socket.read_exact(&mut json_buffer).unwrap();
+
+        // get JSON
+        let s = std::str::from_utf8(&json_buffer).unwrap();
+
+        let json: JSONStream = serde_json::from_str(&s).unwrap();
+        Ok(json)
+    }
+
+    //#[test]
     fn purge_line() {
         let s = "this an example\n";
         let mut cow: Cow<str> = Cow::Borrowed(s);
@@ -332,7 +271,7 @@ mod tests {
         assert_eq!(cow.into_owned(), "this an example");
     }
 
-    #[test]
+    //#[test]
     #[cfg(target_os = "linux")]
     fn new() {
         let mut logfile = LogFile::from_path("/var/log/kern.log").unwrap();
@@ -348,31 +287,32 @@ mod tests {
         assert_eq!(logfile.compression, CompressionScheme::Uncompressed);
     }
 
-    #[test]
-    #[cfg(target_os = "windows")]
-    fn new() {
-        let mut logfile = LogFile::from_path(r"C:\Windows\System32\cmd.exe").unwrap();
-        //assert_eq!(logfile.path.as_os_str(), std::ffi::OsStr::new(r"C:\Windows\System32\cmd.exe"));
-        assert_eq!(logfile.extension.unwrap(), "exe");
-        assert_eq!(
-            logfile.directory.unwrap(),
-            PathBuf::from(r"C:\Windows\System32")
-        );
-        assert_eq!(logfile.compression, CompressionScheme::Uncompressed);
-        assert_eq!(logfile.run_data.len(), 0);
+    // #[test]
+    // #[cfg(target_os = "windows")]
+    // fn new() {
+    //     let mut logfile = LogFile::from_path(r"C:\Windows\System32\cmd.exe").unwrap();
+    //     //assert_eq!(logfile.path.as_os_str(), std::ffi::OsStr::new(r"C:\Windows\System32\cmd.exe"));
+    //     assert_eq!(logfile.extension.unwrap(), "exe");
+    //     assert_eq!(
+    //         logfile.directory.unwrap(),
+    //         PathBuf::from(r"C:\Windows\System32")
+    //     );
+    //     assert_eq!(logfile.compression, CompressionScheme::Uncompressed);
+    //     assert_eq!(logfile.run_data.len(), 0);
 
-        logfile = LogFile::from_path(r"c:\windows\system32\drivers\etc\hosts").unwrap();
-        assert!(logfile.extension.is_none());
-    }
-    //#[test]
+    //     logfile = LogFile::from_path(r"c:\windows\system32\drivers\etc\hosts").unwrap();
+    //     assert!(logfile.extension.is_none());
+    // }
+
+    #[test]
     fn from_reader() {
-        let opts = GlobalOptions::from_str("path: /usr/bin").expect("unable to read YAML");
+        let global = GlobalOptions::from_str("path: /usr/bin").expect("unable to read YAML");
 
         let yaml = r#"
             name: test
             options: "runcallback"
             process: true
-            callback: { 
+            callback: {
                 address: "127.0.0.1:8999",
                 args: ['arg1', 'arg2', 'arg3']
             }
@@ -395,12 +335,9 @@ mod tests {
                 }
         "#;
 
-        let tag = Tag::from_str(yaml).expect("unable to read YAML");
-        let mut logfile_counter = HitCounter::default();
+        let mut tag = Tag::from_str(yaml).expect("unable to read YAML");
 
-        //let mut w = Wrapper::new(&opts, &tag, &mut logfile_counter);
-
-        let mut logfile = LogFile::from_path("tests/logfiles/adhoc.txt").unwrap();
+        let mut logfile = LogFile::from_path("tests/unittest/adhoc.txt").unwrap();
 
         // create a very simple TCP server: wait for data and test them
         let child = std::thread::spawn(move || {
@@ -462,7 +399,7 @@ mod tests {
         let ten_millis = std::time::Duration::from_millis(10);
         std::thread::sleep(ten_millis);
 
-        let _ret = logfile.lookup::<FullReader>(&mut w, &ReaderCallType::FullReaderCall);
+        let _ret = logfile.lookup::<FullReader>(&mut tag, &global);
         let _res = child.join();
     }
 }

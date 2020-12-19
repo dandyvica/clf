@@ -11,6 +11,10 @@ use crate::misc::nagios::Nagios;
 
 /// Create a new config struct
 pub fn init_config(options: &CliOptions) -> Config {
+    #[cfg(feature = "tera")]
+    let _config = Config::from_path(&options.config_file, options.tera_context.as_deref());
+
+    #[cfg(not(feature = "tera"))]
     let _config = Config::from_path(&options.config_file);
 
     // check for loading errors

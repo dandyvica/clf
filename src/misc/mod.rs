@@ -2,5 +2,7 @@
 //! a logfile for patterns.
 #[macro_use]
 pub mod error;
+pub mod constants;
+pub mod extension;
+pub mod macros;
 pub mod nagios;
-pub mod util;

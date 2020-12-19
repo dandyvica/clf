@@ -7,17 +7,21 @@ use bzip2::read::BzDecoder;
 use flate2::read::GzDecoder;
 use xz2::read::XzDecoder;
 
-use crate::misc::error::{AppCustomErrorKind, AppError};
+use crate::context;
+use crate::misc::error::{AppCustomErrorKind, AppError, AppResult};
 
 pub trait Seeker {
     /// Simulates the `seek`method for all used `BufReader<R>`.
-    fn set_offset(&mut self, offset: u64) -> Result<u64, AppError>;
+    fn set_offset(&mut self, offset: u64) -> AppResult<u64>;
 }
 
 impl Seeker for BufReader<File> {
     #[inline(always)]
-    fn set_offset(&mut self, offset: u64) -> Result<u64, AppError> {
-        self.seek(SeekFrom::Start(offset)).map_err(AppError::Io)
+    fn set_offset(&mut self, offset: u64) -> AppResult<u64> {
+        let pos = self
+            .seek(SeekFrom::Start(offset))
+            .map_err(|e| context!(e, "error seeking file {:?} for offset {}", self, offset))?;
+        Ok(pos)
     }
 }
 
@@ -26,7 +30,7 @@ impl<R> Seeker for BufReader<GzDecoder<R>>
 where
     R: Read,
 {
-    fn set_offset(&mut self, offset: u64) -> Result<u64, AppError> {
+    fn set_offset(&mut self, offset: u64) -> AppResult<u64> {
         _set_offset(self, offset)
     }
 }
@@ -35,7 +39,7 @@ impl<R> Seeker for BufReader<BzDecoder<R>>
 where
     R: Read,
 {
-    fn set_offset(&mut self, offset: u64) -> Result<u64, AppError> {
+    fn set_offset(&mut self, offset: u64) -> AppResult<u64> {
         _set_offset(self, offset)
     }
 }
@@ -44,13 +48,13 @@ impl<R> Seeker for BufReader<XzDecoder<R>>
 where
     R: Read,
 {
-    fn set_offset(&mut self, offset: u64) -> Result<u64, AppError> {
+    fn set_offset(&mut self, offset: u64) -> AppResult<u64> {
         _set_offset(self, offset)
     }
 }
 
 // This method is common to all compression ad-hoc seek method.
-fn _set_offset<R>(mut reader: R, offset: u64) -> Result<u64, AppError>
+fn _set_offset<R>(mut reader: R, offset: u64) -> AppResult<u64>
 where
     R: Read,
 {
@@ -61,7 +65,7 @@ where
 
     let pos = match reader.by_ref().bytes().nth((offset - 1) as usize) {
         None => {
-            return Err(AppError::new(
+            return Err(AppError::new_custom(
                 AppCustomErrorKind::SeekPosBeyondEof,
                 &format!("tried to set offset beyond EOF, at offset: {}", offset),
             ))
@@ -75,50 +79,48 @@ where
 mod tests {
     use super::*;
 
-    //     fn get_compressed_reader() -> BufReader<GzDecoder<Cursor<Vec<u8>>>> {
-    //         let data = r#"
-    // ABCDEFGHIJKLMNOPQRSTUVWXYZ
-    // BCDEFGHIJKLMNOPQRSTUVWXYZA
-    // CDEFGHIJKLMNOPQRSTUVWXYZAB
-    // DEFGHIJKLMNOPQRSTUVWXYZABC
-    // EFGHIJKLMNOPQRSTUVWXYZABCD
-    // FGHIJKLMNOPQRSTUVWXYZABCDE
-    // GHIJKLMNOPQRSTUVWXYZABCDEF
-    // HIJKLMNOPQRSTUVWXYZABCDEFG
-    // IJKLMNOPQRSTUVWXYZABCDEFGH
-    // JKLMNOPQRSTUVWXYZABCDEFGHI
-    // KLMNOPQRSTUVWXYZABCDEFGHIJ
-    // LMNOPQRSTUVWXYZABCDEFGHIJK
-    // MNOPQRSTUVWXYZABCDEFGHIJKL
-    // NOPQRSTUVWXYZABCDEFGHIJKLM
-    // OPQRSTUVWXYZABCDEFGHIJKLMN
-    // PQRSTUVWXYZABCDEFGHIJKLMNO
-    // QRSTUVWXYZABCDEFGHIJKLMNOP
-    // RSTUVWXYZABCDEFGHIJKLMNOPQ
-    // STUVWXYZABCDEFGHIJKLMNOPQR
-    // TUVWXYZABCDEFGHIJKLMNOPQRS
-    // UVWXYZABCDEFGHIJKLMNOPQRST
-    // VWXYZABCDEFGHIJKLMNOPQRSTU
-    // WXYZABCDEFGHIJKLMNOPQRSTUV
-    // XYZABCDEFGHIJKLMNOPQRSTUVW
-    // YZABCDEFGHIJKLMNOPQRSTUVWX
-    // ZABCDEFGHIJKLMNOPQRSTUVWXY
-    // "#;
+    use flate2::write::GzEncoder;
+    use flate2::Compression;
+    use std::io::prelude::*;
+    use std::io::Cursor;
 
-    //         // gzip our data
-    //         let gzip_data = gzip_data(&data);
+    use crate::misc::error::{AppCustomErrorKind, InternalError};
 
-    //         let cursor = std::io::Cursor::new(&gzip_data);
-    //         let decoder = GzDecoder::new(cursor);
-    //         let reader = BufReader::new(decoder);
+    fn get_compressed_reader() -> BufReader<GzDecoder<Cursor<Vec<u8>>>> {
+        let data = r#"ABCDEFGHIJKLMNOPQRSTUVWXYZ
+BCDEFGHIJKLMNOPQRSTUVWXYZA
+CDEFGHIJKLMNOPQRSTUVWXYZAB
+DEFGHIJKLMNOPQRSTUVWXYZABC
+EFGHIJKLMNOPQRSTUVWXYZABCD
+FGHIJKLMNOPQRSTUVWXYZABCDE
+GHIJKLMNOPQRSTUVWXYZABCDEF
+HIJKLMNOPQRSTUVWXYZABCDEFG
+IJKLMNOPQRSTUVWXYZABCDEFGH
+JKLMNOPQRSTUVWXYZABCDEFGHI
+KLMNOPQRSTUVWXYZABCDEFGHIJ
+LMNOPQRSTUVWXYZABCDEFGHIJK
+MNOPQRSTUVWXYZABCDEFGHIJKL
+NOPQRSTUVWXYZABCDEFGHIJKLM
+OPQRSTUVWXYZABCDEFGHIJKLMN
+PQRSTUVWXYZABCDEFGHIJKLMNO
+QRSTUVWXYZABCDEFGHIJKLMNOP
+RSTUVWXYZABCDEFGHIJKLMNOPQ
+STUVWXYZABCDEFGHIJKLMNOPQR
+TUVWXYZABCDEFGHIJKLMNOPQRS
+UVWXYZABCDEFGHIJKLMNOPQRST
+VWXYZABCDEFGHIJKLMNOPQRSTU
+WXYZABCDEFGHIJKLMNOPQRSTUV
+XYZABCDEFGHIJKLMNOPQRSTUVW
+YZABCDEFGHIJKLMNOPQRSTUVWX
+ZABCDEFGHIJKLMNOPQRSTUVWXY
+"#;
 
-    //         reader
-    //     }
+        let mut e = GzEncoder::new(Vec::new(), Compression::default());
+        e.write_all(data.as_bytes()).unwrap();
+        let gzip_data = e.finish().unwrap();
 
-    fn get_compressed_reader() -> BufReader<GzDecoder<File>> {
-        let file = File::open("tests/logfiles/clftest.txt.gz")
-            .expect("unable to open compressed test file");
-        let decoder = GzDecoder::new(file);
+        let cursor = std::io::Cursor::new(gzip_data);
+        let decoder = GzDecoder::new(cursor);
         let reader = BufReader::new(decoder);
 
         reader
@@ -155,5 +157,9 @@ mod tests {
         reader = get_compressed_reader();
         offset = reader.set_offset(10000);
         assert!(offset.is_err());
+        let err = offset.unwrap_err();
+        assert!(
+            matches!(err.error_kind, InternalError::Custom(x) if x == AppCustomErrorKind::SeekPosBeyondEof)
+        );
     }
 }

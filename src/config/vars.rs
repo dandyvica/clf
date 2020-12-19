@@ -9,7 +9,9 @@ use std::ops::{Deref, DerefMut};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 
-use crate::misc::util::Cons;
+use crate::context;
+use crate::misc::constants::DEFAULT_CONTAINER_CAPACITY;
+use crate::misc::error::{AppError, AppResult};
 
 /// Macro to build a variable name prepended with its prefix
 #[macro_export]
@@ -39,9 +41,12 @@ pub type RuntimeVars<'a> = Vars<Cow<'a, str>, &'a str>;
 // these are used when loading YAML configuration file were user variables are defined
 pub type UserVars = Vars<String, String>;
 
+// the same for so called "constants" vars
+pub type ConsVars = Vars<String, String>;
+
 impl<K: Hash + Eq, V> Default for Vars<K, V> {
     fn default() -> Self {
-        Vars(HashMap::with_capacity(Cons::DEFAULT_CONTAINER_CAPACITY))
+        Vars(HashMap::with_capacity(DEFAULT_CONTAINER_CAPACITY))
     }
 }
 
@@ -90,6 +95,8 @@ where
     }
 }
 
+/// This implementation is made for lowering the number of memory allocations due to adding
+/// new strings at each line of a logfile.
 impl<'a> Vars<Cow<'a, str>, &'a str> {
     /// Add variables taken from the capture group names or ids.
     pub fn insert_captures(&mut self, re: &Regex, text: &'a str) {
@@ -114,6 +121,22 @@ impl<'a> Vars<Cow<'a, str>, &'a str> {
                 }
             }
         }
+    }
+}
+
+/// This adds "constants" variables because they're not related to a value from a line read from of a logfile
+impl Vars<String, String> {
+    pub fn new_constants(&mut self) -> AppResult<Self> {
+        let mut hmap = HashMap::new();
+
+        // add hostname
+        let hostname = hostname::get().map_err(|e| context!(e, "unable to fetch hostname",))?;
+        let hostname_str = hostname.to_string_lossy();
+        hmap.insert("CLF_HOSTNAME".to_string(), hostname_str.to_string());
+
+        // add ip address
+
+        Ok(Vars(hmap))
     }
 }
 

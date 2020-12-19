@@ -35,6 +35,13 @@ impl From<Option<&str>> for CompressionScheme {
     }
 }
 
+/// By default, no compression
+impl Default for CompressionScheme {
+    fn default() -> Self {
+        CompressionScheme::Uncompressed
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

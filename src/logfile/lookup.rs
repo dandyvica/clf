@@ -5,25 +5,28 @@ use std::time::SystemTime;
 
 use log::{debug, error, info, trace};
 
-use crate::misc::{error::AppError, util::Cons};
+use crate::misc::{
+    constants::*,
+    error::{AppError, AppResult},
+};
 
 use crate::config::{
     callback::{CallbackHandle, ChildData},
-    config::{GlobalOptions, Tag},
+    global::GlobalOptions,
+    tag::Tag,
     vars::RuntimeVars,
 };
 
 use crate::logfile::{logfile::LogFile, seeker::Seeker};
 
-use crate::prefix_var;
-
+use crate::{context, prefix_var};
 pub trait Lookup<T> {
     fn reader<R: BufRead + Seeker>(
         &mut self,
         reader: R,
         tag: &Tag,
         global_options: &GlobalOptions,
-    ) -> Result<Vec<ChildData>, AppError>;
+    ) -> AppResult<Vec<ChildData>>;
 }
 
 // In this case, the logfile is only read and callback not called at all
@@ -67,7 +70,7 @@ impl Lookup<FullReader> for LogFile {
         mut reader: R,
         tag: &Tag,
         global_options: &GlobalOptions,
-    ) -> Result<Vec<ChildData>, AppError> {
+    ) -> AppResult<Vec<ChildData>> {
         //------------------------------------------------------------------------------------
         // 1. initialize local variables
         //------------------------------------------------------------------------------------
@@ -82,7 +85,7 @@ impl Lookup<FullReader> for LogFile {
         let path = self.path.clone();
 
         // uses the same buffer
-        let mut buffer = Vec::with_capacity(Cons::DEFAULT_STRING_CAPACITY);
+        let mut buffer = Vec::with_capacity(DEFAULT_STRING_CAPACITY);
 
         // define a new child handle. This is an Option because the script couldn't be called if not requested so
         let mut children = Vec::new();
@@ -105,6 +108,9 @@ impl Lookup<FullReader> for LogFile {
         let mut run_data = self.rundata_for_tag(&tag.name);
         trace!("tagname: {:?}, run_data:{:?}\n\n", &tag.name, run_data);
 
+        // store pid: it'll be used for output message
+        run_data.pid = std::process::id();
+
         // if we don't need to read the file from the beginning, adjust counters and set offset
         if !tag.options.rewind {
             bytes_count = run_data.last_offset;
@@ -118,7 +124,7 @@ impl Lookup<FullReader> for LogFile {
         );
 
         // reset exec count
-        run_data.counters.exec_counter = 0;
+        run_data.counters.exec_count = 0;
 
         // resets thresholds if requested
         // this will count number of matches for warning & critical, to see if this matches the thresholds
@@ -226,11 +232,11 @@ impl Lookup<FullReader> for LogFile {
                             debug!("added variables: {:?}", vars);
 
                             // now call script if upper run limit is not reached yet
-                            if run_data.counters.exec_counter < tag.options.runlimit {
+                            if run_data.counters.exec_count < tag.options.runlimit {
                                 // in case of a callback error, stop iterating and save state here
                                 match tag.callback_call(
-                                    Some(&global_options.path()),
-                                    global_options.user_vars(),
+                                    Some(&global_options.path),
+                                    &global_options.user_vars,
                                     &vars,
                                     &mut handle,
                                 ) {
@@ -241,13 +247,12 @@ impl Lookup<FullReader> for LogFile {
                                         }
 
                                         // increment number of script executions or number of JSON data sent
-                                        run_data.counters.exec_counter += 1;
+                                        run_data.counters.exec_count += 1;
                                     }
                                     Err(e) => {
                                         error!(
                                             "error <{}> when calling callback <{:#?}>",
-                                            e,
-                                            tag.callback()
+                                            e, tag.callback
                                         );
                                         early_ret = Some(e);
                                         break;
@@ -263,7 +268,10 @@ impl Lookup<FullReader> for LogFile {
                 // a rare IO error could occur here
                 Err(e) => {
                     error!("read_line() error kind: {:?}, line: {}", e.kind(), line);
-                    early_ret = Some(AppError::Io(e));
+                    early_ret = Some(AppError::from_error(
+                        e,
+                        &format!("error reading logfile {:?} at line {}", &path, line_number),
+                    ));
                     break;
                 }
             };
@@ -274,13 +282,15 @@ impl Lookup<FullReader> for LogFile {
         run_data.last_line = line_number;
 
         // and last run
-        let time = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH)?;
+        let time = SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .map_err(|e| context!(e, "error calculating durations",))?;
         run_data.last_run = time.as_secs_f64();
         run_data.last_run_secs = time.as_secs();
 
         info!(
             "number of callback execution: {}",
-            run_data.counters.exec_counter
+            run_data.counters.exec_count
         );
         trace!(
             "========================> end processing logfile:{} for tag:{}",
@@ -315,7 +325,13 @@ impl Lookup<BypassReader> for LogFile {
                         e,
                         &self.path.display()
                     );
-                    return Err(AppError::Io(e));
+                    return Err(AppError::from_error(
+                        e,
+                        &format!(
+                            "error reading logfile {:?} at line {}",
+                            self.path, line_number
+                        ),
+                    ));
                 }
                 line.unwrap()
             };

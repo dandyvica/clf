@@ -1,4 +1,5 @@
 //! Useful wrapper on the `Command` Rust standard library structure.
+//! TODO: move script call to a single vec
 use std::borrow::Cow;
 use std::cell::RefCell;
 use std::convert::TryFrom;
@@ -17,8 +18,11 @@ use serde::Deserialize;
 use serde_json::json;
 
 use crate::config::vars::{RuntimeVars, UserVars};
-use crate::fromstr;
-use crate::misc::{error::AppError, util::Cons};
+use crate::misc::{
+    constants::*,
+    error::{AppError, AppResult},
+};
+use crate::{context, fromstr};
 
 /// A callback is either a script, or a TCP socket or a UNIX domain socket
 #[derive(Debug, Deserialize, PartialEq, Hash, Eq, Clone)]
@@ -57,13 +61,13 @@ impl Clone for CallbackHandle {
 pub struct Callback {
     /// A callback identifier is either a script path, a TCP socket or a UNIX domain socket
     #[serde(flatten)]
-    pub(in crate) callback: CallbackType,
+    pub callback: CallbackType,
 
     /// Option arguments of the previous.
-    pub(in crate) args: Option<Vec<String>>,
+    pub args: Option<Vec<String>>,
 
     /// A timeout in seconds to for wait command completion.
-    #[serde(default = "Cons::default_timeout")]
+    #[serde(default = "default_timeout")]
     timeout: u64,
 }
 
@@ -75,7 +79,7 @@ impl Callback {
         user_vars: &Option<UserVars>,
         runtime_vars: &RuntimeVars,
         handle: &mut CallbackHandle,
-    ) -> Result<Option<ChildData>, AppError> {
+    ) -> AppResult<Option<ChildData>> {
         debug!(
             "ready to start callback {:?} with args={:?}, path={:?}, envs={:?}, current_dir={:?}",
             &self.callback,
@@ -121,7 +125,9 @@ impl Callback {
                 }
 
                 // start command
-                let child = cmd.spawn()?;
+                let child = cmd
+                    .spawn()
+                    .map_err(|e| context!(e, "unable to spawn process for cmd:{:?}", path))?;
                 debug!("starting script {:?}, pid={}", path, child.id());
 
                 Ok(Some(ChildData {
@@ -132,9 +138,13 @@ impl Callback {
                 }))
             }
             CallbackType::Tcp(address) => {
+                debug_assert!(address.is_some());
+                let addr = address.as_ref().unwrap();
+
                 // test whether a TCP socket is already created
                 if handle.tcp_socket.is_none() {
-                    let stream = TcpStream::connect(address.as_ref().unwrap())?;
+                    let stream = TcpStream::connect(addr)
+                        .map_err(|e| context!(e, "unable to connect to TCP address: {}", addr))?;
                     handle.tcp_socket = Some(stream);
                     debug!("creating TCP socket for: {}", address.as_ref().unwrap());
                 }
@@ -160,15 +170,29 @@ impl Callback {
                     file!(),
                     line!()
                 ));
-                stream.write(&size.to_be_bytes())?;
-                stream.write(&json.as_bytes())?;
+                stream.write(&size.to_be_bytes()).map_err(|e| {
+                    context!(
+                        e,
+                        "error writing payload size:{} to address: {:?}",
+                        size,
+                        addr
+                    )
+                })?;
+                stream
+                    .write(&json.as_bytes())
+                    .map_err(|e| context!(e, "error writing JSON data to address: {:?}", addr))?;
 
                 Ok(None)
             }
             CallbackType::Domain(address) => {
+                debug_assert!(address.is_some());
+                let addr = address.as_ref().unwrap();
+
                 // test whether a UNIX socket is already created
                 if handle.domain_socket.is_none() {
-                    let stream = UnixStream::connect(address.as_ref().unwrap())?;
+                    let stream = UnixStream::connect(address.as_ref().unwrap()).map_err(|e| {
+                        context!(e, "unable to connect to UNIX socket address: {:?}", addr)
+                    })?;
                     handle.domain_socket = Some(stream);
                     debug!("creating UNIX socket for: {:?}", address.as_ref().unwrap());
                 }
@@ -194,9 +218,17 @@ impl Callback {
                     file!(),
                     line!()
                 ));
-                stream.write(&size.to_be_bytes())?;
-                //println!("size={:?}", &json_raw.len().to_be_bytes());
-                stream.write(&json.as_bytes())?;
+                stream.write(&size.to_be_bytes()).map_err(|e| {
+                    context!(
+                        e,
+                        "error writing payload size: {} to address: {:?}",
+                        size,
+                        addr
+                    )
+                })?;
+                stream
+                    .write(&json.as_bytes())
+                    .map_err(|e| context!(e, "error writing JSON data to address: {:?}", addr))?;
 
                 Ok(None)
             }
@@ -218,7 +250,7 @@ pub struct ChildData {
 
 impl ChildData {
     #[cfg(test)]
-    fn exit_code(&mut self) -> Result<Option<i32>, AppError> {
+    fn exit_code(&mut self) -> AppResult<Option<i32>> {
         // do we have a Child ?
         if self.child.is_none() {
             return Ok(None);
@@ -232,7 +264,13 @@ impl ChildData {
                 let res = child.wait();
                 return Ok(res.unwrap().code());
             }
-            Err(e) => return Err(crate::misc::error::AppError::Io(e)),
+            Err(e) => {
+                return Err(context!(
+                    e,
+                    "error waiting for child for path:{:?}",
+                    self.child
+                ))
+            }
         }
     }
 }
@@ -242,21 +280,50 @@ pub mod tests {
     use super::*;
     use regex::Regex;
     use std::borrow::Cow;
+    use std::io::{Error, ErrorKind, Result};
     use std::str::FromStr;
 
     use crate::config::vars::Vars;
-    use crate::testing::setup::get_json_from_stream;
+
+    #[derive(Debug, Deserialize)]
+    struct JSONStream {
+        pub args: Vec<String>,
+        pub vars: Vars<String, String>,
+    }
+
+    // utility fn to receive JSON from a stream
+    fn get_json_from_stream<T: std::io::Read>(socket: &mut T) -> Result<JSONStream> {
+        // try to read size first
+        let mut size_buffer = [0; std::mem::size_of::<u16>()];
+        let bytes_read = socket.read(&mut size_buffer)?;
+        //dbg!(bytes_read);
+        if bytes_read == 0 {
+            return Err(Error::new(ErrorKind::Interrupted, "socket closed"));
+        }
+
+        let json_size = u16::from_be_bytes(size_buffer);
+
+        // read JSON raw data
+        let mut json_buffer = vec![0; json_size as usize];
+        socket.read_exact(&mut json_buffer).unwrap();
+
+        // get JSON
+        let s = std::str::from_utf8(&json_buffer).unwrap();
+
+        let json: JSONStream = serde_json::from_str(&s).unwrap();
+        Ok(json)
+    }
 
     #[test]
     #[cfg(target_family = "unix")]
     fn callback_script() {
         let yaml = r#"
-            script: "tests/scripts/check_ut.py"
+            script: "tests/unittest/callback_script.py"
             args: ['one', 'two', 'three']
         "#;
 
         let cb: Callback = Callback::from_str(yaml).expect("unable to read YAML");
-        let script = PathBuf::from("tests/scripts/check_ut.py");
+        let script = PathBuf::from("tests/unittest/callback_script.py");
         assert!(matches!(&cb.callback, CallbackType::Script(Some(x)) if x == &script));
         assert_eq!(cb.args.as_ref().unwrap().len(), 3);
 

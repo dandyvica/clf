@@ -1,13 +1,10 @@
 //! List of Nagios specific const or structures.
-use std::collections::HashMap;
 use std::fmt;
-use std::path::PathBuf;
 use std::str::FromStr;
 
 use serde::Deserialize;
 
-use crate::logfile::logfile::RunData;
-use crate::misc::{error::AppError, util::Cons};
+use crate::logfile::rundata::RunData;
 
 // Helper macro to define all Nagios exit functions
 macro_rules! create_exit {
@@ -24,7 +21,7 @@ pub struct Nagios;
 impl Nagios {
     #[inline(always)]
     pub fn exit(msg: &str, code: NagiosError) {
-        println!("{} - {}", String::from(&code), msg);
+        println!("{}: {}", String::from(&code), msg);
         std::process::exit(code as i32);
     }
 
@@ -119,14 +116,6 @@ pub struct NagiosExit {
     pub error_msg: Option<String>,
 }
 
-// impl NagiosExit {
-//     // store error which corresponds to an unknown Nagios count also
-//     pub fn set_error(&mut self, e: AppError) {
-//         self.unknown_count += 1;
-//         self.error = Some(e);
-//     }
-// }
-
 impl From<&RunData> for NagiosExit {
     fn from(run_data: &RunData) -> Self {
         let mut nagios_exit = NagiosExit::default();
@@ -193,13 +182,13 @@ impl fmt::Display for NagiosExit {
         if self.error_msg.is_none() {
             write!(
                 f,
-                "{:?} - (errors:{}, warnings:{}, unknowns:{})",
+                "{:?}: (errors:{}, warnings:{}, unknowns:{})",
                 nagios_err, self.critical_count, self.warning_count, self.unknown_count
             )
         } else {
             write!(
                 f,
-                "{:?} - (errors:{}, warnings:{}, unknowns:{}) - error: {}",
+                "{:?}: (errors:{}, warnings:{}, unknowns:{}) - error: {}",
                 nagios_err,
                 self.critical_count,
                 self.warning_count,
@@ -210,69 +199,10 @@ impl fmt::Display for NagiosExit {
     }
 }
 
-/// This will hold error counters for each logfile processed.
-// #[derive(Debug)]
-// pub struct LogfileNagiosExit(HashMap<PathBuf, NagiosExit>);
-
-// impl Default for LogfileNagiosExit {
-//     fn default() -> Self {
-//         LogfileNagiosExit(HashMap::with_capacity(Cons::DEFAULT_CONTAINER_CAPACITY))
-//     }
-// }
-
-// impl LogfileNagiosExit {
-//     /// If calling this method, we know we're using only the enum `Stats` branch.
-//     pub fn or_default(&mut self, path: &PathBuf) -> &mut NagiosExit {
-//         self.0.entry(path.clone()).or_default()
-//     }
-
-//     /// Calculates the global counter by summation of all counters
-//     pub fn global(&self) -> NagiosExit {
-//         let mut global = NagiosExit::default();
-
-//         self.0.iter().for_each(|(_, x)| {
-//             global.critical_count += x.critical_count;
-//             global.warning_count += x.warning_count;
-//             global.unknown_count += x.unknown_count;
-//         });
-
-//         global
-//     }
-
-//     /// A fast way to iterate through internal field.
-//     #[cfg(test)]
-//     pub fn iter(&self) -> std::collections::hash_map::Iter<PathBuf, NagiosExit> {
-//         self.0.iter()
-//     }
-
-//     /// Checks whether the underlying hashmap contains an error
-//     #[cfg(test)]
-//     pub fn is_error(&self) -> bool {
-//         self.0.iter().any(|(_, v)| v.error.is_some())
-//     }
-// }
-
-/// Formatted string used for plugin output
-// impl fmt::Display for LogfileNagiosExit {
-//     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-//         let mut s = String::with_capacity(Cons::DEFAULT_STRING_CAPACITY);
-
-//         for (path, counter) in self.0.iter() {
-//             match &counter.error {
-//                 None => s.push_str(&format!("{}: {}\n", path.display(), counter)),
-//                 Some(error) => s.push_str(&format!("{}: {}\n", path.display(), error)),
-//             }
-//         }
-
-//         write!(f, "{}", s)
-//     }
-// }
-
 #[cfg(test)]
 mod tests {
-    //use std::path::PathBuf;
     use super::*;
-    use crate::misc::error::AppError;
+    use crate::misc::error::{AppCustomErrorKind, AppError};
 
     #[test]
     fn display() {
@@ -280,27 +210,27 @@ mod tests {
             critical_count: 10,
             warning_count: 100,
             unknown_count: 0,
-            error: None,
+            error_msg: None,
         };
         assert_eq!(
             &format!("{}", m),
-            "CRITICAL - (errors:10, warnings:100, unknowns:0)"
+            "CRITICAL: (errors:10, warnings:100, unknowns:0)"
         );
 
         m.unknown_count = 1;
         assert_eq!(
             &format!("{}", m),
-            "CRITICAL - (errors:10, warnings:100, unknowns:1)"
+            "CRITICAL: (errors:10, warnings:100, unknowns:1)"
         );
     }
 
     #[test]
-    fn from_matcher() {
+    fn from() {
         let mut m = NagiosExit {
             critical_count: 0,
             warning_count: 0,
             unknown_count: 0,
-            error: None,
+            error_msg: None,
         };
         assert_eq!(NagiosError::from(&m), NagiosError::OK);
 
@@ -312,7 +242,7 @@ mod tests {
     }
 
     #[test]
-    fn convert() {
+    fn from_str() {
         let mut err = NagiosError::from_str("ok").unwrap();
         assert_eq!(err, NagiosError::OK);
 
@@ -327,16 +257,23 @@ mod tests {
     }
 
     #[test]
-    fn logfile_matcher() {
-        let mut m = LogfileNagiosExit::default();
-        let mut a = m.or_default(&PathBuf::from("/usr/bin/gzip"));
-        a.error = Some(AppError::new(
-            crate::misc::error::AppCustomErrorKind::UnsupportedPatternType,
-            "foo",
-        ));
-        let _b = m.or_default(&PathBuf::from("/usr/bin/md5sum"));
+    fn from_rundata() {
+        let mut s = RunData::default();
+        s.counters.critical_count = 5;
+        s.counters.warning_count = 6;
+        s.last_error = None;
 
-        assert_eq!(m.iter().count(), 2);
-        assert!(m.is_error());
+        let mut nexit = NagiosExit::from(&s);
+        assert_eq!(nexit.critical_count, 5);
+        assert_eq!(nexit.warning_count, 6);
+        assert!(nexit.error_msg.is_none());
+
+        s.last_error = Some(AppError::new_custom(
+            AppCustomErrorKind::SeekPosBeyondEof,
+            &format!("tried to set offset beyond EOF, at offset 1000",),
+        ));
+        nexit = NagiosExit::from(&s);
+        assert_eq!(nexit.unknown_count, 1);
+        assert!(nexit.error_msg.is_some());
     }
 }

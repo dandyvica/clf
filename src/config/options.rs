@@ -87,6 +87,7 @@ impl TryFrom<String> for SearchOptions {
             "sticky",
             "fastforward",
             "runlimit",
+            "truncate",
         ];
 
         // create a default options structure
@@ -101,7 +102,7 @@ impl TryFrom<String> for SearchOptions {
         // checks if there're any invalid arguments
         for opt in &opt_list {
             if VALID_OPTIONS.iter().all(|x| !opt.contains(x)) {
-                return Err(AppError::new(
+                return Err(AppError::new_custom(
                     AppCustomErrorKind::UnsupportedSearchOption,
                     &format!("search option: {}  is not supported", opt),
                 ));
@@ -116,7 +117,8 @@ impl TryFrom<String> for SearchOptions {
             rewind,
             keepoutput,
             savethresholdcount,
-            protocol
+            protocol,
+            fastforward
         );
 
         // other options like key=value if any
@@ -158,7 +160,7 @@ mod tests {
 
     #[test]
     fn search_options() {
-        let opts = SearchOptions::try_from("runcallback, keepoutput, rewind, criticalthreshold=10, warningthreshold=15, protocol, savethresholdcount, sticky=5, runlimit=10".to_string()).unwrap();
+        let opts = SearchOptions::try_from("runcallback, keepoutput, rewind, criticalthreshold=10, warningthreshold=15, protocol, savethresholdcount, sticky=5, runlimit=10, truncate=80".to_string()).unwrap();
 
         assert!(opts.runcallback);
         assert!(opts.keepoutput);
@@ -171,6 +173,7 @@ mod tests {
         assert_eq!(opts.sticky, 5);
         assert_eq!(opts.criticalthreshold, 10);
         assert_eq!(opts.runlimit, 10);
+        assert_eq!(opts.truncate, 80);
         //assert_eq!(&opts.logfilemissing.unwrap(), "foo");
     }
 }
