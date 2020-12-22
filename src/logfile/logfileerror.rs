@@ -5,6 +5,7 @@ use std::path::PathBuf;
 
 use crate::misc::{error::AppError, nagios::NagiosError};
 
+#[derive(Debug)]
 pub struct LogFileAccessError {
     pub nagios_error: NagiosError,
     pub error: AppError,

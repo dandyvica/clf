@@ -38,7 +38,7 @@ impl Nagios {
 
 /// Enum list of Nagios error codes.
 #[derive(Debug, Deserialize, Clone, PartialEq)]
-#[serde(rename_all(deserialize = "UPPERCASE"))]
+#[serde(rename_all(deserialize = "lowercase"))]
 pub enum NagiosError {
     OK = 0,
     WARNING = 1,

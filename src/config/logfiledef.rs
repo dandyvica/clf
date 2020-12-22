@@ -21,21 +21,6 @@ impl Default for LogFileFormat {
     }
 }
 
-// // what error to return if logfile is not accessible
-// #[derive(Debug, Deserialize, Clone, PartialEq)]
-// #[allow(non_camel_case_types)]
-// pub enum LogFileMissing {
-//     critical,
-//     warning,
-//     unknown,
-// }
-
-// impl Default for LogFileMissing {
-//     fn default() -> Self {
-//         LogFileMissing::critical
-//     }
-// }
-
 #[derive(Debug, Deserialize, Clone, Default)]
 pub struct LogFileDef {
     // full path of the logfile

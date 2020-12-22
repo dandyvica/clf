@@ -147,6 +147,16 @@ impl Snapshot {
         global_exit.critical_count = pattern_sum.critical_count;
         global_exit.warning_count = pattern_sum.warning_count;
 
+        // add critical, warning or unknown error count with access errors
+        for (_,access_error) in access_errors.iter() {
+            match access_error.nagios_error {
+                NagiosError::CRITICAL => global_exit.critical_count += 1,
+                NagiosError::WARNING => global_exit.warning_count += 1,
+                NagiosError::UNKNOWN => global_exit.unknown_count += 1,
+                NagiosError::OK => (),
+            }
+        }
+
         // unknown is a special case: we sum the number of cases where an error occurred in RunData structures
         for logfile in self.snapshot.values() {
             global_exit.unknown_count += logfile

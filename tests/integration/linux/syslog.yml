@@ -81,6 +81,19 @@ searches:
   - logfile:
       path: /tmp/foo
       format: plain
+      logfilemissing: critical
+    tags:
+      - name: apt
+        process: true
+        options: "runcallback"
+        callback: { domain: "/tmp/clf.sock", args: ["arg1", "arg2", "arg3"] }
+        patterns:
+          warning: { regexes: ["Deleting"] }
+
+  - logfile:
+      path: /tmp/foo2
+      format: plain
+      logfilemissing: critical
     tags:
       - name: apt
         process: true
