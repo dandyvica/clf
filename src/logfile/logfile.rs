@@ -5,7 +5,7 @@ use std::borrow::Cow;
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::BufReader;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use bzip2::read::BzDecoder;
 use flate2::read::GzDecoder;
@@ -239,7 +239,10 @@ mod tests {
         let mut logfile = LogFile::from_path("/var/log/kern.log").unwrap();
         assert_eq!(logfile.id.declared_path.to_str(), Some("/var/log/kern.log"));
         assert_eq!(logfile.id.canon_path.to_str(), Some("/var/log/kern.log"));
-        assert_eq!(logfile.id.directory.unwrap(), PathBuf::from("/var/log"));
+        assert_eq!(
+            logfile.id.directory.unwrap(),
+            std::path::PathBuf::from("/var/log")
+        );
         assert_eq!(logfile.id.extension.unwrap(), "log");
         assert_eq!(logfile.id.compression, CompressionScheme::Uncompressed);
         assert_eq!(logfile.run_data.len(), 0);

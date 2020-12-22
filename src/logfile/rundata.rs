@@ -25,6 +25,7 @@ pub struct RunData {
     pub last_run: f64,
 
     /// last time logfile were processed in seconds: used to check retention
+    #[serde(skip)]
     pub last_run_secs: u64,
 
     /// keep all counters here

@@ -5,6 +5,8 @@ use serde::{de, Deserialize, Deserializer};
 use serde_yaml::Value;
 
 use super::logsource::LogSource;
+use crate::misc::nagios::NagiosError;
+
 // a logfile could be of different format. Necessary to effectively read them
 #[derive(Debug, Deserialize, Clone, PartialEq)]
 #[allow(non_camel_case_types)]
@@ -18,6 +20,21 @@ impl Default for LogFileFormat {
         LogFileFormat::plain
     }
 }
+
+// // what error to return if logfile is not accessible
+// #[derive(Debug, Deserialize, Clone, PartialEq)]
+// #[allow(non_camel_case_types)]
+// pub enum LogFileMissing {
+//     critical,
+//     warning,
+//     unknown,
+// }
+
+// impl Default for LogFileMissing {
+//     fn default() -> Self {
+//         LogFileMissing::critical
+//     }
+// }
 
 #[derive(Debug, Deserialize, Clone, Default)]
 pub struct LogFileDef {
@@ -36,6 +53,10 @@ pub struct LogFileDef {
 
     // optional archive file name. If not specified, itr's just the same file + .1
     pub archive: Option<PathBuf>,
+
+    // what to expect when logfile is not accessible
+    #[serde(default)]
+    pub logfilemissing: NagiosError,
 }
 
 impl LogFileDef {

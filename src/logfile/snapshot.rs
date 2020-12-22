@@ -12,7 +12,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::config::{logfiledef::LogFileDef, pattern::PatternCounters};
 use crate::context;
-use crate::logfile::logfile::LogFile;
+use crate::logfile::{logfile::LogFile, logfileerror::LogFileAccessErrorList};
 use crate::misc::{
     error::{AppError, AppResult},
     nagios::{NagiosError, NagiosExit},
@@ -134,7 +134,7 @@ impl Snapshot {
     }
 
     /// Builds the final output message displayed by the plugin
-    pub fn exit_message(&self) -> NagiosError {
+    pub fn exit_message(&self, access_errors: &LogFileAccessErrorList) -> NagiosError {
         // calculate the summation of all pattern counts for all logfiles
         let pattern_sum = self
             .snapshot
@@ -167,6 +167,16 @@ impl Snapshot {
                     println!("{}(tag={}) - {}", path.display(), tag_name, nagios_exit);
                 }
             }
+        }
+
+        // then list access errors
+        for (path, access_error) in access_errors.iter() {
+            println!(
+                "{} - {}: {}",
+                path.display(),
+                String::from(&access_error.nagios_error),
+                access_error.error
+            );
         }
 
         nagios_error

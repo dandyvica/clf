@@ -36,7 +36,12 @@ impl ReadFs for PathBuf {
 
     /// Tells whether a `PathBuf` is accessible i.e. it combines `has_root()`, `exists()` and `is_file()`.  
     fn is_usable(&self) -> AppResult<()> {
-        let _file = File::open(self).map_err(|e| context!(e, "unable to open file {:?}", self))?;
+        // first canonicalize path
+        let canon = self
+            .canonicalize()
+            .map_err(|e| context!(e, "unable to canonicalize file {:?}", self))?;
+        let _file =
+            File::open(&canon).map_err(|e| context!(e, "unable to open file {:?}", self))?;
 
         // if not a file, it's not really usable
         if !self.is_file() {

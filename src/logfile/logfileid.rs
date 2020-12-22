@@ -1,24 +1,11 @@
 //! A structure representing a logfile, with all its related attributes. Those attributes are
 //! coming from the processing of the log file, every time it's read to look for patterns.
-
-use std::borrow::Cow;
-use std::collections::HashMap;
-use std::fs::File;
-use std::io::BufReader;
 use std::path::{Path, PathBuf};
 
-use bzip2::read::BzDecoder;
-use flate2::read::GzDecoder;
-use log::{debug, error};
 use serde::{Deserialize, Serialize};
-use xz2::read::XzDecoder;
 
-use crate::config::{
-    callback::ChildData, global::GlobalOptions, logfiledef::LogFileDef, pattern::PatternCounters,
-    tag::Tag,
-};
 use crate::context;
-use crate::logfile::{compression::CompressionScheme, lookup::Lookup, rundata::RunData};
+use crate::logfile::compression::CompressionScheme;
 use crate::misc::error::{AppError, AppResult};
 use crate::misc::extension::{ReadFs, Signature};
 

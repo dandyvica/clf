@@ -33,7 +33,10 @@ mod config;
 use config::callback::ChildData;
 
 mod logfile;
-use logfile::lookup::{BypassReader, FullReader, ReaderCallType};
+use logfile::{
+    logfileerror::LogFileAccessErrorList,
+    lookup::{BypassReader, FullReader, ReaderCallType},
+};
 
 mod misc;
 use misc::{extension::ReadFs, nagios::Nagios};
@@ -60,6 +63,9 @@ fn main() {
 
     // manage arguments from command line
     let options = CliOptions::options();
+
+    // store all logfile access errors
+    let mut access_errors = LogFileAccessErrorList::default();
 
     //---------------------------------------------------------------------------------------------------
     // initialize logger
@@ -126,17 +132,16 @@ fn main() {
         info!("==> searching into logfile: {:?}", &search.logfile.path);
 
         // checks if logfile is accessible. If not, no need to move further, just record last error
-        // if let Err(e) = search.logfile.path().is_usable() {
-        //     error!(
-        //         "logfile: {:?} is not a file or is not accessible, error: {}",
-        //         &search.logfile.path, e
-        //     );
+        if let Err(e) = search.logfile.path().is_usable() {
+            error!(
+                "logfile: {:?} is not a file or is not accessible, error: {}",
+                &search.logfile.path, e
+            );
 
-        //     // this is a error for this logfile which boils down to a Nagios unknown error
-        //     //hit_counter.set_error(e);
-
-        //     continue;
-        // }
+            // this is an error for this logfile which boils down to a Nagios error
+            access_errors.set_error(&search.logfile.path(), e, &search.logfile.logfilemissing);
+            continue;
+        }
 
         // create a LogFile struct or get it from snapshot
         let logfile_from_snapshot = {
@@ -149,8 +154,7 @@ fn main() {
                 );
 
                 // this is a error for this logfile which boils down to a Nagios unknown error
-                //hit_counter.set_error(e);
-
+                access_errors.set_error(&search.logfile.path(), e, &search.logfile.logfilemissing);
                 continue;
             }
             temp.unwrap()
@@ -195,8 +199,8 @@ fn main() {
             let archive_path = search.logfile.archive.as_ref().unwrap();
 
             // clone search and assign archive logfile instead of original logfile
-            let mut archive_logfile_from_snapshot = logfile_from_snapshot.clone();
-            archive_logfile_from_snapshot.id.update(&archive_path);
+            let mut archived_logfile = logfile_from_snapshot.clone();
+            archived_logfile.id.update(&archive_path);
 
             // call adequate reader according to command line
             if reader_type == &ReaderCallType::BypassReaderCall {
@@ -278,7 +282,7 @@ fn main() {
     );
 
     // now we can prepare the global hit counters to exit the relevant Nagios code
-    let exit_code = snapshot.exit_message();
+    let exit_code = snapshot.exit_message(&access_errors);
     Nagios::exit_with(exit_code);
 }
 

@@ -3,6 +3,7 @@
 #[macro_use]
 pub mod logfile;
 pub mod compression;
+pub mod logfileerror;
 pub mod logfileid;
 pub mod lookup;
 pub mod rundata;
