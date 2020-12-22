@@ -11,6 +11,13 @@ pub struct Search {
     pub tags: Vec<Tag>,
 }
 
+impl Search {
+    /// Return the list of all tag names
+    pub fn tag_names(&self) -> Vec<&str> {
+        self.tags.iter().map(|x| x.name.as_str()).collect()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

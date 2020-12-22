@@ -51,15 +51,15 @@ impl LogFileDef {
     }
 
     // Return the list variant from LogSource
-    // pub fn list(&self) -> &Vec<String> {
-    //     match &self.path {
-    //         LogSource::LogFile(_) => unimplemented!(
-    //             "LogSource::LogList not permitted here in {} !",
-    //             module_path!()
-    //         ),
-    //         LogSource::LogList(list) => list,
-    //     }
-    // }
+    pub fn list(&self) -> &Vec<String> {
+        match &self.path {
+            LogSource::LogFile(_) => unimplemented!(
+                "LogSource::LogList not permitted here in {} !",
+                module_path!()
+            ),
+            LogSource::LogList(list) => list,
+        }
+    }
 
     // /// Return the list variant from LogSource
     // pub fn set_path(&mut self, path: &PathBuf) {

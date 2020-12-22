@@ -9,40 +9,26 @@ use std::path::{Path, PathBuf};
 
 use bzip2::read::BzDecoder;
 use flate2::read::GzDecoder;
-use log::{debug, error};
+use log::{debug, error, Log};
 use serde::{Deserialize, Serialize};
 use xz2::read::XzDecoder;
-
-use crate::misc::error::{AppError, AppResult};
 
 use crate::config::{
     callback::ChildData, global::GlobalOptions, logfiledef::LogFileDef, pattern::PatternCounters,
     tag::Tag,
 };
-
-use crate::logfile::{compression::CompressionScheme, lookup::Lookup, rundata::RunData};
-
-use crate::misc::extension::{ReadFs, Signature};
-
 use crate::context;
+use crate::logfile::{
+    compression::CompressionScheme, logfileid::LogFileID, lookup::Lookup, rundata::RunData,
+};
+use crate::misc::error::{AppError, AppResult};
+use crate::misc::extension::{ReadFs, Signature};
 
 /// A wrapper to get logfile information and its related attributes.
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
 pub struct LogFile {
-    /// File & path as a `PathBuf`.
-    pub path: PathBuf,
-
-    /// Directory part or `None` if not existing.
-    pub directory: Option<PathBuf>,
-
-    /// Extension or `None` if no extension.
-    pub extension: Option<String>,
-
-    /// Compression method
-    pub compression: CompressionScheme,
-
-    /// Uniquely identifies a logfile
-    pub signature: Signature,
+    /// All fields depending on the declared path
+    pub id: LogFileID,
 
     /// All other fields from the config file
     #[serde(skip)]
@@ -61,33 +47,9 @@ impl LogFile {
         // create a default logfile and update it later. This is used to not duplicate code
         let mut logfile = LogFile::default();
 
-        logfile.update(path)?;
+        logfile.id.update(path)?;
 
         Ok(logfile)
-    }
-
-    /// Update some logfile fields with up to date path values
-    pub fn update<P: AsRef<Path>>(&mut self, path: P) -> AppResult<()> {
-        // check if we can really use the file
-        let log_path = PathBuf::from(path.as_ref());
-
-        // canonicalize path: absolute form of the path with all intermediate
-        // components normalized and symbolic links resolved.
-        let canon = log_path
-            .canonicalize()
-            .map_err(|e| context!(e, "unable to canonicalize file:{:?}", &log_path))?;
-
-        self.directory = canon.parent().map(|p| p.to_path_buf());
-        self.extension = canon.extension().map(|x| x.to_string_lossy().to_string());
-        self.compression = CompressionScheme::from(self.extension.as_deref());
-
-        // // get inode & dev ID
-        self.signature = canon.signature()?;
-
-        // finally save path
-        self.path = canon;
-
-        Ok(())
     }
 
     /// Set definition coming from config file
@@ -98,8 +60,8 @@ impl LogFile {
     /// Recalculate the signature to check whether it has changed
     pub fn has_changed(&self) -> Result<bool, AppError> {
         // get most recent signature
-        let signature = self.path.signature()?;
-        Ok(self.signature != signature && self.signature != Signature::default())
+        let signature = self.id.canon_path.signature()?;
+        Ok(self.id.signature != signature && self.id.signature != Signature::default())
     }
 
     /// Returns an Option on a reference of a `RunData`, mapping the first
@@ -152,12 +114,12 @@ impl LogFile {
         Self: Lookup<T>,
     {
         // open target file
-        let file = File::open(&self.path)
-            .map_err(|e| context!(e, "unable to open file:{:?}", &self.path))?;
+        let file = File::open(&self.id.canon_path)
+            .map_err(|e| context!(e, "unable to open file:{:?}", &self.id.canon_path))?;
 
         // if file is compressed, we need to call a specific reader
         // create a specific reader for each compression scheme
-        match self.compression {
+        match self.id.compression {
             CompressionScheme::Gzip => {
                 let decoder = GzDecoder::new(file);
                 let reader = BufReader::new(decoder);
@@ -211,7 +173,7 @@ impl LogFile {
                     error!(
                         "error: {} when searching logfile: {} for tag: {}",
                         e,
-                        self.path.display(),
+                        self.id.canon_path.display(),
                         &tag.name
                     );
 
@@ -275,16 +237,17 @@ mod tests {
     #[cfg(target_os = "linux")]
     fn new() {
         let mut logfile = LogFile::from_path("/var/log/kern.log").unwrap();
-        assert_eq!(logfile.path.to_str(), Some("/var/log/kern.log"));
-        assert_eq!(logfile.directory.unwrap(), PathBuf::from("/var/log"));
-        assert_eq!(logfile.extension.unwrap(), "log");
-        assert_eq!(logfile.compression, CompressionScheme::Uncompressed);
+        assert_eq!(logfile.id.declared_path.to_str(), Some("/var/log/kern.log"));
+        assert_eq!(logfile.id.canon_path.to_str(), Some("/var/log/kern.log"));
+        assert_eq!(logfile.id.directory.unwrap(), PathBuf::from("/var/log"));
+        assert_eq!(logfile.id.extension.unwrap(), "log");
+        assert_eq!(logfile.id.compression, CompressionScheme::Uncompressed);
         assert_eq!(logfile.run_data.len(), 0);
 
         logfile = LogFile::from_path("/etc/hosts").unwrap();
-        assert_eq!(logfile.path.to_str(), Some("/etc/hosts"));
-        assert!(logfile.extension.is_none());
-        assert_eq!(logfile.compression, CompressionScheme::Uncompressed);
+        assert_eq!(logfile.id.canon_path.to_str(), Some("/etc/hosts"));
+        assert!(logfile.id.extension.is_none());
+        assert_eq!(logfile.id.compression, CompressionScheme::Uncompressed);
     }
 
     // #[test]

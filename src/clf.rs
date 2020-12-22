@@ -18,7 +18,6 @@
 // - use Config::from_path iso Config::from_file: done FIXME: return code when cmd not working
 // - add log rotation facility: FIXME: test it !
 
-
 use log::{debug, info};
 use std::io::ErrorKind;
 use std::thread;
@@ -140,7 +139,7 @@ fn main() {
         // }
 
         // create a LogFile struct or get it from snapshot
-        let snapshot_logfile = {
+        let logfile_from_snapshot = {
             let temp = snapshot.logfile_mut(&search.logfile.path(), &search.logfile);
             if let Err(e) = temp {
                 error!(
@@ -157,18 +156,26 @@ fn main() {
             temp.unwrap()
         };
 
+        // in case the configuration file changed since the last run and for a logfile, the tags configuration
+        // changed, we need to adjust. There're some cases where there could be more tags in the snapshot than
+        // in the configuration file. So we need to keep in the snapshot only those in the config file.
+        let tag_names = search.tag_names();
+        logfile_from_snapshot
+            .run_data
+            .retain(|k, _| tag_names.contains(&k.as_str()));
+
         // check if the rotation occured. This means the logfile signature has changed
         let logfile_is_archived = {
-            let temp = snapshot_logfile.has_changed();
+            let temp = logfile_from_snapshot.has_changed();
             if let Err(e) = temp {
                 error!(
                     "error on fetching metadata on logfile {}: {}",
-                    snapshot_logfile.path.display(),
+                    logfile_from_snapshot.id.canon_path.display(),
                     e
                 );
 
                 // this is a error for this logfile which boils down to a Nagios unknown error
-                //snapshot_logfile.set_error(e);
+                //logfile_from_snapshot.set_error(e);
 
                 continue;
             }
@@ -181,25 +188,25 @@ fn main() {
             // get archive file name
             // first, check if an archive tag has been defined in the YAML config for this search
             if search.logfile.archive.is_none() {
-                error!("logfile {} has been moved or archived but no archive settings defined in the configuration file", snapshot_logfile.path.display());
+                error!("logfile {} has been moved or archived but no archive settings defined in the configuration file", logfile_from_snapshot.id.canon_path.display());
                 break;
             }
 
             let archive_path = search.logfile.archive.as_ref().unwrap();
 
             // clone search and assign archive logfile instead of original logfile
-            let mut archive_snapshot_logfile = snapshot_logfile.clone();
-            archive_snapshot_logfile.update(&archive_path);
+            let mut archive_logfile_from_snapshot = logfile_from_snapshot.clone();
+            archive_logfile_from_snapshot.id.update(&archive_path);
 
             // call adequate reader according to command line
             if reader_type == &ReaderCallType::BypassReaderCall {
-                snapshot_logfile.lookup_tags::<BypassReader>(
+                logfile_from_snapshot.lookup_tags::<BypassReader>(
                     &config.global,
                     &search.tags,
                     &mut children_list,
                 );
             } else if reader_type == &ReaderCallType::FullReaderCall {
-                snapshot_logfile.lookup_tags::<FullReader>(
+                logfile_from_snapshot.lookup_tags::<FullReader>(
                     &config.global,
                     &search.tags,
                     &mut children_list,
@@ -207,18 +214,18 @@ fn main() {
             }
 
             // reset run_data into original search because this is a new file
-            snapshot_logfile.run_data.clear();
+            logfile_from_snapshot.run_data.clear();
         }
 
         // call adequate reader according to command line
         if reader_type == &ReaderCallType::BypassReaderCall {
-            snapshot_logfile.lookup_tags::<BypassReader>(
+            logfile_from_snapshot.lookup_tags::<BypassReader>(
                 &config.global,
                 &search.tags,
                 &mut children_list,
             );
         } else if reader_type == &ReaderCallType::FullReaderCall {
-            snapshot_logfile.lookup_tags::<FullReader>(
+            logfile_from_snapshot.lookup_tags::<FullReader>(
                 &config.global,
                 &search.tags,
                 &mut children_list,

@@ -76,13 +76,13 @@ impl Lookup<FullReader> for LogFile {
         //------------------------------------------------------------------------------------
         info!(
             "start processing logfile:{} for tag:{}",
-            self.path.display(),
+            self.id.canon_path.display(),
             tag.name
         );
 
         // create new reader
-        //let mut reader = LogReader::from_path(&self.path)?;
-        let path = self.path.clone();
+        //let mut reader = LogReader::from_path(&self.id.canon_path)?;
+        let path = self.id.canon_path.clone();
 
         // uses the same buffer
         let mut buffer = Vec::with_capacity(DEFAULT_STRING_CAPACITY);
@@ -294,7 +294,7 @@ impl Lookup<FullReader> for LogFile {
         );
         trace!(
             "========================> end processing logfile:{} for tag:{}",
-            self.path.display(),
+            self.id.canon_path.display(),
             tag.name
         );
 
@@ -323,13 +323,13 @@ impl Lookup<BypassReader> for LogFile {
                     error!(
                         "error {} reading logfile {} using BypassReader",
                         e,
-                        &self.path.display()
+                        &self.id.canon_path.display()
                     );
                     return Err(AppError::from_error(
                         e,
                         &format!(
                             "error reading logfile {:?} at line {}",
-                            self.path, line_number
+                            self.id.canon_path, line_number
                         ),
                     ));
                 }
@@ -347,7 +347,7 @@ impl Lookup<BypassReader> for LogFile {
 
                 eprintln!(
                     "{}:{}:{}:{}:[{}]:{}",
-                    &self.path.display(),
+                    &self.id.canon_path.display(),
                     &tag.name,
                     String::from(pattern_match.pattern_type),
                     line_number,

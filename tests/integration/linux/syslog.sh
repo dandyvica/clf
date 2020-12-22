@@ -1,7 +1,7 @@
 #!/bin/bash
 #set -x
 
-root=~/projects/newclf
+root=~/projects/clf
 
 clf=$root/target/debug/clf
 config=$root/tests/integration/linux/syslog.yml
