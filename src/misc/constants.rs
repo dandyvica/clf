@@ -1,4 +1,4 @@
-//! All constants reside here
+//! All constants reside here.
 
 /// A default value for the retention of data in the snapshot file.
 pub const DEFAULT_RETENTION: u64 = 86000 * 7;

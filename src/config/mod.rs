@@ -2,8 +2,8 @@
 //! a logfile for patterns.
 #[macro_use]
 pub mod callback;
+pub mod archive;
 pub mod config;
-//pub mod archive;
 pub mod global;
 pub mod logfiledef;
 pub mod logsource;

@@ -1,4 +1,4 @@
-//! Options which apply only to a search
+//! Configuration options which apply only to a search.
 use std::convert::TryFrom;
 
 use serde::Deserialize;
@@ -14,6 +14,7 @@ pub struct SearchOptions {
     pub runcallback: bool,
 
     /// If `true`, the matching line will be saved in an output file.
+    // TODO:
     pub keepoutput: bool,
 
     /// If `true`, the logfile will be search from the beginning, regardless of any saved offset.
@@ -26,11 +27,12 @@ pub struct SearchOptions {
     pub warningthreshold: u64,
 
     // controls whether the matching lines are written to a protocol file for later investigation
+    // TODO:
     pub protocol: bool,
 
     /// controls whether the hit counter will be saved between the runs.
     /// If yes, hit numbers are added until a threshold is reached (criticalthreshold).
-    /// Otherwise the run begins with reset counters
+    /// Otherwise the run begins resetting counters
     pub savethresholdcount: bool,
 
     /// controls whether an error is propagated through successive runs of check_logfiles.
@@ -46,6 +48,9 @@ pub struct SearchOptions {
 
     /// truncate the read line at specified value before lookup
     pub truncate: usize,
+
+    /// Stop processing of the logfile at this specific line number
+    pub stopat: u64,
 }
 
 /// Convenient macro to add a boolean option
@@ -88,6 +93,7 @@ impl TryFrom<String> for SearchOptions {
             "fastforward",
             "runlimit",
             "truncate",
+            "stopat",
         ];
 
         // create a default options structure
@@ -142,6 +148,7 @@ impl TryFrom<String> for SearchOptions {
                 add_typed_option!(splitted_options, sticky, opt, u16);
                 add_typed_option!(splitted_options, runlimit, opt, u64);
                 add_typed_option!(splitted_options, truncate, opt, usize);
+                add_typed_option!(splitted_options, stopat, opt, u64);
 
                 // special case for this
                 // if key == "logfilemissing" {

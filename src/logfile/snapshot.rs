@@ -1,4 +1,4 @@
-//! A repository for all runtime logfile searches.
+//! A repository for all runtime logfile searches. These values are kept as a JSON file and reused each time the process is run.
 use std::collections::HashMap;
 use std::ffi::OsStr;
 use std::fmt::Debug;
@@ -148,7 +148,7 @@ impl Snapshot {
         global_exit.warning_count = pattern_sum.warning_count;
 
         // add critical, warning or unknown error count with access errors
-        for (_,access_error) in access_errors.iter() {
+        for (_, access_error) in access_errors.iter() {
             match access_error.nagios_error {
                 NagiosError::CRITICAL => global_exit.critical_count += 1,
                 NagiosError::WARNING => global_exit.warning_count += 1,
@@ -200,55 +200,167 @@ mod tests {
     use super::*;
 
     const SNAPSHOT_SAMPLE: &'static str = r#"
-    {
-        "snapshot": {
-            "/var/log/kern.log": {
-              "path": "/var/log/kern.log",
-              "directory": "/var/log",
-              "extension": "log",
-              "compression": "uncompressed",
-              "signature": {
-                "inode": 1104686,
-                "dev": 28
-              },
-              "run_data": {
-                "kern_kernel": {
-                  "last_offset": 4556,
-                  "last_line": 42,
-                  "last_run": "2020-11-29 18:20:11.660118341",
-                  "last_run_secs": 1606674011,
-                  "counters": {
-                    "critical_count": 0,
-                    "warning_count": 42,
-                    "ok_count": 0,
-                    "exec_count": 10
-                  },
-                  "last_error": "None"
-                },
-                "kern_nokernel": {
-                  "last_offset": 122,
-                  "last_line": 1,
-                  "last_run": "2020-11-29 18:20:11.627811908",
-                  "last_run_secs": 1606674011,
-                  "counters": {
-                    "critical_count": 0,
-                    "warning_count": 1,
-                    "ok_count": 0,
-                    "exec_count": 0
-                  },
-                  "last_error": "No such file or directory (os error 2)"
-                }
-              }
+{
+    "snapshot": {
+        "/var/log/apt/term.log": {
+        "id": {
+            "declared_path": "/var/log/apt/term.log",
+            "canon_path": "/var/log/apt/term.log",
+            "directory": "/var/log/apt",
+            "extension": "log",
+            "compression": "uncompressed",
+            "signature": {
+            "inode": 1116186,
+            "dev": 28
             }
-          }
-     }
+        },
+        "run_data": {
+            "apt": {
+            "pid": 40468,
+            "start_offset": 197326,
+            "start_line": 999,
+            "last_offset": 98607,
+            "last_line": 1100,
+            "last_run": "2020-12-22 16:10:55.286912679",
+            "counters": {
+                "critical_count": 0,
+                "warning_count": 5,
+                "ok_count": 0,
+                "exec_count": 5
+            },
+            "last_error": "None"
+            }
+        }
+        },
+        "/var/log/apt/history.log": {
+        "id": {
+            "declared_path": "/var/log/apt/history.log",
+            "canon_path": "/var/log/apt/history.log",
+            "directory": "/var/log/apt",
+            "extension": "log",
+            "compression": "uncompressed",
+            "signature": {
+            "inode": 1116188,
+            "dev": 28
+            }
+        },
+        "run_data": {
+            "apt": {
+            "pid": 40468,
+            "start_offset": 197326,
+            "start_line": 999,
+            "last_offset": 13996,
+            "last_line": 68,
+            "last_run": "2020-12-22 16:10:55.287475585",
+            "counters": {
+                "critical_count": 0,
+                "warning_count": 0,
+                "ok_count": 0,
+                "exec_count": 0
+            },
+            "last_error": "None"
+            }
+        }
+        },
+        "/var/log/kern.log": {
+        "id": {
+            "declared_path": "/var/log/kern.log",
+            "canon_path": "/var/log/kern.log",
+            "directory": "/var/log",
+            "extension": "log",
+            "compression": "uncompressed",
+            "signature": {
+            "inode": 1274327,
+            "dev": 28
+            }
+        },
+        "run_data": {
+            "kern_kernel": {
+            "pid": 40468,
+            "start_offset": 197326,
+            "start_line": 999,
+            "last_offset": 392201,
+            "last_line": 3885,
+            "last_run": "2020-12-22 16:10:55.280019283",
+            "counters": {
+                "critical_count": 0,
+                "warning_count": 3885,
+                "ok_count": 0,
+                "exec_count": 10
+            },
+            "last_error": "None"
+            },
+            "kern_nokernel": {
+            "pid": 40468,
+            "start_offset": 197326,
+            "start_line": 999,
+            "last_offset": 392201,
+            "last_line": 3885,
+            "last_run": "2020-12-22 16:10:54.102239131",
+            "counters": {
+                "critical_count": 0,
+                "warning_count": 3867,
+                "ok_count": 0,
+                "exec_count": 3867
+            },
+            "last_error": "None"
+            }
+        }
+        },
+        "/var/log/syslog": {
+        "id": {
+            "declared_path": "/var/log/syslog",
+            "canon_path": "/var/log/syslog",
+            "directory": "/var/log",
+            "extension": null,
+            "compression": "uncompressed",
+            "signature": {
+            "inode": 1275587,
+            "dev": 28
+            }
+        },
+        "run_data": {
+            "syslog_nokernel": {
+            "pid": 40468,
+            "start_offset": 197326,
+            "start_line": 999,
+            "last_offset": 334147,
+            "last_line": 3152,
+            "last_run": "2020-12-22 16:10:48.877119302",
+            "counters": {
+                "critical_count": 0,
+                "warning_count": 0,
+                "ok_count": 0,
+                "exec_count": 0
+            },
+            "last_error": "None"
+            },
+            "syslog_kernel": {
+            "pid": 40468,
+            "start_offset": 197326,
+            "start_line": 999,
+            "last_offset": 334147,
+            "last_line": 3152,
+            "last_run": "2020-12-22 16:10:51.412855148",
+            "counters": {
+                "critical_count": 0,
+                "warning_count": 1400,
+                "ok_count": 0,
+                "exec_count": 1400
+            },
+            "last_error": "None"
+            }
+        }
+        }
+    }
+}    
  "#;
 
     #[test]
     fn load() {
         let data: Snapshot = serde_json::from_str(SNAPSHOT_SAMPLE).unwrap();
         let keys: Vec<_> = data.snapshot.keys().collect();
-        assert!(keys.contains(&&PathBuf::from("/var/log/kern.log")));
+        assert!(keys.contains(&&PathBuf::from("/var/log/syslog")));
     }
 
     //#[test]
@@ -274,19 +386,4 @@ mod tests {
         let _ = data.logfile_mut(&PathBuf::from("/usr/bin/zip"), &def);
         assert_eq!(data.snapshot.len(), 3);
     }
-
-    // #[test]
-    // #[cfg(target_family = "unix")]
-    // fn from_path() {
-    //     let config = PathBuf::from("/home/johndoe/config.yml");
-
-    //     assert_eq!(
-    //         Snapshot::from_path(&config),
-    //         PathBuf::from("/tmp/config.json")
-    //     );
-    //     assert_eq!(
-    //         Snapshot::from_path(&config, Some(PathBuf::from("/home/foo"))),
-    //         PathBuf::from("/home/foo/config.json")
-    //     );
-    // }
 }

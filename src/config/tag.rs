@@ -1,3 +1,4 @@
+//! Contains the configuration of each tag.
 use serde::Deserialize;
 
 use crate::config::{
@@ -12,7 +13,7 @@ use crate::misc::error::AppResult;
 use crate::fromstr;
 
 /// This is the core structure which handles data used to search into the logfile. These are
-/// gathered and refered to a tag name.
+/// gathered and refered to as a tag name.
 #[derive(Debug, Deserialize, Clone)]
 pub struct Tag {
     /// A name to identify the tag.

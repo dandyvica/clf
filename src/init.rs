@@ -82,9 +82,16 @@ pub fn init_log(options: &CliOptions) {
     info!("options: {:?}", &options);
 }
 
-/// Load the snapshot file
-pub fn load_snapshot(options: &CliOptions) -> Snapshot {
-    let snapfile = Snapshot::build_name(&options.config_file);
+/// Load the snapshot file: if option "-p" is present, use it, or use the config tag or build a new name from config file
+pub fn load_snapshot(options: &CliOptions, config_snap: &Option<PathBuf>) -> (Snapshot, PathBuf) {
+    // if option "-p" is present, use it, or use the config tag or build a new name from config file
+    let snapfile = if options.snapshot_file.is_some() {
+        options.snapshot_file.as_ref().unwrap().clone()
+    } else if config_snap.is_some() {
+        config_snap.as_ref().unwrap().clone()
+    } else {
+        Snapshot::build_name(&options.config_file)
+    };
 
     // delete snapshot file if requested
     if options.delete_snapfile {
@@ -116,7 +123,7 @@ pub fn load_snapshot(options: &CliOptions) -> Snapshot {
         &snapfile, &snapshot
     );
 
-    snapshot.unwrap()
+    (snapshot.unwrap(), snapfile)
 }
 
 /// Saves snapshot file into provided path
@@ -129,6 +136,3 @@ pub fn save_snapshot(snapshot: &mut Snapshot, snapfile: &PathBuf, retention: u64
         ));
     }
 }
-
-// Manage the case where a rotation occured
-//pub fn manage_rotation(logfile: &mut LogFile) ->  {}

@@ -1,5 +1,5 @@
-//! Another variables structure
-//!
+//! Contains the definition of all structures for handling variables, either user-defined as used in the global tag, or
+//! the runtime ones populated each time a pattern is matched.
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::fmt::Display;
@@ -33,15 +33,16 @@ macro_rules! prefix_var {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
+/// A generic variable structure.
 pub struct Vars<K: Hash + Eq, V>(HashMap<K, V>);
 
-// minimize string allocations with this
+/// Runtime vars are created for each matched line. Using `Cow` minimizes string allocations.
 pub type RuntimeVars<'a> = Vars<Cow<'a, str>, &'a str>;
 
-// these are used when loading YAML configuration file were user variables are defined
+/// user vars are optionally defined in the global configuration tag.
 pub type UserVars = Vars<String, String>;
 
-// the same for so called "constants" vars
+/// Constants variables are those which don't change during the whole process, like the hostname etc.
 pub type ConsVars = Vars<String, String>;
 
 impl<K: Hash + Eq, V> Default for Vars<K, V> {

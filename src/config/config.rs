@@ -7,10 +7,6 @@
 //! trigger a match.
 //!
 //! The logfile could either be an accessible file path, or a command which will be executed and gets back a list of files.
-//!
-//!
-//!
-
 use std::fs::File;
 use std::path::Path;
 
@@ -20,7 +16,10 @@ use serde_yaml::Value;
 
 use super::{global::GlobalOptions, logsource::LogSource, search::Search};
 
-use crate::misc::{error::AppError, extension::ListFiles};
+use crate::misc::{
+    error::{AppError, AppResult},
+    extension::ListFiles,
+};
 
 use crate::{context, fromstr};
 
@@ -81,7 +80,7 @@ impl Config {
 
     /// Loads a YAML configuration file as a `Config` struct. Not using Tera
     #[cfg(not(feature = "tera"))]
-    pub fn from_path<P: AsRef<Path> + std::fmt::Debug>(file_name: P) -> Result<Config, AppError> {
+    pub fn from_path<P: AsRef<Path> + std::fmt::Debug>(file_name: P) -> AppResult<Config> {
         // open YAML file
         let file = File::open(&file_name)
             .map_err(|e| context!(e, "unable to read configuration file: {:?}", &file_name))?;
@@ -229,7 +228,7 @@ mod tests {
         assert_eq!(config.global.output_dir, PathBuf::from("/tmp/foo"));
         assert_eq!(
             config.global.snapshot_file,
-            PathBuf::from("/tmp/my_snapshot.json")
+            Some(PathBuf::from("/tmp/my_snapshot.json"))
         );
         assert_eq!(config.global.snapshot_retention, 5);
         assert_eq!(

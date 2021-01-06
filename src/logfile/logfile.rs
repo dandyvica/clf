@@ -1,6 +1,5 @@
 //! A structure representing a logfile, with all its related attributes. Those attributes are
 //! coming from the processing of the log file, every time it's read to look for patterns.
-
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::fs::File;
@@ -58,9 +57,15 @@ impl LogFile {
     }
 
     /// Recalculate the signature to check whether it has changed
-    pub fn has_changed(&self) -> Result<bool, AppError> {
+    pub fn has_changed(&self) -> AppResult<bool> {
         // get most recent signature
         let signature = self.id.canon_path.signature()?;
+        trace!(
+            "file = {:?}, current signature = {:?}, recalculated = {:?}",
+            &self.id.canon_path,
+            self.id.signature,
+            signature
+        );
         Ok(self.id.signature != signature && self.id.signature != Signature::default())
     }
 

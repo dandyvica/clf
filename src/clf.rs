@@ -3,7 +3,8 @@
 // - implement logfilemissing
 // - add missing variables: CLF_HOSTNAME, CLF_IPADDRESS, CLF_TIMESTAMP, CLF_USER
 // - implement a unique ID iso pid. FIXME: check exit message from snapshot
-// - manage errors when logfile is not found
+// - output message: put canon_path iso declared_path
+// - add error msg if rewind & fastforward ?
 
 // DONE:
 // - serialize/deserialize date correctly
@@ -17,6 +18,7 @@
 // - add Tera/Jinja2 templating => add context argument
 // - use Config::from_path iso Config::from_file: done FIXME: return code when cmd not working
 // - add log rotation facility: FIXME: test it !
+// - manage errors when logfile is not found
 
 use log::{debug, info};
 use std::io::ErrorKind;
@@ -30,7 +32,7 @@ extern crate simplelog;
 use wait_timeout::ChildExt;
 
 mod config;
-use config::callback::ChildData;
+use config::{archive::LogArchive, callback::ChildData};
 
 mod logfile;
 use logfile::{
@@ -49,6 +51,7 @@ use init::*;
 
 //use clf::exit_or_unwrap;
 
+/// The main entry point.
 fn main() {
     //---------------------------------------------------------------------------------------------------
     // set up variables
@@ -91,11 +94,7 @@ fn main() {
     //---------------------------------------------------------------------------------------------------
     // manage snapshot file: overrides the snapshot file is provided as a command line argument
     //---------------------------------------------------------------------------------------------------
-    if let Some(snap_file) = &options.snapshot_file {
-        config.global.snapshot_file = snap_file.to_path_buf();
-    }
-
-    let mut snapshot = load_snapshot(&options);
+    let (mut snapshot, snapfile) = load_snapshot(&options, &config.global.snapshot_file);
 
     //---------------------------------------------------------------------------------------------------
     // start the prescript if any
@@ -128,7 +127,7 @@ fn main() {
     // loop through all searches
     //---------------------------------------------------------------------------------------------------
     for search in &config.searches {
-        // log some useful info
+        // log some :qeful info
         info!("==> searching into logfile: {:?}", &search.logfile.path);
 
         // checks if logfile is accessible. If not, no need to move further, just record last error
@@ -191,12 +190,15 @@ fn main() {
 
             // get archive file name
             // first, check if an archive tag has been defined in the YAML config for this search
-            if search.logfile.archive.is_none() {
-                error!("logfile {} has been moved or archived but no archive settings defined in the configuration file", logfile_from_snapshot.id.canon_path.display());
-                break;
-            }
+            // if search.logfile.archive.is_none() {
+            //     error!("logfile {} has been moved or archived but no archive settings defined in the configuration file", logfile_from_snapshot.id.canon_path.display());
+            //     break;
+            // }
 
-            let archive_path = search.logfile.archive.as_ref().unwrap();
+            // let archive_path = search.logfile.archive.as_ref().unwrap();
+
+            let archive_path = LogArchive::rotated_path(search.logfile.path());
+            trace!("archived logfile = {:?}", &archive_path);
 
             // clone search and assign archive logfile instead of original logfile
             let mut archived_logfile = logfile_from_snapshot.clone();
@@ -204,18 +206,21 @@ fn main() {
 
             // call adequate reader according to command line
             if reader_type == &ReaderCallType::BypassReaderCall {
-                logfile_from_snapshot.lookup_tags::<BypassReader>(
+                archived_logfile.lookup_tags::<BypassReader>(
                     &config.global,
                     &search.tags,
                     &mut children_list,
                 );
             } else if reader_type == &ReaderCallType::FullReaderCall {
-                logfile_from_snapshot.lookup_tags::<FullReader>(
+                archived_logfile.lookup_tags::<FullReader>(
                     &config.global,
                     &search.tags,
                     &mut children_list,
                 );
             }
+
+            // add logfile to snapshot for reference and debug
+            //snapshot
 
             // reset run_data into original search because this is a new file
             logfile_from_snapshot.run_data.clear();
@@ -243,18 +248,17 @@ fn main() {
     }
 
     // save snapshot and optionally delete old entries
-    save_snapshot(
-        &mut snapshot,
-        &config.global.snapshot_file,
-        config.global.snapshot_retention,
-    );
+    save_snapshot(&mut snapshot, &snapfile, config.global.snapshot_retention);
+    trace!("snapshot = {:#?}", &snapshot);
 
     // teardown
-    info!(
-        "waiting for all processes to finish, nb of children: {}",
-        children_list.len()
-    );
-    wait_children(children_list);
+    if children_list.len() != 0 {
+        info!(
+            "waiting for all processes to finish, nb of children: {}",
+            children_list.len()
+        );
+        wait_children(children_list);
+    }
 
     // optionally call postscript
     if config.global.postcript.is_some() {

@@ -1,3 +1,4 @@
+//! Manage command line arguments here.
 use std::path::PathBuf;
 
 use clap::{App, Arg};

@@ -1,8 +1,9 @@
+//! Contains the configuration of a script meant to be called either at the beginning of the search, for every line or at the end of all searches.
 use std::process::Command;
 
 use serde::Deserialize;
 
-/// A callable script
+/// A callable script.
 #[derive(Debug, Deserialize, Clone)]
 pub struct Script {
     // command with its arguments
@@ -20,7 +21,7 @@ impl Script {
         let result = Command::new(cmd).args(args).spawn()?;
 
         // now it's safe to unwrap to get pid
-        let prescript_pid = result.id();
+        let pid = result.id();
 
         // wait if specified
         if self.timeout.is_some() {
@@ -30,12 +31,9 @@ impl Script {
             std::thread::sleep(wait_timeout);
         }
 
-        info!(
-            "prescript command successfully executed, pid={}",
-            prescript_pid
-        );
+        info!("prescript command successfully executed, pid={}", pid);
 
-        Ok(prescript_pid)
+        Ok(pid)
     }
 }
 
@@ -48,7 +46,7 @@ mod tests {
     #[cfg(target_family = "unix")]
     fn spawn() {
         let mut script = Script {
-            command: vec!["/usr/bin/find".to_string(), ".".to_string()],
+            command: vec!["/usr/bin/find".to_string(), "/tmp".to_string()],
             timeout: Some(1000),
         };
 

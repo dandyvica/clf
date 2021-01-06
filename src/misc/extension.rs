@@ -1,6 +1,6 @@
-//! Traits defined here to extend std structs
-//!
+//! Traits defined here to extend Rust standard structures.
 use std::fs::{read_dir, File};
+use std::io::{BufReader, Read};
 #[cfg(target_family = "unix")]
 use std::os::unix::fs::MetadataExt;
 use std::path::PathBuf;
@@ -13,12 +13,13 @@ use serde::{Deserialize, Serialize};
 use crate::misc::error::{AppCustomErrorKind, AppError, AppResult};
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone, Default)]
+/// A way to uniquely identify a logfile and to know whether is has been archived.
 pub struct Signature {
     inode: u64,
     dev: u64,
 }
 
-/// Tells whether a `PathBuf` is accessible.
+/// All `PathBuf` utility functions.
 pub trait ReadFs {
     fn is_match(self, re: &Regex) -> bool;
     fn is_usable(&self) -> AppResult<()>;
@@ -92,7 +93,7 @@ impl ReadFs for PathBuf {
     }
 }
 
-// Returns the list of files from a command
+/// Returns the list of files from a spwand command.
 pub trait ListFiles {
     fn get_file_list(&self) -> AppResult<Vec<PathBuf>>;
 }
@@ -114,7 +115,7 @@ impl ListFiles for Vec<String> {
             .map_err(|e| {
                 context!(
                     e,
-                    "unable to read output from command '{:?}' wth args '{:?}'",
+                    "unable to read output from command '{:?}' with args '{:?}'",
                     cmd,
                     args
                 )
@@ -129,6 +130,41 @@ impl ListFiles for Vec<String> {
             .lines()
             .map(PathBuf::from)
             .collect::<Vec<PathBuf>>())
+    }
+}
+/// When a logfile has a JSOn format, this will be used to read a whole JSON strings, even spanning on several lines.
+trait JsonRead {
+    fn read_json(&mut self, buf: &mut Vec<u8>) -> AppResult<usize>;
+}
+
+impl<R: Read> JsonRead for BufReader<R> {
+    fn read_json(&mut self, buf: &mut Vec<u8>) -> AppResult<usize> {
+        const LEFT_PARENTHESIS: u8 = 123;
+        const RIGHT_PARENTHESIS: u8 = 125;
+
+        let mut left = 0u16;
+
+        for (i, b) in self.bytes().enumerate() {
+            let byte = b.map_err(|e| context!(e, "unable to convert value to byte",))?;
+
+            if byte == LEFT_PARENTHESIS {
+                buf.push(byte);
+                left += 1;
+            } else if byte == RIGHT_PARENTHESIS {
+                buf.push(byte);
+                left -= 1;
+            } else if left != 0 {
+                buf.push(byte);
+            } else {
+                continue;
+            }
+
+            if left == 0 {
+                return Ok(i);
+            }
+        }
+
+        Ok(0)
     }
 }
 
@@ -217,5 +253,72 @@ mod tests {
         //println!("{:?}", files);
         assert!(files.len() > 1000);
         //assert!(files.iter().all(|f| f.ends_with("dll")));
+    }
+
+    #[test]
+    fn json_read() {
+        use std::io::Cursor;
+
+        let json = r#"
+{"widget": {
+    "debug": "on",
+    "window": {
+        "title": "Sample Konfabulator Widget",
+        "name": "main_window",
+        "width": 500,
+        "height": 500
+    },
+    "image": { 
+        "src": "Images/Sun.png",
+        "name": "sun1",
+        "hOffset": 250,
+        "vOffset": 250,
+        "alignment": "center"
+    },
+    "text": {
+        "data": "Click Here",
+        "size": 36,
+        "style": "bold",
+        "name": "text1",
+        "hOffset": 250,
+        "vOffset": 100,
+        "alignment": "center",
+        "onMouseUp": "sun1.opacity = (sun1.opacity / 100) * 90;"
+    }
+}}
+{"employees":[
+{"name":"Shyam", "email":"shyamjaiswal@gmail.com"},
+{"name":"Bob", "email":"bob32@gmail.com"},
+{"name":"Jai", "email":"jai87@gmail.com"}
+]}
+"#;
+        let cursor = Cursor::new(json);
+        let mut reader = BufReader::new(cursor);
+        let mut buffer = Vec::new();
+
+        // read first json
+        let ret = reader.read_json(&mut buffer);
+
+        assert!(ret.is_ok());
+        let value = ret.unwrap();
+        assert_eq!(value, 601);
+
+        let mut one_line = str::replace(&String::from_utf8_lossy(&buffer), "\n", "");
+        println!("oneline={}", one_line);
+        assert_eq!(one_line.len(), 576);
+
+        // read next json
+        buffer.clear();
+        let ret = reader.read_json(&mut buffer);
+        assert!(ret.is_ok());
+        let value = ret.unwrap();
+        assert_eq!(value, 154);
+
+        one_line = str::replace(&String::from_utf8_lossy(&buffer), "\n", "");
+        println!("oneline={}", one_line);
+        assert_eq!(
+            &one_line,
+            r#"{"employees":[{"name":"Shyam", "email":"shyamjaiswal@gmail.com"},{"name":"Bob", "email":"bob32@gmail.com"},{"name":"Jai", "email":"jai87@gmail.com"}]}"#
+        );
     }
 }

@@ -6,11 +6,13 @@ use std::path::PathBuf;
 use crate::misc::{error::AppError, nagios::NagiosError};
 
 #[derive(Debug)]
+/// A structure to hold possible logfile errors and related Nagios errors.
 pub struct LogFileAccessError {
     pub nagios_error: NagiosError,
     pub error: AppError,
 }
 
+/// A list of logfile errors.
 pub struct LogFileAccessErrorList(HashMap<PathBuf, LogFileAccessError>);
 
 impl Default for LogFileAccessErrorList {

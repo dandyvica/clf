@@ -1,6 +1,5 @@
 //! A structure representing a logfile, with all its related attributes. Those attributes are
 //! coming from the processing of the log file, every time it's read to look for patterns.
-
 use chrono::prelude::*;
 use serde::{Deserialize, Serialize, Serializer};
 
@@ -13,6 +12,12 @@ use crate::config::pattern::{PatternCounters, PatternType};
 pub struct RunData {
     /// pid of the process currently running
     pub pid: u32,
+
+    /// starting position of the search
+    pub start_offset: u64,
+
+    /// starting line of the search
+    pub start_line: u64,
 
     /// position of the last run. Used to seek the file pointer to this point.
     pub last_offset: u64,
@@ -36,7 +41,7 @@ pub struct RunData {
     pub last_error: Option<AppError>,
 }
 
-/// Converts the timestamp to a human readable string in the snapshot
+/// Converts the timestamp to a human readable string in the snapshot.
 pub fn timestamp_to_string<S>(value: &f64, serializer: S) -> Result<S::Ok, S::Error>
 where
     S: Serializer,
@@ -49,7 +54,7 @@ where
     format!("{}", utc_tms.format("%Y-%m-%d %H:%M:%S.%f")).serialize(serializer)
 }
 
-/// Converts the error to string
+/// Converts the error to string.
 pub fn error_to_string<S>(value: &Option<AppError>, serializer: S) -> Result<S::Ok, S::Error>
 where
     S: Serializer,

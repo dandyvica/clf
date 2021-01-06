@@ -1,33 +1,5 @@
 {
   "snapshot": {
-    "/var/log/apt/term.log": {
-      "id": {
-        "declared_path": "/var/log/apt/term.log",
-        "canon_path": "/var/log/apt/term.log",
-        "directory": "/var/log/apt",
-        "extension": "log",
-        "compression": "uncompressed",
-        "signature": {
-          "inode": 1116186,
-          "dev": 28
-        }
-      },
-      "run_data": {
-        "apt": {
-          "pid": 40468,
-          "last_offset": 98607,
-          "last_line": 1100,
-          "last_run": "2020-12-22 16:10:55.286912679",
-          "counters": {
-            "critical_count": 0,
-            "warning_count": 5,
-            "ok_count": 0,
-            "exec_count": 5
-          },
-          "last_error": "None"
-        }
-      }
-    },
     "/var/log/apt/history.log": {
       "id": {
         "declared_path": "/var/log/apt/history.log",
@@ -36,16 +8,18 @@
         "extension": "log",
         "compression": "uncompressed",
         "signature": {
-          "inode": 1116188,
+          "inode": 1299484,
           "dev": 28
         }
       },
       "run_data": {
         "apt": {
-          "pid": 40468,
-          "last_offset": 13996,
-          "last_line": 68,
-          "last_run": "2020-12-22 16:10:55.287475585",
+          "pid": 94759,
+          "start_offset": 0,
+          "start_line": 0,
+          "last_offset": 1783,
+          "last_line": 23,
+          "last_run": "2021-01-06 18:04:54.097684621",
           "counters": {
             "critical_count": 0,
             "warning_count": 0,
@@ -64,34 +38,38 @@
         "extension": "log",
         "compression": "uncompressed",
         "signature": {
-          "inode": 1274327,
+          "inode": 1305981,
           "dev": 28
         }
       },
       "run_data": {
-        "kern_kernel": {
-          "pid": 40468,
-          "last_offset": 392201,
-          "last_line": 3885,
-          "last_run": "2020-12-22 16:10:55.280019283",
+        "kern_nokernel": {
+          "pid": 94759,
+          "start_offset": 0,
+          "start_line": 0,
+          "last_offset": 501427,
+          "last_line": 5012,
+          "last_run": "2021-01-06 18:04:52.574493885",
           "counters": {
             "critical_count": 0,
-            "warning_count": 3885,
+            "warning_count": 4982,
             "ok_count": 0,
-            "exec_count": 10
+            "exec_count": 4982
           },
           "last_error": "None"
         },
-        "kern_nokernel": {
-          "pid": 40468,
-          "last_offset": 392201,
-          "last_line": 3885,
-          "last_run": "2020-12-22 16:10:54.102239131",
+        "kern_kernel": {
+          "pid": 94759,
+          "start_offset": 0,
+          "start_line": 0,
+          "last_offset": 501427,
+          "last_line": 5012,
+          "last_run": "2021-01-06 18:04:54.096343517",
           "counters": {
             "critical_count": 0,
-            "warning_count": 3867,
+            "warning_count": 5012,
             "ok_count": 0,
-            "exec_count": 3867
+            "exec_count": 10
           },
           "last_error": "None"
         }
@@ -105,16 +83,18 @@
         "extension": null,
         "compression": "uncompressed",
         "signature": {
-          "inode": 1275587,
+          "inode": 1317597,
           "dev": 28
         }
       },
       "run_data": {
         "syslog_nokernel": {
-          "pid": 40468,
-          "last_offset": 334147,
-          "last_line": 3152,
-          "last_run": "2020-12-22 16:10:48.877119302",
+          "pid": 94759,
+          "start_offset": 0,
+          "start_line": 0,
+          "last_offset": 96124,
+          "last_line": 816,
+          "last_run": "2021-01-06 18:04:49.093585014",
           "counters": {
             "critical_count": 0,
             "warning_count": 0,
@@ -124,15 +104,47 @@
           "last_error": "None"
         },
         "syslog_kernel": {
-          "pid": 40468,
-          "last_offset": 334147,
-          "last_line": 3152,
-          "last_run": "2020-12-22 16:10:51.412855148",
+          "pid": 94759,
+          "start_offset": 0,
+          "start_line": 0,
+          "last_offset": 96124,
+          "last_line": 816,
+          "last_run": "2021-01-06 18:04:49.147704124",
           "counters": {
             "critical_count": 0,
-            "warning_count": 1400,
+            "warning_count": 25,
             "ok_count": 0,
-            "exec_count": 1400
+            "exec_count": 25
+          },
+          "last_error": "None"
+        }
+      }
+    },
+    "/var/log/apt/term.log": {
+      "id": {
+        "declared_path": "/var/log/apt/term.log",
+        "canon_path": "/var/log/apt/term.log",
+        "directory": "/var/log/apt",
+        "extension": "log",
+        "compression": "uncompressed",
+        "signature": {
+          "inode": 1299482,
+          "dev": 28
+        }
+      },
+      "run_data": {
+        "apt": {
+          "pid": 94759,
+          "start_offset": 0,
+          "start_line": 0,
+          "last_offset": 10663,
+          "last_line": 117,
+          "last_run": "2021-01-06 18:04:54.097281455",
+          "counters": {
+            "critical_count": 0,
+            "warning_count": 0,
+            "ok_count": 0,
+            "exec_count": 0
           },
           "last_error": "None"
         }

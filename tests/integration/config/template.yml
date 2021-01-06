@@ -1,0 +1,21 @@
+global:
+  path: "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+
+searches:
+  - logfile: 
+      path: $logfile
+      format: $format
+    tags: 
+      - name: tag1
+        process: $process
+        options: $options
+        callback: { $callback, args: [$args] }
+        patterns:
+          critical: {
+            regexes: ['GET\s+([/\w]+)\s+HTTP/1\.1"\s+(?P<code>\d+)\s+(?P<length>\d+)'],
+            exceptions: ['AppleWebKit/537\.36']
+          }
+          warning: {
+            regexes: ['POST\s+([/\w\.]+)\s+HTTP/1\.1"\s+(?P<code>\d+)\s+(?P<length>\d+)'],
+            exceptions: ['^\d{2,3}\.']
+          }

@@ -10,6 +10,7 @@ use xz2::read::XzDecoder;
 use crate::context;
 use crate::misc::error::{AppCustomErrorKind, AppError, AppResult};
 
+/// Used to defined functions to set a precise offset in a file, either being compressed or not.
 pub trait Seeker {
     /// Simulates the `seek`method for all used `BufReader<R>`.
     fn set_offset(&mut self, offset: u64) -> AppResult<u64>;
@@ -53,6 +54,7 @@ where
     }
 }
 
+#[doc(hidden)]
 // This method is common to all compression ad-hoc seek method.
 fn _set_offset<R>(mut reader: R, offset: u64) -> AppResult<u64>
 where

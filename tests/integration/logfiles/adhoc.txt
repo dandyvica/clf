@@ -1,6 +1,0 @@
-ERROR: opening file "/var/log/messages1" from node server01.domain.com, error = 1
-ERROR: opening file "/var/log/messages2" from node server01.domain.com, error = 2
-ERROR: opening file "/var/log/messages3" from node server01.domain.com, error = 3
-ERROR: opening file "/var/log/messages4" from node server01.domain.com, error = 4
-ERROR: opening file "/var/log/messages5" from node server02.domain.com, error = 5
-WARNING: opening file "/var/log/syslog6" from node server01.domain.com, error = 6

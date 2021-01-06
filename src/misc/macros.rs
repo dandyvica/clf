@@ -1,4 +1,6 @@
-/// Auto-implement the FromStr trait for a struct
+//! List of macros used throughout.
+
+/// Auto-implement the `FromStr` trait for a struct
 #[macro_export]
 macro_rules! fromstr {
     ($t:ty) => {

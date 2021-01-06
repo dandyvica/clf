@@ -1,6 +1,5 @@
 //! A list of structures dedicated to match text data from a logfile. It merely defines a list of
 //! regexes structures, which are used to search for a pattern in a text.
-//!
 use std::convert::{From, TryFrom};
 use std::iter::Sum;
 use std::ops::Add;
@@ -148,6 +147,7 @@ pub struct PatternSet {
     pub ok: Option<Pattern>,
 }
 
+/// When a line is matched, this is used to store which pattern and which regex in the list triggered the match.
 pub struct PatternMatchResult<'a> {
     pub pattern_type: PatternType,
     pub regex: &'a Regex,

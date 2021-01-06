@@ -1,3 +1,4 @@
+//! Contains the global configuration when processing logfiles. These values are independant from the ones solely related to a logfile when searching.
 use std::path::PathBuf;
 
 use serde::Deserialize;
@@ -20,7 +21,7 @@ pub struct GlobalOptions {
     pub output_dir: PathBuf,
 
     /// The snapshot file name. Option<> is used because if not specified here,
-    pub snapshot_file: PathBuf,
+    pub snapshot_file: Option<PathBuf>,
 
     /// Retention time for tags.
     pub snapshot_retention: u64,
@@ -59,7 +60,7 @@ impl Default for GlobalOptions {
         GlobalOptions {
             path: path_var,
             output_dir: std::env::temp_dir(),
-            snapshot_file: Snapshot::default_path(),
+            snapshot_file: None,
             snapshot_retention: DEFAULT_RETENTION,
             user_vars: None,
             prescript: None,
@@ -87,7 +88,10 @@ output_dir: /usr/foo2
 
         assert_eq!(&opts.path, "/usr/foo1");
         assert_eq!(opts.output_dir, PathBuf::from("/usr/foo2"));
-        assert_eq!(opts.snapshot_file, PathBuf::from("/usr/foo3/snap.foo"));
+        assert_eq!(
+            opts.snapshot_file,
+            Some(PathBuf::from("/usr/foo3/snap.foo"))
+        );
 
         yaml = r#"
 path: /usr/foo1
@@ -103,7 +107,7 @@ user_vars:
         opts = GlobalOptions::from_str(yaml).expect("unable to read YAML");
         assert_eq!(&opts.path, "/usr/foo1");
         assert_eq!(opts.output_dir, PathBuf::from("/tmp"));
-        assert_eq!(opts.snapshot_file, PathBuf::from("/tmp/clf_snapshot.json"));
+        assert_eq!(opts.snapshot_file, None);
         assert!(opts.user_vars.is_some());
 
         let vars = opts.user_vars.unwrap();

@@ -1,5 +1,6 @@
-//! Useful wrapper on the `Command` Rust standard library structure.
-//! TODO: move script call to a single vec
+//! Contains the configuration of what is executed each time a pattern is found in the logfile. It could be either a spawned script, a TCP socket to which send
+//! relevant data, or a Unix Datagram Socket. For the 2 latter cases, found data are sent as a JSON string. Otherwise, when a script is called, data are sent
+//! through environment variables.
 use std::borrow::Cow;
 use std::cell::RefCell;
 use std::convert::TryFrom;

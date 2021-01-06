@@ -1,3 +1,4 @@
+//! Contains the configuration of the name of a logfile: it could be either a single file, or a command giving the list of files.
 use std::fmt::Display;
 use std::path::PathBuf;
 

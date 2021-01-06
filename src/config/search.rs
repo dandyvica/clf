@@ -1,8 +1,10 @@
+//! Contains the configuration each search.
 use serde::Deserialize;
 
 use super::{logfiledef::LogFileDef, tag::Tag};
 
 #[derive(Debug, Deserialize, Clone)]
+/// Contains the logfile attributes from the `LogFileDef` structure and all defined tags to search for patterns.
 pub struct Search {
     /// the logfile name to check
     pub logfile: LogFileDef,

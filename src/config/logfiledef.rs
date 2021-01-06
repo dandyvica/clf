@@ -1,3 +1,4 @@
+//! Contains the logfile configuration for each logfile. These are not related to a search but only to the logfile itself: format (plain or JSON), optional lines to exclude, etc.
 use std::path::PathBuf;
 
 use regex::Regex;
@@ -10,6 +11,7 @@ use crate::misc::nagios::NagiosError;
 // a logfile could be of different format. Necessary to effectively read them
 #[derive(Debug, Deserialize, Clone, PartialEq)]
 #[allow(non_camel_case_types)]
+/// The format of a logfile, either plain or JSON.
 pub enum LogFileFormat {
     plain,
     json,
@@ -22,6 +24,7 @@ impl Default for LogFileFormat {
 }
 
 #[derive(Debug, Deserialize, Clone, Default)]
+/// Logfile attributes not dependant from a runtime search.
 pub struct LogFileDef {
     // full path of the logfile
     #[serde(flatten)]
@@ -73,12 +76,13 @@ impl LogFileDef {
     // }
 }
 
+/// A custom deserializer for the `exclude` field.
 fn to_regex<'de, D>(deserializer: D) -> Result<Option<Regex>, D::Error>
 where
     D: Deserializer<'de>,
 {
     let v: Value = Deserialize::deserialize(deserializer)?;
-    println!("v= {:?}", v);
+    //println!("v= {:?}", v);
     let re = Regex::new(v.as_str().unwrap()).map_err(de::Error::custom)?;
     Ok(Some(re))
 }

@@ -9,7 +9,7 @@ use crate::logfile::compression::CompressionScheme;
 use crate::misc::error::{AppError, AppResult};
 use crate::misc::extension::{ReadFs, Signature};
 
-/// Logfile variable fields that change depending on the path
+/// Logfile variable fields that change depending on the path.
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
 pub struct LogFileID {
     /// File & path as a `PathBuf`.
@@ -58,6 +58,11 @@ impl LogFileID {
 
         // // get inode & dev ID
         self.signature = canon.signature()?;
+        trace!(
+            "current signature for {:?} is {:?}",
+            &canon,
+            &self.signature
+        );
 
         // finally save path
         self.canon_path = canon;

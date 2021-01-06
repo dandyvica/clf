@@ -1,4 +1,4 @@
-//! List of Nagios specific const or structures.
+//! List of Nagios specific const or structures like errors, exit functions or codes, etc.
 use std::fmt;
 use std::str::FromStr;
 
@@ -6,7 +6,7 @@ use serde::Deserialize;
 
 use crate::logfile::rundata::RunData;
 
-// Helper macro to define all Nagios exit functions
+/// Helper macro to define all Nagios exit functions.
 macro_rules! create_exit {
     ($name:ident, $code:expr) => {
         #[allow(dead_code)]
@@ -15,7 +15,7 @@ macro_rules! create_exit {
         }
     };
 }
-/// Nagios exit functions
+/// Nagios exit functions.
 pub struct Nagios;
 
 impl Nagios {
@@ -46,7 +46,7 @@ pub enum NagiosError {
     UNKNOWN = 3,
 }
 
-/// Default implementation which boils down to critical
+/// Default implementation which boils down to unknown
 impl Default for NagiosError {
     fn default() -> Self {
         NagiosError::UNKNOWN
@@ -80,7 +80,7 @@ impl From<&NagiosError> for String {
     }
 }
 
-/// Nagios protocol version
+/// Nagios protocol version.
 #[derive(Debug)]
 pub enum NagiosVersion {
     Nrpe2,
@@ -101,7 +101,7 @@ impl FromStr for NagiosVersion {
 }
 
 /// This will count critical & warning errors, and reported as the plugin output.
-/// Or en IO error when dealing with the logfile
+/// Or en IO error when dealing with the logfile.
 #[derive(Debug, Default)]
 pub struct NagiosExit {
     /// Number of matches triggered by a critical pattern.

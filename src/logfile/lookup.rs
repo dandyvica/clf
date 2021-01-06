@@ -29,10 +29,10 @@ pub trait Lookup<T> {
     ) -> AppResult<Vec<ChildData>>;
 }
 
-// In this case, the logfile is only read and callback not called at all
+/// A unit struct to represent a reader which is not calling any script but just scans the logfile and outputs matched lines.
 pub struct BypassReader;
 
-// The regular reader
+/// A unit struct to represent a reader which reads each line, tests for a match and called a callback.
 pub struct FullReader;
 
 // this will call the relevant reader
@@ -112,9 +112,16 @@ impl Lookup<FullReader> for LogFile {
         run_data.pid = std::process::id();
 
         // if we don't need to read the file from the beginning, adjust counters and set offset
-        if !tag.options.rewind {
+        if tag.options.rewind {
+            run_data.start_offset = 0;
+            run_data.start_line = 0;
+        } else {
+            run_data.start_offset = run_data.last_offset;
+            run_data.start_line = run_data.last_line;
             bytes_count = run_data.last_offset;
             line_number = run_data.last_line;
+
+            // move to previous offset
             reader.set_offset(run_data.last_offset)?;
         }
 
@@ -176,6 +183,11 @@ impl Lookup<FullReader> for LogFile {
                     // we've been reading a new line successfully
                     line_number += 1;
                     bytes_count += bytes_read as u64;
+
+                    // if stopat is reached, stop here
+                    if tag.options.stopat == line_number {
+                        break;
+                    }
 
                     // do we just need to go to EOF ?
                     // TODO: implement go to EOF directly
@@ -316,7 +328,7 @@ impl Lookup<BypassReader> for LogFile {
         reader: R,
         tag: &Tag,
         _global_options: &GlobalOptions,
-    ) -> Result<Vec<ChildData>, AppError> {
+    ) -> AppResult<Vec<ChildData>> {
         for (line_number, line) in reader.lines().enumerate() {
             let text = {
                 if let Err(e) = line {

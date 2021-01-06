@@ -1,10 +1,10 @@
 //! All structures involved in error management. It combines a list a Rust standard library
 //! error types, used crates error types and a specific one to the application.
-//! Use `map_err` method to report errors with context (see examples in tests)
+//! Use `map_err` method to report errors with context (see examples in tests).
 use std::clone::Clone;
 use std::{fmt, io, num};
 
-/// A specific Result for all functions
+/// A specific custom `Result` for all functions
 pub type AppResult<T> = Result<T, AppError>;
 
 /// Error kind specific to an application error, different from standard errors.
@@ -73,7 +73,7 @@ from_error!(std::time::SystemTimeError, InternalError::SystemTime);
 from_error!(num::ParseIntError, InternalError::Parse);
 from_error!(std::str::Utf8Error, InternalError::Utf8);
 
-// Customer error which will be used for all errors conversions
+/// Custom error which will be used for all errors conversions and throughout the code.
 #[derive(Debug)]
 pub struct AppError {
     pub error_kind: InternalError,
@@ -89,6 +89,7 @@ impl AppError {
         }
     }
 
+    /// Convert from an internal error
     pub fn from_error<T: Into<InternalError>>(err: T, msg: &str) -> Self {
         AppError {
             error_kind: err.into(),
@@ -125,7 +126,7 @@ impl Clone for AppError {
     }
 }
 
-// To simplify definition of all error conversions.
+/// To simplify definition of all error conversions.
 #[macro_export]
 macro_rules! context {
     ($err:ident, $fmt:expr, $($arg:tt)*) => {
