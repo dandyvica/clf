@@ -190,8 +190,16 @@ mod tests {
         );
     }
 
+    #[cfg(target_family = "unix")]
     fn file() -> AppResult<File> {
         let path = "/foo/foo.foo";
+        let file = File::open(path).map_err(|e| context!(e, "unable to open file {}", path))?;
+        Ok(file)
+    }
+
+    #[cfg(target_family = "windows")]
+    fn file() -> AppResult<File> {
+        let path = r"c:\foo\foo.foo";
         let file = File::open(path).map_err(|e| context!(e, "unable to open file {}", path))?;
         Ok(file)
     }

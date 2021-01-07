@@ -1,0 +1,61 @@
+---
+# global settings
+global:
+  snapshot_file: ./tmp/tcp.json
+  snapshot_retention: 60
+  vars:
+    CLF_firstname: Al
+    CLF_lastname: Pacino
+    CLF_city: "Los Angeles"
+    CLF_profession: actor
+  prescript:
+    command: ['python.exe', './scripts/echotcp.py', '8999']
+    timeout: 1000
+  postcript:
+    command: ['python.exe', './scripts/kill.py']
+
+# a list of logfiles & tags, to search for patterns. This is either a list of logfiles, or a command giving back a list of 
+# files to search for.
+searches:
+  # name & path of the logfile to search
+  - logfile: 
+      path: logfiles/access_simple.log
+
+    # list of tags to refer to
+    tags: 
+
+      # tag name
+      - name: http_access_get_or_post
+
+        # set it to false if you don't want to process this tag. This is particularly useful for testing purposes, without changing other fields
+        process: true
+
+        # a list of comma-separated options to manage the search. Current supported options are:
+        # runcallback: if present, means the provided script will be called
+        # rewind: restart the search from the beginning of the file
+        options: "runcallback"
+
+        # a script or command to be called, every time a hit is found.
+        callback: { 
+          address: 127.0.0.1:8999,
+          args: ['arg1', 'arg2', 'arg3']
+        }
+
+        # list of patterns to match
+        patterns:
+          critical: {
+            regexes: [
+              'GET\s+([/\w]+)\s+HTTP/1\.1"\s+(?P<code>\d+)\s+(?P<length>\d+)',
+            ],
+            exceptions: [
+              'AppleWebKit/537\.36',
+            ]
+          }
+          warning: {
+            regexes: [
+              'POST\s+([/\w\.]+)\s+HTTP/1\.1"\s+(?P<code>\d+)\s+(?P<length>\d+)'
+            ],
+            exceptions: [
+              '^\d{2,3}\.'
+            ]
+          }

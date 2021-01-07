@@ -276,6 +276,7 @@ mod tests {
     // }
 
     #[test]
+    #[cfg(target_family = "unix")]
     fn from_reader() {
         let global = GlobalOptions::from_str("path: /usr/bin").expect("unable to read YAML");
 

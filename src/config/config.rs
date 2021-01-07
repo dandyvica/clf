@@ -159,6 +159,7 @@ mod tests {
     use std::path::PathBuf;
 
     #[test]
+    #[cfg(target_family = "unix")]
     fn config() {
         dbg!(std::env::current_dir().unwrap());
         let yaml = r#"

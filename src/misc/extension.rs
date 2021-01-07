@@ -242,17 +242,15 @@ mod tests {
     #[test]
     #[cfg(target_os = "windows")]
     fn list_files_shell() {
-        let files = Util::get_list(
-            &"cmd.exe",
-            Some(&[
-                "/c".to_string(),
-                r"dir /b c:\windows\system32\*.dll".to_string(),
-            ]),
-        )
-        .expect("error listing files");
-        //println!("{:?}", files);
-        assert!(files.len() > 1000);
-        //assert!(files.iter().all(|f| f.ends_with("dll")));
+        let mut cmd = vec![
+            "cmd.exe".to_string(),
+            "/c".to_string(),
+            r"dir /b c:\windows\system32\*.dll".to_string(),
+        ];
+
+        let files = cmd.get_file_list().unwrap();
+        assert!(files.len() > 10);
+        assert!(files.iter().all(|f| f.extension().unwrap() == "DLL" || f.extension().unwrap() == "dll"));        
     }
 
     #[test]
@@ -304,7 +302,7 @@ mod tests {
         assert_eq!(value, 601);
 
         let mut one_line = str::replace(&String::from_utf8_lossy(&buffer), "\n", "");
-        println!("oneline={}", one_line);
+        //println!("oneline={}", one_line);
         assert_eq!(one_line.len(), 576);
 
         // read next json
