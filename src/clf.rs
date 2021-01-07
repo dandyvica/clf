@@ -1,9 +1,7 @@
 // TODO:
 // - create a reader for JSON files
 // - implement logfilemissing
-// - add missing variables: CLF_HOSTNAME, CLF_IPADDRESS, CLF_TIMESTAMP, CLF_USER
 // - implement a unique ID iso pid. FIXME: check exit message from snapshot
-// - output message: put canon_path iso declared_path
 // - add error msg if rewind & fastforward ?
 
 // DONE:
@@ -19,6 +17,8 @@
 // - use Config::from_path iso Config::from_file: done FIXME: return code when cmd not working
 // - add log rotation facility: FIXME: test it !
 // - manage errors when logfile is not found
+// - output message: put canon_path iso declared_path
+// - add missing variables: CLF_HOSTNAME, CLF_IPADDRESS, CLF_TIMESTAMP, CLF_USER. FIXME: missing CLF_IPADDRESS
 
 use log::{debug, info};
 use std::io::ErrorKind;

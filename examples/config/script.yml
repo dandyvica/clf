@@ -1,9 +1,21 @@
 ---
+# global settings
+global:
+  path: "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+  snapshot_file: ./tmp/script.json
+  snapshot_retention: 60
+  vars:
+    CLF_firstname: Al
+    CLF_lastname: Pacino
+    CLF_city: "Los Angeles"
+    CLF_profession: actor
+
 # a list of logfiles & tags, to search for patterns. This is either a list of logfiles, or a command giving back a list of 
 # files to search for.
 searches:
   # name & path of the logfile to search
-  - logfile: tests/logfiles/small_acces.log
+  - logfile: 
+      path: logfiles/access_simple.log
 
     # list of tags to refer to
     tags: 
@@ -21,7 +33,7 @@ searches:
 
         # a script or command to be called, every time a hit is found.
         callback: { 
-          comain: "tests/tmp/echovars.sock",
+          script: "./scripts/echovars.py",
           args: ['arg1', 'arg2', 'arg3']
         }
 

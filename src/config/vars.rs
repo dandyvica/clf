@@ -9,9 +9,7 @@ use std::ops::{Deref, DerefMut};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 
-use crate::context;
 use crate::misc::constants::DEFAULT_CONTAINER_CAPACITY;
-use crate::misc::error::{AppError, AppResult};
 
 /// Macro to build a variable name prepended with its prefix
 #[macro_export]
@@ -22,7 +20,7 @@ macro_rules! prefix_var {
     };
 
     // prefix_var!(name) => "CLF_LOGFILE" as a String
-    ($v:ident) => {
+    ($v:expr) => {
         Cow::from(format!("CLF_{}", $v))
     };
 
@@ -40,10 +38,7 @@ pub struct Vars<K: Hash + Eq, V>(HashMap<K, V>);
 pub type RuntimeVars<'a> = Vars<Cow<'a, str>, &'a str>;
 
 /// user vars are optionally defined in the global configuration tag.
-pub type UserVars = Vars<String, String>;
-
-/// Constants variables are those which don't change during the whole process, like the hostname etc.
-pub type ConsVars = Vars<String, String>;
+pub type GlobalVars = Vars<String, String>;
 
 impl<K: Hash + Eq, V> Default for Vars<K, V> {
     fn default() -> Self {
@@ -100,10 +95,12 @@ where
 /// new strings at each line of a logfile.
 impl<'a> Vars<Cow<'a, str>, &'a str> {
     /// Add variables taken from the capture group names or ids.
-    pub fn insert_captures(&mut self, re: &Regex, text: &'a str) {
+    pub fn insert_captures(&mut self, re: &Regex, text: &'a str) -> usize {
         // get the captures
         let caps = re.captures(text).unwrap();
-        //trace!("caps={:?}", caps);
+
+        // insert number of captures
+        let nbcaps = caps.len();
 
         // now loop and get text corresponding to either name or position
         for (i, cg_name) in re.capture_names().enumerate() {
@@ -111,33 +108,19 @@ impl<'a> Vars<Cow<'a, str>, &'a str> {
                 None => {
                     if let Some(m) = caps.get(i) {
                         // variable will be: CLF_CAPTURE2 (example)
-                        self.0.insert(prefix_var!("CAPTURE", i), m.as_str());
+                        self.0.insert(prefix_var!("CG_", i), m.as_str());
                     }
                 }
                 Some(cap_name) => {
                     if let Some(m) = caps.name(cap_name) {
                         // variable will be: CLF_FOO (example)
-                        self.0.insert(prefix_var!(cap_name), m.as_str());
+                        self.0.insert(prefix_var!("CG_", cap_name), m.as_str());
                     }
                 }
             }
         }
-    }
-}
 
-/// This adds "constants" variables because they're not related to a value from a line read from of a logfile
-impl Vars<String, String> {
-    pub fn new_constants(&mut self) -> AppResult<Self> {
-        let mut hmap = HashMap::new();
-
-        // add hostname
-        let hostname = hostname::get().map_err(|e| context!(e, "unable to fetch hostname",))?;
-        let hostname_str = hostname.to_string_lossy();
-        hmap.insert("CLF_HOSTNAME".to_string(), hostname_str.to_string());
-
-        // add ip address
-
-        Ok(Vars(hmap))
+        nbcaps
     }
 }
 
@@ -184,13 +167,13 @@ mod tests {
         vars.insert_captures(&re, text);
 
         assert_eq!(
-            vars.get("CLF_CAPTURE0").unwrap(),
+            vars.get("CLF_CG_0").unwrap(),
             &"my name is john fitzgerald kennedy"
         );
-        assert_eq!(vars.get("CLF_CAPTURE1").unwrap(), &"my name is");
-        assert_eq!(vars.get("CLF_CAPTURE2").unwrap(), &"john");
-        assert_eq!(vars.get("CLF_CAPTURE3").unwrap(), &"fitzgerald");
-        assert_eq!(vars.get("CLF_LASTNAME").unwrap(), &"kennedy");
+        assert_eq!(vars.get("CLF_CG_1").unwrap(), &"my name is");
+        assert_eq!(vars.get("CLF_CG_2").unwrap(), &"john");
+        assert_eq!(vars.get("CLF_CG_3").unwrap(), &"fitzgerald");
+        assert_eq!(vars.get("CLF_CG_LASTNAME").unwrap(), &"kennedy");
 
         vars.insert_var("CLF_LOGFILE", "/var/log/foo");
         vars.insert_var(String::from("CLF_TAG"), "tag1");

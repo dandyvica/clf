@@ -66,23 +66,23 @@ class Testing(unittest.TestCase):
         print("test_yaml_error: todo")
 
     # logfile not found and related logfilemissing options
-    def test_log_notfound_unkown(self):
-        self.tc.prepare("log_notfound_unkown", logfile="./logfiles/access_simple.lo", options="fastforward")
+    # def test_log_notfound_unkown(self):
+    #     self.tc.prepare("log_notfound_unkown", logfile="./logfiles/access_simple.lo", options="fastforward")
 
-        p = self.tc.exec()
-        self.assertEqual(p.returncode, 3)
+    #     p = self.tc.exec()
+    #     self.assertEqual(p.returncode, 3)
 
-    def test_log_notfound_error(self):
-        self.tc.prepare("log_notfound_error", logfile="./logfiles/access_simple.lo", options="logfilemissing=error")
+    # def test_log_notfound_error(self):
+    #     self.tc.prepare("log_notfound_error", logfile="./logfiles/access_simple.lo", options="logfilemissing=error")
 
-        p = self.tc.exec()
-        self.assertEqual(p.returncode, 2)
+    #     p = self.tc.exec()
+    #     self.assertEqual(p.returncode, 2)
 
-    def test_log_notfound_warning(self):
-        self.tc.prepare("log_notfound_warning", logfile="./logfiles/access_simple.lo", options="logfilemissing=warning")
+    # def test_log_notfound_warning(self):
+    #     self.tc.prepare("log_notfound_warning", logfile="./logfiles/access_simple.lo", options="logfilemissing=warning")
 
-        p = self.tc.exec()
-        self.assertEqual(p.returncode, 1)
+    #     p = self.tc.exec()
+    #     self.assertEqual(p.returncode, 1)
 
     # regular processing of the logfile
     def test_fastforward(self):
@@ -126,7 +126,7 @@ class Testing(unittest.TestCase):
         self.assert_counters(critical_count=63, warning_count=2, ok_count=0, exec_count=0)
 
     def test_savethresholdcount(self):
-        self.tc.prepare("savethresholdcount", logfile="./logfiles/access_simple.log", options="savethresholdcount")
+        self.tc.prepare("savethresholds", logfile="./logfiles/access_simple.log", options="savethresholds")
 
         p = self.tc.exec("-d")
         self.assertEqual(p.returncode, 2)        
@@ -177,7 +177,7 @@ class Testing(unittest.TestCase):
         p = self.tc.exec("-d")
 
         self.add_logdata(log)
-        self.tc.prepare("rotate", logfile=log, options="savethresholdcount")
+        self.tc.prepare("rotate", logfile=log, options="savethresholds")
         p = self.tc.exec()
 
         # assert all run data
@@ -203,7 +203,7 @@ class Testing(unittest.TestCase):
         copyfile("./logfiles/access_simple.log", log)
         print(f"inode({log}) = ", os.lstat(log)[stat.ST_INO])
 
-        self.tc.prepare("rotate", logfile=log, options="savethresholdcount")
+        self.tc.prepare("rotate", logfile=log, options="savethresholds")
         p = self.tc.exec()        
         self.assertEqual(p.returncode, 2)         
 

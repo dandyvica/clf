@@ -7,7 +7,6 @@
 //! trigger a match.
 //!
 //! The logfile could either be an accessible file path, or a command which will be executed and gets back a list of files.
-use std::fs::File;
 use std::path::Path;
 
 use log::debug;
@@ -46,11 +45,12 @@ impl Config {
     pub fn from_path<P: AsRef<Path> + std::fmt::Debug>(
         file_name: P,
         context: Option<&str>,
+        show_rendered: bool,
     ) -> AppResult<Config> {
-        use tera::{Context, Result, Tera, Value};
+        use tera::{Context, Tera, Value};
 
         // read the whole file into a string
-        let config = read_to_string(&file_name)
+        let config = std::fs::read_to_string(&file_name)
             .map_err(|e| context!(e, "unable to read configuration file: {:?}", &file_name))?;
 
         // load context or create context if specified from arguments
@@ -66,6 +66,10 @@ impl Config {
 
         // render the config with Tera context
         let rendered = Tera::one_off(&config, &context, false).expect("error one_off");
+        if show_rendered {
+            println!("{}", rendered);
+            std::process::exit(0);
+        }
 
         // load YAML data
         let yaml: Config = serde_yaml::from_str(&rendered)
@@ -82,7 +86,7 @@ impl Config {
     #[cfg(not(feature = "tera"))]
     pub fn from_path<P: AsRef<Path> + std::fmt::Debug>(file_name: P) -> AppResult<Config> {
         // open YAML file
-        let file = File::open(&file_name)
+        let file = std::fs::File::open(&file_name)
             .map_err(|e| context!(e, "unable to read configuration file: {:?}", &file_name))?;
 
         // load YAML data
@@ -92,6 +96,7 @@ impl Config {
             "sucessfully loaded YAML configuration file, nb_searches={}",
             yaml.searches.len()
         );
+
         Ok(yaml)
     }
 }
@@ -162,7 +167,7 @@ mod tests {
           output_dir: /tmp/foo
           snapshot_file: /tmp/my_snapshot.json
           snapshot_retention: 5
-          user_vars:
+          vars:
             first_name: Al
             last_name: Pacino
             city: 'Los Angeles'
@@ -231,44 +236,17 @@ mod tests {
             Some(PathBuf::from("/tmp/my_snapshot.json"))
         );
         assert_eq!(config.global.snapshot_retention, 5);
+        assert_eq!(&config.global.global_vars.get("first_name").unwrap(), &"Al");
         assert_eq!(
-            &config
-                .global
-                .user_vars
-                .as_ref()
-                .unwrap()
-                .get("first_name")
-                .unwrap(),
-            &"Al"
-        );
-        assert_eq!(
-            &config
-                .global
-                .user_vars
-                .as_ref()
-                .unwrap()
-                .get("last_name")
-                .unwrap(),
+            &config.global.global_vars.get("last_name").unwrap(),
             &"Pacino"
         );
         assert_eq!(
-            &config
-                .global
-                .user_vars
-                .as_ref()
-                .unwrap()
-                .get("city")
-                .unwrap(),
+            &config.global.global_vars.get("city").unwrap(),
             &"Los Angeles"
         );
         assert_eq!(
-            &config
-                .global
-                .user_vars
-                .as_ref()
-                .unwrap()
-                .get("profession")
-                .unwrap(),
+            &config.global.global_vars.get("profession").unwrap(),
             &"actor"
         );
         assert_eq!(config.searches.len(), 1);

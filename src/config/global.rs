@@ -1,14 +1,13 @@
 //! Contains the global configuration when processing logfiles. These values are independant from the ones solely related to a logfile when searching.
+use std::borrow::Cow;
 use std::path::PathBuf;
 
 use serde::Deserialize;
 
-use crate::config::{script::Script, vars::UserVars};
-use crate::logfile::snapshot::Snapshot;
+use crate::config::{script::Script, vars::GlobalVars};
 use crate::misc::constants::*;
 
-use crate::fromstr;
-
+use crate::{fromstr, prefix_var};
 #[derive(Debug, Deserialize, Clone)]
 /// A list of global options, which apply globally for all searches.
 #[serde(default)]
@@ -27,13 +26,49 @@ pub struct GlobalOptions {
     pub snapshot_retention: u64,
 
     /// A list of user variables if any.
-    pub user_vars: Option<UserVars>,
+    #[serde(rename = "vars")]
+    pub global_vars: GlobalVars,
 
     // A command called before starting reading
     pub prescript: Option<Script>,
 
     // A command called before the end of clf
     pub postcript: Option<Script>,
+}
+
+impl GlobalOptions {
+    /// Add variables like user, platform etc not dependant from a logfile
+    pub fn insert_process_env(&mut self) {
+        // now just add relevant variables
+        self.global_vars
+            .insert_var(prefix_var!("USER"), whoami::username());
+        self.global_vars
+            .insert_var(prefix_var!("HOSTNAME"), whoami::hostname());
+        self.global_vars
+            .insert_var(prefix_var!("PLATFORM"), whoami::platform().to_string());
+    }
+
+    /// Add optional extra global variables coming from the command line
+    pub fn insert_extar_vars(&mut self, vars: &Option<Vec<String>>) {
+        if vars.is_some() {
+            let vars = vars.as_ref().unwrap();
+
+            // each var should have this form: var=value
+            for var in vars {
+                // split at char ':'
+                let splitted: Vec<&str> = var.split(':').collect();
+
+                // if we don't find the equals sign just loop
+                if splitted.len() != 2 {
+                    continue;
+                }
+
+                // now it's safe to insert
+                self.global_vars
+                    .insert_var(prefix_var!(splitted[0]), splitted[1].to_string());
+            }
+        }
+    }
 }
 
 // Auto-implement FromStr
@@ -62,7 +97,7 @@ impl Default for GlobalOptions {
             output_dir: std::env::temp_dir(),
             snapshot_file: None,
             snapshot_retention: DEFAULT_RETENTION,
-            user_vars: None,
+            global_vars: GlobalVars::default(),
             prescript: None,
             postcript: None,
         }
@@ -97,7 +132,7 @@ output_dir: /usr/foo2
 path: /usr/foo1
 
 # a list of user variables, if any
-user_vars:
+vars:
     first_name: Al
     last_name: Pacino
     city: 'Los Angeles'
@@ -108,9 +143,8 @@ user_vars:
         assert_eq!(&opts.path, "/usr/foo1");
         assert_eq!(opts.output_dir, PathBuf::from("/tmp"));
         assert_eq!(opts.snapshot_file, None);
-        assert!(opts.user_vars.is_some());
 
-        let vars = opts.user_vars.unwrap();
+        let vars = opts.global_vars;
         assert_eq!(vars.get("first_name").unwrap(), "Al");
         assert_eq!(vars.get("last_name").unwrap(), "Pacino");
         assert_eq!(vars.get("city").unwrap(), "Los Angeles");

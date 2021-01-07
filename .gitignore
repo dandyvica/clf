@@ -4,10 +4,11 @@ Cargo.lock
 **/large*.log
 **/large*.log.gz
 clf.log
-/examples
 /tests/integration/tmp
 /huge
 /tests/local/clf_snapshot.json
 **/__pycache__
 /hidden
 clf_snapshot.json
+**/*.json
+/examples/tmp

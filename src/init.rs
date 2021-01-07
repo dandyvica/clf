@@ -12,7 +12,11 @@ use crate::misc::nagios::Nagios;
 /// Create a new config struct
 pub fn init_config(options: &CliOptions) -> Config {
     #[cfg(feature = "tera")]
-    let _config = Config::from_path(&options.config_file, options.tera_context.as_deref());
+    let _config = Config::from_path(
+        &options.config_file,
+        options.tera_context.as_deref(),
+        options.show_rendered,
+    );
 
     #[cfg(not(feature = "tera"))]
     let _config = Config::from_path(&options.config_file);
@@ -25,7 +29,12 @@ pub fn init_config(options: &CliOptions) -> Config {
         ));
     }
 
-    let config = Config::from(_config.unwrap());
+    let mut config = Config::from(_config.unwrap());
+
+    // add process environment variables and optional extra variables
+    config.global.insert_process_env();
+    config.global.insert_extar_vars(&options.extra_vars);
+
     config
 }
 

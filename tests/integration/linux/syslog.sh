@@ -9,4 +9,4 @@ log=$root/tests/integration/linux/clf.log
 snapshot=$root/tests/integration/linux/clf_snapshot.json
 
 # launch clf
-$clf --config $config --logger $log  --loglevel Debug --snapshot $snapshot --delete-snapshot $@
+$clf --config $config --log $log  --loglevel Debug --snapshot $snapshot --delete-snapshot --var FOO1:bar1 FOO2:bar2 $@

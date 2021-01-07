@@ -61,7 +61,7 @@ global:
   snapshot_retention: 5
 
   # a list of user variables, if any
-  user_vars:
+  global_vars:
     first_name: Al
     last_name: Pacino
     city: 'Los Angeles'
@@ -179,7 +179,7 @@ global       | no  |  a list of options, which are set globally for all defined 
 path         | no  |  This path will be searched for spawning the external script, if the provided script path is relative. Will defaults to '/usr/sbin:/usr/bin:/sbin:/bin' for Unix, or 'C:\Windows\system32;C:\Windows;C:\Windows\System32\Wbem;' for Windows.               
 snapshot_file              | no  | a file which will keep runtime data. If not present, defaults to '/tmp/clf_snapshot.json' on Unix, or any temporary Windows directory plus 'clf_snapshot.json'
 snapshot_retention         | no  | number of seconds after which runtime data will be deleted from snapshot file, for a specific tag. 0 means keep forever, default is ??
-user_vars                  | no  | a YAML list of user-defined variables. These will be provided as environment variables, prefixed with 'CLF_', to the called script
+global_vars                  | no  | a YAML list of user-defined variables. These will be provided as environment variables, prefixed with 'CLF_', to the called script
 searches    | yes | a list of data defining where to search for, what to search for, and which action to trigger on a match
 logfile     | yes | the path to the logfile to search for. If defined as a relative path, it'll be relative to the current directory
 process     | no  | set it to *false* if you don't want to process the logfile. Defaults to *true* if not present
@@ -200,7 +200,7 @@ runscript                | if set, the defined script will be call for each line
 rewind                   | if set, *clf* will read the considered logfile from the beginning, bypassing any offset recorded in the *snapshot* file
 criticalthreshold=<u16>  | when set to a 2-byte positive integer value, it means that critical errors will not be triggered unless this threshold is reached
 warningthreshold=<u16>   | when set to a 2-byte positive integer value, it means that warning errors will not be triggered unless this threshold is reached
-savethresholdcount       | when set, either critical or warning threshold will be save in the *snapshot* file
+savethresholds       | when set, either critical or warning threshold will be save in the *snapshot* file
 runlimit=<u16>           | when set, for each execution of *clf*, the defined script (if any) will only be called at most the value set by this option
 
 ## Patterns definition

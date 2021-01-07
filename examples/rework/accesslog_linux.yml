@@ -15,7 +15,7 @@ global:
   snapshot_retention: 5
 
   # a list of user variables, if any
-  user_vars:
+  vars:
     first_name: Al
     last_name: Pacino
     city: 'Los Angeles'

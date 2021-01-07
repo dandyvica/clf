@@ -18,7 +18,7 @@ use log::debug;
 use serde::Deserialize;
 use serde_json::json;
 
-use crate::config::vars::{RuntimeVars, UserVars};
+use crate::config::vars::{GlobalVars, RuntimeVars};
 use crate::misc::{
     constants::*,
     error::{AppError, AppResult},
@@ -35,6 +35,7 @@ pub enum CallbackType {
     Tcp(Option<String>),
 
     #[serde(rename = "domain")]
+    #[cfg(target_family = "unix")]
     Domain(Option<PathBuf>),
 }
 
@@ -43,6 +44,7 @@ pub enum CallbackType {
 pub struct CallbackHandle {
     cmd: Option<Command>,
     tcp_socket: Option<TcpStream>,
+    #[cfg(target_family = "unix")]
     domain_socket: Option<UnixStream>,
 }
 
@@ -52,6 +54,7 @@ impl Clone for CallbackHandle {
         CallbackHandle {
             cmd: None,
             tcp_socket: None,
+            #[cfg(target_family = "unix")]
             domain_socket: None,
         }
     }
@@ -77,7 +80,7 @@ impl Callback {
     pub fn call(
         &self,
         env_path: Option<&str>,
-        user_vars: &Option<UserVars>,
+        global_vars: &GlobalVars,
         runtime_vars: &RuntimeVars,
         handle: &mut CallbackHandle,
     ) -> AppResult<Option<ChildData>> {
@@ -100,8 +103,8 @@ impl Callback {
                 let mut cmd = Command::new(path.as_ref().unwrap());
 
                 // user vars don't change so we can add them right now
-                if let Some(uservars) = user_vars {
-                    cmd.envs(uservars.inner());
+                if global_vars.len() != 0 {
+                    cmd.envs(global_vars.inner());
                 }
 
                 // add arguments if any
@@ -156,7 +159,7 @@ impl Callback {
                 // create a dedicated JSON structure
                 let mut json = json!({
                     "args": &self.args,
-                    "user": user_vars,
+                    "global": global_vars,
                     "vars": runtime_vars
                 })
                 .to_string();
@@ -185,6 +188,7 @@ impl Callback {
 
                 Ok(None)
             }
+            #[cfg(target_family = "unix")]
             CallbackType::Domain(address) => {
                 debug_assert!(address.is_some());
                 let addr = address.as_ref().unwrap();
@@ -204,7 +208,7 @@ impl Callback {
                 // create a dedicated JSON structure
                 let mut json = json!({
                     "args": &self.args,
-                    "user": user_vars,
+                    "global": global_vars,
                     "vars": runtime_vars
                 })
                 .to_string();
@@ -337,7 +341,9 @@ pub mod tests {
 
         // call script
         let mut handle = CallbackHandle::default();
-        let data = cb.call(None, &None, &vars, &mut handle).unwrap();
+        let data = cb
+            .call(None, &GlobalVars::default(), &vars, &mut handle)
+            .unwrap();
         assert!(data.is_some());
 
         // safe to unwrap
@@ -393,7 +399,9 @@ pub mod tests {
 
         // some work here
         let mut handle = CallbackHandle::default();
-        let data = cb.call(None, &None, &vars, &mut handle).unwrap();
+        let data = cb
+            .call(None, &GlobalVars::default(), &vars, &mut handle)
+            .unwrap();
         assert!(data.is_none());
 
         let _res = child.join();
@@ -447,7 +455,9 @@ pub mod tests {
 
         // some work here
         let mut handle = CallbackHandle::default();
-        let data = cb.call(None, &None, &mut vars, &mut handle).unwrap();
+        let data = cb
+            .call(None, &GlobalVars::default(), &mut vars, &mut handle)
+            .unwrap();
         assert!(data.is_none());
 
         //cb.call(None, &vars).unwrap();

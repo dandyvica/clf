@@ -24,6 +24,8 @@ pub struct CliOptions {
     pub snapshot_file: Option<PathBuf>,
     pub reader_type: ReaderCallType,
     pub tera_context: Option<String>,
+    pub extra_vars: Option<Vec<String>>,
+    pub show_rendered: bool,
 }
 
 /// Implements `Default` trait for `CliOptions`.
@@ -45,6 +47,8 @@ impl Default for CliOptions {
             snapshot_file: None,
             reader_type: ReaderCallType::FullReaderCall,
             tera_context: None,
+            extra_vars: None,
+            show_rendered: false,
         }
     }
 }
@@ -61,19 +65,19 @@ impl CliOptions {
             "#)
             .arg(
                 Arg::new("config")
-                    .long_about("Mandatory argument. The name and path of the YAML configuration file, containing logfiles to search for and patterns to match.")
+                    .long_about("Mandatory argument. The name and path of the YAML configuration file, containing logfiles to search for and patterns to match")
                     .short('c')
                     .long("config")
                     .required(true)
-                    .long_about("Name of the YAML configuration file.")
+                    .long_about("Name of the YAML configuration file")
                     .takes_value(true),
             )
             .arg(
-                Arg::new("logger")
+                Arg::new("log")
                     .short('l')
-                    .long("logger")
+                    .long("log")
                     .required(false)
-                    .long_about("Name of the logger file for logging information of this executable.")
+                    .long_about("Name of the log file for logging information of this executable. Not to be confused with the logfile to search into")
                     .takes_value(true),
             )
             .arg(
@@ -81,7 +85,7 @@ impl CliOptions {
                     .short('d')
                     .long("delete-snapshot")
                     .required(false)
-                    .long_about("Delete snapshot file before searching.")
+                    .long_about("Delete snapshot file before searching")
                     .takes_value(false),
             )
             .arg(
@@ -89,7 +93,7 @@ impl CliOptions {
                     .short('s')
                     .long("syntax-check")
                     .required(false)
-                    .long_about("Check configuration file correctness, print it out and exit.")
+                    .long_about("Check configuration file correctness, print it out and exit")
                     .takes_value(false),
             )
             .arg(
@@ -97,7 +101,7 @@ impl CliOptions {
                     .short('g')
                     .long("loglevel")
                     .required(false)
-                    .long_about("When logger is enabled, set the minimum logger level. Defaults to 'Info'.")
+                    .long_about("When log is enabled, set the minimum log level. Defaults to 'Info'")
                     .possible_values(&["Off", "Error", "Warn", "Info", "Debug", "Trace"])
                     .takes_value(true),
             )
@@ -106,7 +110,7 @@ impl CliOptions {
                     .short('m')
                     .long("max-logsize")
                     .required(false)
-                    .long_about("When logger is enabled, set the maximum logger size (in Mb). If specified, logger file will be deleted first if current size is over this value. Defaults to 50 MB.")
+                    .long_about("When log is enabled, set the maximum log size (in Mb). If specified, log file will be deleted first if current size is over this value. Defaults to 50 MB")
                     .takes_value(true),
             )
             .arg(
@@ -114,7 +118,15 @@ impl CliOptions {
                     .short('o')
                     .long("show-options")
                     .required(false)
-                    .long_about("Just show the command line options passed and exit.")
+                    .long_about("Just show the command line options passed and exit")
+                    .takes_value(false),
+            )
+            .arg(
+                Arg::new("show-rendered")
+                    .short('w')
+                    .long("show-rendered")
+                    .required(false)
+                    .long_about("Render the configuration file through Jinja2/Tera and exit. This is meant to check Tera substitutions")
                     .takes_value(false),
             )
             .arg(
@@ -131,7 +143,7 @@ impl CliOptions {
                     .short('a')
                     .long("no-callback")
                     .required(false)
-                    .long_about("Don't run any callback, just read all logfiles in the configuration file and print out matching line. Used to check whether regexes are correct.")
+                    .long_about("Don't run any callback, just read all logfiles in the configuration file and print out matching line. Used to check whether regexes are correct")
                     .takes_value(false),
             )
             .arg(
@@ -139,7 +151,7 @@ impl CliOptions {
                     .short('p')
                     .long("snapshot")
                     .required(false)
-                    .long_about("Override the snapshot file specified in the configuration file. It will default to the platform-dependent name using the temporary directory if not provided in configuration file or by using this flag.")
+                    .long_about("Override the snapshot file specified in the configuration file. It will default to the platform-dependent name using the temporary directory if not provided in configuration file or by using this flag")
                     .takes_value(true),
             )
             .arg(
@@ -148,6 +160,15 @@ impl CliOptions {
                     .long("context")
                     .required(false)
                     .long_about("A JSON string used to set the Tera context. Only valid if tera feature is enabled")
+                    .takes_value(true),
+            )
+            .arg(
+                Arg::new("var")
+                    .short('v')
+                    .long("var")
+                    .required(false)
+                    .long_about("An optional variable to send to the defined callback. Multiple values are possible")
+                    .multiple(true)
                     .takes_value(true),
             )
             .get_matches();
@@ -167,9 +188,9 @@ impl CliOptions {
         }
         options.config_file = canonicalized_config_file.unwrap();
 
-        // optional logger file
-        if matches.is_present("logger") {
-            options.clf_logger = PathBuf::from(matches.value_of("logger").unwrap());
+        // optional log file
+        if matches.is_present("log") {
+            options.clf_logger = PathBuf::from(matches.value_of("log").unwrap());
         }
 
         // optional check for reading
@@ -181,6 +202,7 @@ impl CliOptions {
         options.check_conf = matches.is_present("syntax-check");
         options.delete_snapfile = matches.is_present("delete-snapshot");
         options.show_options = matches.is_present("show-options");
+        options.show_rendered = matches.is_present("show-rendered");
 
         options.logger_level = matches.value_of_t("loglevel").unwrap_or(LevelFilter::Info);
 
@@ -195,6 +217,15 @@ impl CliOptions {
         options.max_logger_size = matches
             .value_of_t("max-logsize")
             .unwrap_or(MAX_LOGGER_SIZE * 1024 * 1024);
+
+        options.tera_context = matches
+            .value_of("context")
+            .and_then(|x| Some(x.to_string()));
+
+        if matches.is_present("var") {
+            let vars: Vec<&str> = matches.values_of("var").unwrap().collect();
+            options.extra_vars = Some(vars.iter().map(|x| x.to_string()).collect());
+        }
 
         options.show_options = matches.is_present("show-options");
         if options.show_options {

@@ -13,10 +13,10 @@ with open('/tmp/myfile.txt', 'w') as f:
 try:
     assert sys.argv[1:] == ['one', 'two', 'three']
 
-    assert vars["CLF_CAPTURE1"] == "my name is"
-    assert vars["CLF_CAPTURE2"] == "john"
-    assert vars["CLF_CAPTURE3"] == "fitzgerald"
-    assert vars["CLF_LASTNAME"] == "kennedy"
+    assert vars["CLF_CG_1"] == "my name is"
+    assert vars["CLF_CG_2"] == "john"
+    assert vars["CLF_CG_3"] == "fitzgerald"
+    assert vars["CLF_CG_LASTNAME"] == "kennedy"
 
     exit(0)
 

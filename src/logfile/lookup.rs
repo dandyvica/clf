@@ -54,7 +54,7 @@ impl Lookup<FullReader> for LogFile {
     ///
     /// 2. reset `RunData` fields depending on local options
     ///     - get a mutable reference on `RunData` structure
-    ///     - reset thresholds if `savethresholdcount` is set: those thresholds trigger a callback whenever they are reached
+    ///     - reset thresholds if `savethresholds` is set: those thresholds trigger a callback whenever they are reached
     ///     - set current file pointers (offset and line number) to the last ones recorded in the `RunData` structure. If local option
     ///       is set to `rewind`, read from the beginning of the file and set offsets accordingly
     ///
@@ -136,7 +136,7 @@ impl Lookup<FullReader> for LogFile {
         // resets thresholds if requested
         // this will count number of matches for warning & critical, to see if this matches the thresholds
         // first is warning, second is critical
-        if !tag.options.savethresholdcount {
+        if !tag.options.savethresholds {
             run_data.counters.critical_count = 0;
             run_data.counters.warning_count = 0;
         }
@@ -239,7 +239,10 @@ impl Lookup<FullReader> for LogFile {
                             let pattern_type = String::from(pattern_match.pattern_type);
                             vars.insert_var(prefix_var!("MATCHED_RE_TYPE"), &pattern_type);
 
-                            vars.insert_captures(pattern_match.regex, &line);
+                            // insert number of captures and capture groups
+                            let nb_caps = vars.insert_captures(pattern_match.regex, &line);
+                            let nb_caps_s = nb_caps.to_string();
+                            vars.insert_var(prefix_var!("NB_CG"), &nb_caps_s);
 
                             debug!("added variables: {:?}", vars);
 
@@ -248,7 +251,7 @@ impl Lookup<FullReader> for LogFile {
                                 // in case of a callback error, stop iterating and save state here
                                 match tag.callback_call(
                                     Some(&global_options.path),
-                                    &global_options.user_vars,
+                                    &global_options.global_vars,
                                     &vars,
                                     &mut handle,
                                 ) {

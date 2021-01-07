@@ -1,0 +1,17 @@
+# {% set logfile = "/var/log/syslog" -%}
+searches:
+  - logfile:
+      path: {{ logfile }}
+    tags:
+      - name: syslog_nokernel
+        options: "runcallback,fastforward"
+        callback:
+          script: {{ script }}
+          args: 
+            - "arg1"
+            - "arg2"
+            - "arg3"
+        patterns:
+          critical:
+            regexes: ['(\w+)[(\d+)]']
+            exceptions: ["kernel:"]

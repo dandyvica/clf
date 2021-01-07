@@ -8,7 +8,7 @@ use std::path::Path;
 
 use bzip2::read::BzDecoder;
 use flate2::read::GzDecoder;
-use log::{debug, error, Log};
+use log::{debug, error};
 use serde::{Deserialize, Serialize};
 use xz2::read::XzDecoder;
 

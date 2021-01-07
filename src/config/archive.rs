@@ -2,12 +2,6 @@
 //! of an archived file that has been rotated, usually using `logrotate` UNIX process.
 use std::path::{Path, PathBuf};
 
-use crate::context;
-use crate::misc::{
-    error::{AppError, AppResult},
-    extension::ReadFs,
-};
-
 use serde::Deserialize;
 
 /// This structure keeps everything related to log rotations
@@ -27,7 +21,7 @@ impl LogArchive {
     /// When no archive is specified, just get the standard logrotate file name: add .1 at the end of the logfile
     pub fn rotated_path<P: AsRef<Path> + Clone>(path: P) -> PathBuf {
         // build the file name by appending .1 to its path
-        let mut rotated_path = format!("{}.1", path.as_ref().to_string_lossy());
+        let rotated_path = format!("{}.1", path.as_ref().to_string_lossy());
 
         PathBuf::from(rotated_path)
     }

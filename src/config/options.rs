@@ -33,7 +33,7 @@ pub struct SearchOptions {
     /// controls whether the hit counter will be saved between the runs.
     /// If yes, hit numbers are added until a threshold is reached (criticalthreshold).
     /// Otherwise the run begins resetting counters
-    pub savethresholdcount: bool,
+    pub savethresholds: bool,
 
     /// controls whether an error is propagated through successive runs of check_logfiles.
     /// Once an error was found, the exitcode will be non-zero until an okpattern resets it or until
@@ -88,7 +88,7 @@ impl TryFrom<String> for SearchOptions {
             "criticalthreshold",
             "warningthreshold",
             "protocol",
-            "savethresholdcount",
+            "savethresholds",
             "sticky",
             "fastforward",
             "runlimit",
@@ -122,7 +122,7 @@ impl TryFrom<String> for SearchOptions {
             runcallback,
             rewind,
             keepoutput,
-            savethresholdcount,
+            savethresholds,
             protocol,
             fastforward
         );
@@ -167,12 +167,12 @@ mod tests {
 
     #[test]
     fn search_options() {
-        let opts = SearchOptions::try_from("runcallback, keepoutput, rewind, criticalthreshold=10, warningthreshold=15, protocol, savethresholdcount, sticky=5, runlimit=10, truncate=80".to_string()).unwrap();
+        let opts = SearchOptions::try_from("runcallback, keepoutput, rewind, criticalthreshold=10, warningthreshold=15, protocol, savethresholds, sticky=5, runlimit=10, truncate=80".to_string()).unwrap();
 
         assert!(opts.runcallback);
         assert!(opts.keepoutput);
         assert!(opts.rewind);
-        assert!(opts.savethresholdcount);
+        assert!(opts.savethresholds);
         assert!(opts.protocol);
 
         assert_eq!(opts.criticalthreshold, 10);

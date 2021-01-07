@@ -5,7 +5,7 @@ use crate::config::{
     callback::{Callback, CallbackHandle, ChildData},
     options::SearchOptions,
     pattern::{PatternMatchResult, PatternSet},
-    vars::{RuntimeVars, UserVars},
+    vars::{GlobalVars, RuntimeVars},
 };
 
 use crate::misc::error::AppResult;
@@ -50,7 +50,7 @@ impl Tag {
     pub fn callback_call(
         &self,
         path: Option<&str>,
-        user_vars: &Option<UserVars>,
+        global_vars: &GlobalVars,
         runtime_vars: &RuntimeVars,
         handle: &mut CallbackHandle,
     ) -> AppResult<Option<ChildData>> {
@@ -58,7 +58,7 @@ impl Tag {
             self.callback
                 .as_ref()
                 .unwrap()
-                .call(path, user_vars, runtime_vars, handle)
+                .call(path, global_vars, runtime_vars, handle)
         } else {
             Ok(None)
         }
