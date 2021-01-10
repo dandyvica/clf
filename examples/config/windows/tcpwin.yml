@@ -1,7 +1,7 @@
 ---
 # global settings
 global:
-  snapshot_file: ./tmp/tcp.json
+  snapshot_file: .\tmp\tcp.json
   snapshot_retention: 60
   vars:
     CLF_firstname: Al
@@ -9,17 +9,17 @@ global:
     CLF_city: "Los Angeles"
     CLF_profession: actor
   prescript:
-    command: ['python.exe', './scripts/echotcp.py', '8999']
+    command: ['python.exe', '.\scripts\echotcp.py', '8999']
     timeout: 1000
   postcript:
-    command: ['python.exe', './scripts/kill.py']
+    command: ['python.exe', '.\scripts\kill.py']
 
 # a list of logfiles & tags, to search for patterns. This is either a list of logfiles, or a command giving back a list of 
 # files to search for.
 searches:
   # name & path of the logfile to search
   - logfile: 
-      path: logfiles/access_simple.log
+      path: .\logfiles\access_simple.log
 
     # list of tags to refer to
     tags: 

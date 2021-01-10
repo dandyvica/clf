@@ -6,12 +6,23 @@ use std::os::unix::fs::MetadataExt;
 use std::path::PathBuf;
 use std::process::Command;
 
+#[cfg(target_family = "windows")]
+use std::os::windows::prelude::*;
+
 use log::debug;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 
 use crate::misc::error::{AppCustomErrorKind, AppError, AppResult};
 
+// specific linking for Windows signature
+#[link(name = r".\src\windows\signature")]
+extern "C" {
+    fn get_signature_a(file_name: *const u8, signature: *const Signature) -> u32;
+    fn get_signature_w(file_name: *const u16, signature: *const Signature) -> u32;
+}
+
+#[repr(C)]
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone, Default)]
 /// A way to uniquely identify a logfile and to know whether is has been archived.
 pub struct Signature {
@@ -89,7 +100,32 @@ impl ReadFs for PathBuf {
 
     #[cfg(target_family = "windows")]
     fn signature(&self) -> AppResult<Signature> {
-        unimplemented!("Signature trait not yet implemented for Windows");
+        let mut rc: u32 = 0;
+        let sign = Signature::default();
+
+        // convert path to UTF16 Windows string
+        let u16_path: Vec<u16> = self.as_os_str().encode_wide().collect();
+
+        println!("signature for {}", self.display());
+        println!("u16_path for {}, length={}", String::from_utf16(&u16_path).unwrap(), u16_path.len());
+
+        unsafe {
+            rc = get_signature_w(u16_path.as_ptr(), &sign);
+        }
+
+        // windows DLL rc should be 0, or rc from GetLastError() API
+        if rc != 0 {
+            return Err(AppError::new_custom(
+                AppCustomErrorKind::WindowsApiError,
+                &format!(
+                    "Windows API error trying to get file signature = {} for file {}",
+                    rc,
+                    self.display()
+                ),
+            ));
+        }
+
+        Ok(sign)
     }
 }
 
@@ -250,7 +286,9 @@ mod tests {
 
         let files = cmd.get_file_list().unwrap();
         assert!(files.len() > 10);
-        assert!(files.iter().all(|f| f.extension().unwrap() == "DLL" || f.extension().unwrap() == "dll"));        
+        assert!(files
+            .iter()
+            .all(|f| f.extension().unwrap() == "DLL" || f.extension().unwrap() == "dll"));
     }
 
     #[test]

@@ -128,7 +128,7 @@ fn main() {
     //---------------------------------------------------------------------------------------------------
     for search in &config.searches {
         // log some :qeful info
-        info!("==> searching into logfile: {:?}", &search.logfile.path);
+        info!("==> searching into logfile: {:?}", &search.logfile.path());
 
         // checks if logfile is accessible. If not, no need to move further, just record last error
         if let Err(e) = search.logfile.path().is_usable() {

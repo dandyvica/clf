@@ -17,6 +17,8 @@ pub enum AppCustomErrorKind {
     UnsupportedSearchOption,
     OsStringConversionError,
     PhantomCloneError,
+    #[cfg(target_family = "windows")]
+    WindowsApiError,
 }
 
 impl fmt::Display for AppCustomErrorKind {
@@ -37,6 +39,8 @@ impl fmt::Display for AppCustomErrorKind {
                 write!(f, "conversion from OsString failed")
             }
             AppCustomErrorKind::PhantomCloneError => write!(f, "no error"),
+            #[cfg(target_family = "windows")]
+            AppCustomErrorKind::WindowsApiError => write!(f, "Windows API error"),
         }
     }
 }

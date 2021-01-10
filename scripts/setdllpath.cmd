@@ -1,0 +1,1 @@
+set PATH=C:\Users\%USERNAME%\projects\clf\src\windows;%PATH%

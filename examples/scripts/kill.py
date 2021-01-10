@@ -4,4 +4,5 @@
 import os
 import sys
 
+print("killing PID " + sys.argv[1])
 os.kill(int(sys.argv[1]), 9)
