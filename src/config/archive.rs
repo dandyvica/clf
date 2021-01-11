@@ -1,6 +1,6 @@
 //! Contains the configuration of the archiving process of a logfile. WWe can define here how, where and the naming convention
 //! of an archived file that has been rotated, usually using `logrotate` UNIX process.
-use std::path::{Path, PathBuf};
+use std::{fmt::Debug, path::{Path, PathBuf}};
 
 use serde::Deserialize;
 
@@ -27,7 +27,7 @@ impl LogArchive {
     }
 
     // When a LogArchive struct is specified in the config file, build the archive file name
-    pub fn archived_path<P: AsRef<Path>>(&self, path: P) -> PathBuf {
+    pub fn archived_path<P: AsRef<Path>+std::fmt::Debug>(&self, path: P) -> PathBuf {
         // build the directory for the archived path
         let dir = match &self.dir {
             None => {
@@ -41,16 +41,13 @@ impl LogArchive {
         debug_assert!(dir.is_dir());
 
         // extract file name
-        debug_assert!(path.as_ref().parent().is_some());
-        let file_name = path.as_ref().parent().unwrap().to_string_lossy();
+        debug_assert!(path.as_ref().file_name().is_some());
+        let file_name = path.as_ref().file_name().unwrap().to_string_lossy();
 
         // if not archive is specified, just add .1 at the end of the path
+        #[cfg(target_family = "windows")]
         let rotated_path = if self.extension.is_none() {
-            format!(
-                "{}\\{}.1",
-                dir.to_string_lossy(),
-                file_name
-            )
+            format!("{}\\{}.1", dir.to_string_lossy(), file_name)
         } else {
             format!(
                 "{}\\{}.{}",
@@ -59,6 +56,27 @@ impl LogArchive {
                 self.extension.as_ref().unwrap()
             )
         };
+
+        // if not archive is specified, just add .1 at the end of the path
+        #[cfg(target_family = "unix")]
+        let rotated_path = if self.extension.is_none() {
+            format!("{}/{}.1", dir.to_string_lossy(), file_name)
+        } else {
+            format!(
+                "{}/{}.{}",
+                dir.to_string_lossy(),
+                file_name,
+                self.extension.as_ref().unwrap()
+            )
+        };        
+
+        println!(
+            "self={:?}, dir={}, file={}, rotated={}",
+            path,
+            dir.display(),
+            file_name,
+            rotated_path
+        );
 
         PathBuf::from(rotated_path)
     }
@@ -148,7 +166,7 @@ mod tests {
         };
         assert_eq!(
             archive.archived_path(&p),
-            PathBuf::from(r"C:\Windows\Temp\WindowsUpdate.log.1")
+            PathBuf::from(r"C:\Windows\WindowsUpdate.log.gz")
         );
 
         let archive = LogArchive {
