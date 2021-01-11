@@ -155,9 +155,6 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use std::path::PathBuf;
-
     #[test]
     #[cfg(target_family = "unix")]
     fn config() {

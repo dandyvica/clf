@@ -82,8 +82,8 @@ DWORD get_signature_a(char* file_name, Signature* signature) {
 
 // Windows specific signature for a file for ASCII paths
 DWORD get_signature_w(wchar_t* file_name, Signature* signature) {
-    std::wcout << "received utf16 string = <" << file_name << ">" << std::endl;
-    std::cout << "length = " << wcslen(file_name) << std::endl;
+    //std::wcout << "received utf16 string = <" << file_name << ">" << std::endl;
+    //std::cout << "length = " << wcslen(file_name) << std::endl;
 
     // first, get file handle for Ascii path
     HANDLE fh = CreateFileW(

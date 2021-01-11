@@ -192,13 +192,11 @@ impl LogFile {
 
 #[cfg(test)]
 mod tests {
-    use std::io::{Error, ErrorKind};
-    use std::str::FromStr;
+    use std::path::PathBuf;
 
     use super::*;
 
     use crate::config::vars::Vars;
-    use crate::logfile::lookup::FullReader;
     #[derive(Debug, Deserialize)]
     struct JSONStream {
         pub args: Vec<String>,
@@ -206,33 +204,43 @@ mod tests {
     }
 
     // utility fn to receive JSON from a stream
-    fn get_json_from_stream<T: std::io::Read>(
-        socket: &mut T,
-    ) -> Result<JSONStream, std::io::Error> {
-        // try to read size first
-        let mut size_buffer = [0; std::mem::size_of::<u16>()];
-        let bytes_read = socket.read(&mut size_buffer)?;
-        //dbg!(bytes_read);
-        if bytes_read == 0 {
-            return Err(Error::new(ErrorKind::Interrupted, "socket closed"));
-        }
+    // fn get_json_from_stream<T: std::io::Read>(
+    //     socket: &mut T,
+    // ) -> Result<JSONStream, std::io::Error> {
+    //     // try to read size first
+    //     let mut size_buffer = [0; std::mem::size_of::<u16>()];
+    //     let bytes_read = socket.read(&mut size_buffer)?;
+    //     //dbg!(bytes_read);
+    //     if bytes_read == 0 {
+    //         return Err(Error::new(ErrorKind::Interrupted, "socket closed"));
+    //     }
 
-        let json_size = u16::from_be_bytes(size_buffer);
+    //     let json_size = u16::from_be_bytes(size_buffer);
 
-        // read JSON raw data
-        let mut json_buffer = vec![0; json_size as usize];
-        socket.read_exact(&mut json_buffer).unwrap();
+    //     // read JSON raw data
+    //     let mut json_buffer = vec![0; json_size as usize];
+    //     socket.read_exact(&mut json_buffer).unwrap();
 
-        // get JSON
-        let s = std::str::from_utf8(&json_buffer).unwrap();
+    //     // get JSON
+    //     let s = std::str::from_utf8(&json_buffer).unwrap();
 
-        let json: JSONStream = serde_json::from_str(&s).unwrap();
-        Ok(json)
-    }
+    //     let json: JSONStream = serde_json::from_str(&s).unwrap();
+    //     Ok(json)
+    // }
 
-    //#[test]
+    #[test]
+    #[cfg(target_family = "unix")]
     fn purge_line() {
         let s = "this an example\n";
+        let mut cow: Cow<str> = Cow::Borrowed(s);
+        LogFile::purge_line(&mut cow);
+        assert_eq!(cow.into_owned(), "this an example");
+    }
+
+    #[test]
+    #[cfg(target_family = "windows")]
+    fn purge_line() {
+        let s = "this an example\r\n";
         let mut cow: Cow<str> = Cow::Borrowed(s);
         LogFile::purge_line(&mut cow);
         assert_eq!(cow.into_owned(), "this an example");
@@ -258,22 +266,22 @@ mod tests {
         assert_eq!(logfile.id.compression, CompressionScheme::Uncompressed);
     }
 
-    // #[test]
-    // #[cfg(target_os = "windows")]
-    // fn new() {
-    //     let mut logfile = LogFile::from_path(r"C:\Windows\System32\cmd.exe").unwrap();
-    //     //assert_eq!(logfile.path.as_os_str(), std::ffi::OsStr::new(r"C:\Windows\System32\cmd.exe"));
-    //     assert_eq!(logfile.extension.unwrap(), "exe");
-    //     assert_eq!(
-    //         logfile.directory.unwrap(),
-    //         PathBuf::from(r"C:\Windows\System32")
-    //     );
-    //     assert_eq!(logfile.compression, CompressionScheme::Uncompressed);
-    //     assert_eq!(logfile.run_data.len(), 0);
+    #[test]
+    #[cfg(target_os = "windows")]
+    fn new() {
+        let mut logfile = LogFile::from_path(r"C:\Windows\System32\cmd.exe").unwrap();
+        //assert_eq!(logfile.path.as_os_str(), std::ffi::OsStr::new(r"C:\Windows\System32\cmd.exe"));
+        assert_eq!(logfile.id.extension.unwrap(), "exe");
+        assert_eq!(
+            logfile.id.directory.unwrap(),
+            PathBuf::from(r"\\?\C:\Windows\System32")
+        );
+        assert_eq!(logfile.id.compression, CompressionScheme::Uncompressed);
+        assert_eq!(logfile.run_data.len(), 0);
 
-    //     logfile = LogFile::from_path(r"c:\windows\system32\drivers\etc\hosts").unwrap();
-    //     assert!(logfile.extension.is_none());
-    // }
+        logfile = LogFile::from_path(r"c:\windows\system32\drivers\etc\hosts").unwrap();
+        assert!(logfile.id.extension.is_none());
+    }
 
     #[test]
     #[cfg(target_family = "unix")]

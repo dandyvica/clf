@@ -106,9 +106,6 @@ impl Default for GlobalOptions {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use std::str::FromStr;
-
     #[test]
     #[cfg(target_family = "unix")]
     fn global_options() {

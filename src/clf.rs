@@ -176,10 +176,6 @@ fn main() {
                     logfile_from_snapshot.id.canon_path.display(),
                     e
                 );
-
-                // this is a error for this logfile which boils down to a Nagios unknown error
-                //logfile_from_snapshot.set_error(e);
-
                 continue;
             }
             temp.unwrap()
@@ -188,21 +184,18 @@ fn main() {
         if logfile_is_archived {
             info!("logfile has changed, probably archived and rotated");
 
-            // get archive file name
-            // first, check if an archive tag has been defined in the YAML config for this search
-            // if search.logfile.archive.is_none() {
-            //     error!("logfile {} has been moved or archived but no archive settings defined in the configuration file", logfile_from_snapshot.id.canon_path.display());
-            //     break;
-            // }
-
-            // let archive_path = search.logfile.archive.as_ref().unwrap();
-
             let archive_path = LogArchive::rotated_path(search.logfile.path());
             trace!("archived logfile = {:?}", &archive_path);
 
             // clone search and assign archive logfile instead of original logfile
             let mut archived_logfile = logfile_from_snapshot.clone();
-            archived_logfile.id.update(&archive_path);
+            if let Err(e) = archived_logfile.id.update(&archive_path) {
+                error!(
+                    "error on updating core data on logfile {}: {}",
+                    logfile_from_snapshot.id.canon_path.display(),
+                    e
+                )
+            }
 
             // call adequate reader according to command line
             if reader_type == &ReaderCallType::BypassReaderCall {

@@ -60,6 +60,7 @@ impl LogFileDef {
     }
 
     // Return the list variant from LogSource
+    #[cfg(test)]
     pub fn list(&self) -> &Vec<String> {
         match &self.path {
             LogSource::LogFile(_) => unimplemented!(

@@ -6,8 +6,8 @@ use std::os::unix::fs::MetadataExt;
 use std::path::PathBuf;
 use std::process::Command;
 
-#[cfg(target_family = "windows")]
-use std::os::windows::prelude::*;
+// #[cfg(target_family = "windows")]
+// use std::os::windows::prelude::*;
 
 use log::debug;
 use regex::Regex;
@@ -16,9 +16,10 @@ use serde::{Deserialize, Serialize};
 use crate::misc::error::{AppCustomErrorKind, AppError, AppResult};
 
 // specific linking for Windows signature
+#[cfg(target_family = "windows")]
 #[link(name = r".\src\windows\signature")]
 extern "C" {
-    fn get_signature_a(file_name: *const u8, signature: *const Signature) -> u32;
+    //fn get_signature_a(file_name: *const u8, signature: *const Signature) -> u32;
     fn get_signature_w(file_name: *const u16, signature: *const Signature) -> u32;
 }
 
@@ -99,19 +100,22 @@ impl ReadFs for PathBuf {
     }
 
     #[cfg(target_family = "windows")]
+    // needs to convert a regular Rust string to an UTF16 unicode null-terminated string
+    // this is because Win32 APIs needs a LPWCSTR type which a pointer on a null-terminated
+    // UTF16 string
     fn signature(&self) -> AppResult<Signature> {
-        let mut rc: u32 = 0;
+        use widestring::U16CString;
+
+        //let mut rc: u32 = 0;
         let sign = Signature::default();
 
         // convert path to UTF16 Windows string
-        let u16_path: Vec<u16> = self.as_os_str().encode_wide().collect();
+        let u16_path = U16CString::from_os_str(self.as_os_str()).unwrap();
 
         println!("signature for {}", self.display());
-        println!("u16_path for {}, length={}", String::from_utf16(&u16_path).unwrap(), u16_path.len());
+        println!("u16_path for {:?}, length={}", &u16_path, u16_path.len());
 
-        unsafe {
-            rc = get_signature_w(u16_path.as_ptr(), &sign);
-        }
+        let rc = unsafe { get_signature_w(u16_path.as_ptr(), &sign) };
 
         // windows DLL rc should be 0, or rc from GetLastError() API
         if rc != 0 {
@@ -204,6 +208,9 @@ impl<R: Read> JsonRead for BufReader<R> {
     }
 }
 
+// specific Windows function to convert a Rust string into an UTF16 Windows unicode
+// string. This is used to receive a LPWCSTR string to a Windows API
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -278,7 +285,7 @@ mod tests {
     #[test]
     #[cfg(target_os = "windows")]
     fn list_files_shell() {
-        let mut cmd = vec![
+        let cmd = vec![
             "cmd.exe".to_string(),
             "/c".to_string(),
             r"dir /b c:\windows\system32\*.dll".to_string(),

@@ -11,7 +11,7 @@ pub struct LogArchive {
     dir: Option<PathBuf>,
 
     /// the most recent archived path
-    archive: Option<PathBuf>,
+    extension: Option<String>,
 
     /// a regex pattern to determine which archive to get
     pattern: Option<String>,
@@ -40,14 +40,23 @@ impl LogArchive {
         };
         debug_assert!(dir.is_dir());
 
+        // extract file name
+        debug_assert!(path.as_ref().parent().is_some());
+        let file_name = path.as_ref().parent().unwrap().to_string_lossy();
+
         // if not archive is specified, just add .1 at the end of the path
-        let rotated_path = if self.archive.is_none() {
-            format!("{}.1", path.as_ref().to_string_lossy())
+        let rotated_path = if self.extension.is_none() {
+            format!(
+                "{}\\{}.1",
+                dir.to_string_lossy(),
+                file_name
+            )
         } else {
             format!(
-                "{}/{}",
+                "{}\\{}.{}",
                 dir.to_string_lossy(),
-                self.archive.as_ref().unwrap().to_string_lossy()
+                file_name,
+                self.extension.as_ref().unwrap()
             )
         };
 
@@ -57,6 +66,8 @@ impl LogArchive {
 
 #[cfg(test)]
 mod tests {
+    use std::path::PathBuf;
+
     use super::*;
 
     #[test]
@@ -75,14 +86,14 @@ mod tests {
         );
     }
 
-    //#[test]
+    #[test]
     #[cfg(target_family = "unix")]
     fn archived_path() {
         let mut p = PathBuf::from("/var/log/kern.log");
 
         let mut archive = LogArchive {
             dir: None,
-            archive: None,
+            extension: None,
             pattern: None,
         };
         assert_eq!(
@@ -92,19 +103,62 @@ mod tests {
 
         let mut archive = LogArchive {
             dir: Some(PathBuf::from("/tmp")),
-            archive: None,
+            extension: None,
             pattern: None,
         };
         assert_eq!(archive.archived_path(&p), PathBuf::from("/tmp/kern.log.1"));
 
-        // let mut archive = LogArchive {
-        //     dir: None,
-        //     archive: None,
-        //     pattern: None,
-        // };
-        // assert_eq!(
-        //     archive.archived_path(&p),
-        //     PathBuf::from("/var/log/kern.log.1")
-        // );
+        let mut archive = LogArchive {
+            dir: None,
+            extension: Some("gz"),
+            pattern: None,
+        };
+        assert_eq!(archive.archived_path(&p), PathBuf::from("/tmp/kern.log.gz"));
+    }
+
+    #[test]
+    #[cfg(target_family = "windows")]
+    fn archived_path() {
+        let p = PathBuf::from(r"C:\Windows\WindowsUpdate.log");
+
+        let archive = LogArchive {
+            dir: None,
+            extension: None,
+            pattern: None,
+        };
+        assert_eq!(
+            archive.archived_path(&p),
+            PathBuf::from(r"C:\Windows\WindowsUpdate.log.1")
+        );
+
+        let archive = LogArchive {
+            dir: Some(PathBuf::from(r"c:\Windows\Temp")),
+            extension: None,
+            pattern: None,
+        };
+        assert_eq!(
+            archive.archived_path(&p),
+            PathBuf::from(r"C:\Windows\Temp\WindowsUpdate.log.1")
+        );
+
+        let archive = LogArchive {
+            dir: None,
+            extension: Some("gz".to_string()),
+            pattern: None,
+        };
+        assert_eq!(
+            archive.archived_path(&p),
+            PathBuf::from(r"C:\Windows\Temp\WindowsUpdate.log.1")
+        );
+
+        let archive = LogArchive {
+            dir: Some(PathBuf::from(r"c:\Windows\Temp")),
+            extension: Some("gz".to_string()),
+            pattern: None,
+        };
+        assert_eq!(
+            archive.archived_path(&p),
+            PathBuf::from(r"c:\Windows\Temp\WindowsUpdate.log.gz")
+        );
     }
 }

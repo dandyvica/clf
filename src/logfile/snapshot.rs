@@ -126,13 +126,6 @@ impl Snapshot {
         Ok(logfile)
     }
 
-    /// Builds a default snapshot file name.
-    pub fn default_path() -> PathBuf {
-        let mut snapfile = std::env::temp_dir();
-        snapfile.push("clf_snapshot.json");
-        snapfile
-    }
-
     /// Builds the final output message displayed by the plugin
     pub fn exit_message(&self, access_errors: &LogFileAccessErrorList) -> NagiosError {
         // calculate the summation of all pattern counts for all logfiles

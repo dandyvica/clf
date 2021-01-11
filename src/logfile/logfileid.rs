@@ -32,14 +32,6 @@ pub struct LogFileID {
 }
 
 impl LogFileID {
-    /// Fill all variable fields from declared
-    pub fn from_declared<P: AsRef<Path>>(path: P) -> AppResult<Self> {
-        let mut id = LogFileID::default();
-        id.update(path)?;
-
-        Ok(id)
-    }
-
     /// Update some logfile fields with up to date path values. This is used when detecting rotation for logfiles
     pub fn update<P: AsRef<Path>>(&mut self, path: P) -> AppResult<()> {
         // check if we can really use the file
@@ -73,8 +65,6 @@ impl LogFileID {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
     #[test]
     #[cfg(target_os = "linux")]
     fn id() {

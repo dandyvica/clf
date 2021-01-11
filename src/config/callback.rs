@@ -253,32 +253,32 @@ pub struct ChildData {
     pub start_time: Option<Instant>,
 }
 
-impl ChildData {
-    #[cfg(test)]
-    fn exit_code(&mut self) -> AppResult<Option<i32>> {
-        // do we have a Child ?
-        if self.child.is_none() {
-            return Ok(None);
-        }
+// impl ChildData {
+//     #[cfg(test)]
+//     fn exit_code(&mut self) -> AppResult<Option<i32>> {
+//         // do we have a Child ?
+//         if self.child.is_none() {
+//             return Ok(None);
+//         }
 
-        // now it's safe to unwrap
-        let child = &mut self.child.as_ref().unwrap().borrow_mut();
-        match child.try_wait() {
-            Ok(Some(status)) => return Ok(status.code()),
-            Ok(None) => {
-                let res = child.wait();
-                return Ok(res.unwrap().code());
-            }
-            Err(e) => {
-                return Err(context!(
-                    e,
-                    "error waiting for child for path:{:?}",
-                    self.child
-                ))
-            }
-        }
-    }
-}
+//         // now it's safe to unwrap
+//         let child = &mut self.child.as_ref().unwrap().borrow_mut();
+//         match child.try_wait() {
+//             Ok(Some(status)) => return Ok(status.code()),
+//             Ok(None) => {
+//                 let res = child.wait();
+//                 return Ok(res.unwrap().code());
+//             }
+//             Err(e) => {
+//                 return Err(context!(
+//                     e,
+//                     "error waiting for child for path:{:?}",
+//                     self.child
+//                 ))
+//             }
+//         }
+//     }
+// }
 
 #[cfg(test)]
 pub mod tests {
