@@ -39,6 +39,8 @@ impl Script {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+
     #[test]
     #[cfg(target_family = "unix")]
     fn spawn() {
@@ -47,10 +49,16 @@ mod tests {
             timeout: Some(1000),
         };
 
-        let pid = script.spawn();
+        let _pid = script.spawn();
 
         script.command = vec!["/usr/bin/fin".to_string(), ".".to_string()];
         let res = script.spawn();
         assert!(res.is_err());
+    }
+
+    #[test]
+    #[cfg(target_family = "windows")]
+    fn spawn() {
+        unimplemented!("todo");
     }
 }

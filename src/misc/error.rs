@@ -123,10 +123,7 @@ impl fmt::Display for AppError {
 
 impl Clone for AppError {
     fn clone(&self) -> Self {
-        AppError::new_custom(
-            AppCustomErrorKind::PhantomCloneError,
-            &format!("fake clone error"),
-        )
+        AppError::new_custom(AppCustomErrorKind::PhantomCloneError, "fake clone error")
     }
 }
 

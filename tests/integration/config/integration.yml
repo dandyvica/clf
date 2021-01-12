@@ -1,17 +1,15 @@
 global:
-  path: $script_path
+  path: "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 
 searches:
   - logfile: 
-      path: $path
-      format: $format
+      path: ./tests/integration/logfiles/small_access.log
+      format: plain
     tags: 
       - name: tag1
-        process: $process
-        options: $options
-        callback: 
-          - $callback
-          - args: [$args]
+        process: true
+        options: rewind
+        callback: { domain: ./tests/integration/tmp/callback.sock", args: ["arg1", "arg2", "arg3"] }
         patterns:
           critical: {
             regexes: ['GET\s+([/\w]+)\s+HTTP/1\.1"\s+(?P<code>\d+)\s+(?P<length>\d+)'],

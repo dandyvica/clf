@@ -18,7 +18,7 @@ use log::debug;
 use serde::Deserialize;
 use serde_json::json;
 
-use crate::config::vars::{GlobalVars, RuntimeVars};
+use crate::configuration::vars::{GlobalVars, RuntimeVars};
 use crate::misc::{
     constants::*,
     error::{AppError, AppResult},
@@ -169,11 +169,10 @@ impl Callback {
                 let json_raw = json.as_bytes();
 
                 // send data length first in network order, and then send payload
-                let size = u16::try_from(json_raw.len()).expect(&format!(
-                    "unexpected conversion error at {}-{}",
-                    file!(),
-                    line!()
-                ));
+                let size = u16::try_from(json_raw.len()).unwrap_or_else(|_| {
+                    panic!("unexpected conversion error at {}-{}", file!(), line!())
+                });
+
                 stream.write(&size.to_be_bytes()).map_err(|e| {
                     context!(
                         e,
@@ -218,11 +217,10 @@ impl Callback {
                 let json_raw = json.as_bytes();
 
                 // send data length first in network order, and then send payload
-                let size = u16::try_from(json_raw.len()).expect(&format!(
-                    "unexpected conversion error at {}-{}",
-                    file!(),
-                    line!()
-                ));
+                let size = u16::try_from(json_raw.len()).unwrap_or_else(|_| {
+                    panic!("unexpected conversion error at {}-{}", file!(), line!())
+                });
+
                 stream.write(&size.to_be_bytes()).map_err(|e| {
                     context!(
                         e,
@@ -253,32 +251,32 @@ pub struct ChildData {
     pub start_time: Option<Instant>,
 }
 
-// impl ChildData {
-//     #[cfg(test)]
-//     fn exit_code(&mut self) -> AppResult<Option<i32>> {
-//         // do we have a Child ?
-//         if self.child.is_none() {
-//             return Ok(None);
-//         }
+impl ChildData {
+    #[cfg(test)]
+    fn exit_code(&mut self) -> AppResult<Option<i32>> {
+        // do we have a Child ?
+        if self.child.is_none() {
+            return Ok(None);
+        }
 
-//         // now it's safe to unwrap
-//         let child = &mut self.child.as_ref().unwrap().borrow_mut();
-//         match child.try_wait() {
-//             Ok(Some(status)) => return Ok(status.code()),
-//             Ok(None) => {
-//                 let res = child.wait();
-//                 return Ok(res.unwrap().code());
-//             }
-//             Err(e) => {
-//                 return Err(context!(
-//                     e,
-//                     "error waiting for child for path:{:?}",
-//                     self.child
-//                 ))
-//             }
-//         }
-//     }
-// }
+        // now it's safe to unwrap
+        let child = &mut self.child.as_ref().unwrap().borrow_mut();
+        match child.try_wait() {
+            Ok(Some(status)) => return Ok(status.code()),
+            Ok(None) => {
+                let res = child.wait();
+                return Ok(res.unwrap().code());
+            }
+            Err(e) => {
+                return Err(context!(
+                    e,
+                    "error waiting for child for path:{:?}",
+                    self.child
+                ))
+            }
+        }
+    }
+}
 
 #[cfg(test)]
 pub mod tests {
@@ -288,7 +286,7 @@ pub mod tests {
     use std::io::{Error, ErrorKind, Result};
     use std::str::FromStr;
 
-    use crate::config::vars::Vars;
+    use crate::configuration::vars::Vars;
 
     #[derive(Debug, Deserialize)]
     struct JSONStream {

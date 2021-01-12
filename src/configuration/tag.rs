@@ -1,7 +1,7 @@
 //! Contains the configuration of each tag.
 use serde::Deserialize;
 
-use crate::config::{
+use crate::configuration::{
     callback::{Callback, CallbackHandle, ChildData},
     options::SearchOptions,
     pattern::{PatternMatchResult, PatternSet},
@@ -70,6 +70,9 @@ fromstr!(Tag);
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+    use std::str::FromStr;
+
     #[test]
     #[cfg(target_family = "unix")]
     fn tag() {
@@ -99,7 +102,7 @@ patterns:
         assert!(!tag.process);
         let script = std::path::PathBuf::from("tests/scripts/echovars.py");
         assert!(
-            matches!(&tag.callback.as_ref().unwrap().callback, crate::config::callback::CallbackType::Script(Some(x)) if x == &script)
+            matches!(&tag.callback.as_ref().unwrap().callback, crate::configuration::callback::CallbackType::Script(Some(x)) if x == &script)
         );
         assert_eq!(
             tag.callback.unwrap().args.unwrap(),

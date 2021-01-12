@@ -1,6 +1,9 @@
 //! Contains the configuration of the archiving process of a logfile. WWe can define here how, where and the naming convention
 //! of an archived file that has been rotated, usually using `logrotate` UNIX process.
-use std::{fmt::Debug, path::{Path, PathBuf}};
+use std::{
+    fmt::Debug,
+    path::{Path, PathBuf},
+};
 
 use serde::Deserialize;
 
@@ -27,7 +30,7 @@ impl LogArchive {
     }
 
     // When a LogArchive struct is specified in the config file, build the archive file name
-    pub fn archived_path<P: AsRef<Path>+std::fmt::Debug>(&self, path: P) -> PathBuf {
+    pub fn archived_path<P: AsRef<Path> + std::fmt::Debug>(&self, path: P) -> PathBuf {
         // build the directory for the archived path
         let dir = match &self.dir {
             None => {
@@ -68,7 +71,7 @@ impl LogArchive {
                 file_name,
                 self.extension.as_ref().unwrap()
             )
-        };        
+        };
 
         println!(
             "self={:?}, dir={}, file={}, rotated={}",
@@ -107,9 +110,9 @@ mod tests {
     #[test]
     #[cfg(target_family = "unix")]
     fn archived_path() {
-        let mut p = PathBuf::from("/var/log/kern.log");
+        let p = PathBuf::from("/var/log/kern.log");
 
-        let mut archive = LogArchive {
+        let archive = LogArchive {
             dir: None,
             extension: None,
             pattern: None,
@@ -119,16 +122,26 @@ mod tests {
             PathBuf::from("/var/log/kern.log.1")
         );
 
-        let mut archive = LogArchive {
+        let archive = LogArchive {
             dir: Some(PathBuf::from("/tmp")),
             extension: None,
             pattern: None,
         };
         assert_eq!(archive.archived_path(&p), PathBuf::from("/tmp/kern.log.1"));
 
-        let mut archive = LogArchive {
+        let archive = LogArchive {
             dir: None,
-            extension: Some("gz"),
+            extension: Some("gz".to_string()),
+            pattern: None,
+        };
+        assert_eq!(
+            archive.archived_path(&p),
+            PathBuf::from("/var/log/kern.log.gz")
+        );
+
+        let archive = LogArchive {
+            dir: Some(PathBuf::from(r"/tmp")),
+            extension: Some("gz".to_string()),
             pattern: None,
         };
         assert_eq!(archive.archived_path(&p), PathBuf::from("/tmp/kern.log.gz"));

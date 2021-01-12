@@ -155,6 +155,10 @@ where
 
 #[cfg(test)]
 mod tests {
+    #[cfg(target_family = "unix")]
+    use super::*;
+    use std::path::PathBuf;
+
     #[test]
     #[cfg(target_family = "unix")]
     fn config() {
@@ -263,7 +267,7 @@ mod tests {
         assert!(tag.callback.is_some());
         let script = PathBuf::from("tests/scripts/echovars.py");
         assert!(
-            matches!(&tag.callback.as_ref().unwrap().callback, crate::config::callback::CallbackType::Script(Some(x)) if x == &script)
+            matches!(&tag.callback.as_ref().unwrap().callback, crate::configuration::callback::CallbackType::Script(Some(x)) if x == &script)
         );
         assert_eq!(
             tag.callback.as_ref().unwrap().args.as_ref().unwrap(),

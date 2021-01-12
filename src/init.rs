@@ -5,7 +5,7 @@ use std::path::PathBuf;
 use simplelog::*;
 
 use crate::args::CliOptions;
-use crate::config::config::Config;
+use crate::configuration::config::Config;
 use crate::logfile::snapshot::Snapshot;
 use crate::misc::nagios::Nagios;
 
@@ -29,7 +29,8 @@ pub fn init_config(options: &CliOptions) -> Config {
         ));
     }
 
-    let mut config = Config::from(_config.unwrap());
+    //let mut config = Config::from(_config.unwrap());
+    let mut config = _config.unwrap();
 
     // add process environment variables and optional extra variables
     config.global.insert_process_env();

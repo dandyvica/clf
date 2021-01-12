@@ -10,7 +10,7 @@ use std::time::SystemTime;
 use log::debug;
 use serde::{Deserialize, Serialize};
 
-use crate::config::{logfiledef::LogFileDef, pattern::PatternCounters};
+use crate::configuration::{logfiledef::LogFileDef, pattern::PatternCounters};
 use crate::context;
 use crate::logfile::{logfile::LogFile, logfileerror::LogFileAccessErrorList};
 use crate::misc::{
@@ -42,7 +42,9 @@ impl Snapshot {
     /// Builds a new snapshot file name from `path`.
     pub fn build_name(path: &PathBuf) -> PathBuf {
         // get file name from path variable
-        let name = path.file_stem().unwrap_or(OsStr::new("clf_snapshot"));
+        let name = path
+            .file_stem()
+            .unwrap_or_else(|| OsStr::new("clf_snapshot"));
 
         // builds new name
         let mut snapshot_file = PathBuf::new();
@@ -112,7 +114,7 @@ impl Snapshot {
         if !self.snapshot.contains_key(path) {
             // create a new LogFile
             let logfile = LogFile::from_path(&path)?;
-            let opt = self.snapshot.insert(path.clone().to_path_buf(), logfile);
+            let opt = self.snapshot.insert(path.clone(), logfile);
             debug_assert!(opt.is_none());
             debug_assert!(self.snapshot.contains_key(path));
         }
@@ -356,8 +358,8 @@ mod tests {
         assert!(keys.contains(&&PathBuf::from("/var/log/syslog")));
     }
 
-    //#[test]
-    #[cfg(target_family = "unix")]
+    #[test]
+    #[cfg(target_os = "linux")]
     fn logfile_mut() {
         let mut data: Snapshot = serde_json::from_str(SNAPSHOT_SAMPLE).unwrap();
         let def = LogFileDef::default();
@@ -367,16 +369,16 @@ mod tests {
             .contains_key(&PathBuf::from("/var/log/kern.log")));
         assert!(data
             .snapshot
-            .contains_key(&PathBuf::from("/etc/hosts.allow")));
-        assert_eq!(data.snapshot.len(), 2);
+            .contains_key(&PathBuf::from("/var/log/syslog")));
+        assert_eq!(data.snapshot.len(), 4);
 
         let _ = data.logfile_mut(&PathBuf::from("/bin/gzip"), &def);
 
         // snapshot has now 3 logfiles
         assert!(data.snapshot.contains_key(&PathBuf::from("/bin/gzip")));
-        assert_eq!(data.snapshot.len(), 3);
+        assert_eq!(data.snapshot.len(), 5);
 
         let _ = data.logfile_mut(&PathBuf::from("/usr/bin/zip"), &def);
-        assert_eq!(data.snapshot.len(), 3);
+        assert_eq!(data.snapshot.len(), 6);
     }
 }

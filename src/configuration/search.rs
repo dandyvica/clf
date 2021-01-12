@@ -23,7 +23,7 @@ impl Search {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::logfiledef::LogFileFormat;
+    use crate::configuration::logfiledef::LogFileFormat;
     use std::path::PathBuf;
 
     #[test]
@@ -66,7 +66,7 @@ tags:
         assert!(!tag.process);
         let script = std::path::PathBuf::from("tests/scripts/echovars.py");
         assert!(
-            matches!(&tag.callback.as_ref().unwrap().callback, crate::config::callback::CallbackType::Script(Some(x)) if x == &script)
+            matches!(&tag.callback.as_ref().unwrap().callback, crate::configuration::callback::CallbackType::Script(Some(x)) if x == &script)
         );
         assert_eq!(
             tag.callback.as_ref().unwrap().args.as_ref().unwrap(),

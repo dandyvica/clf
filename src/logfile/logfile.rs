@@ -12,7 +12,7 @@ use log::{debug, error};
 use serde::{Deserialize, Serialize};
 use xz2::read::XzDecoder;
 
-use crate::config::{
+use crate::configuration::{
     callback::ChildData, global::GlobalOptions, logfiledef::LogFileDef, pattern::PatternCounters,
     tag::Tag,
 };
@@ -74,7 +74,7 @@ impl LogFile {
     pub fn rundata_for_tag(&mut self, name: &str) -> &mut RunData {
         self.run_data
             .entry(name.to_string())
-            .or_insert(RunData::default())
+            .or_insert_with(RunData::default)
     }
 
     /// Returns a reference on `Rundata`.
@@ -168,7 +168,7 @@ impl LogFile {
                 // script might be started, giving back a `Child` structure with process features like pid etc
                 Ok(mut children) => {
                     // merge list of children
-                    if children.len() != 0 {
+                    if !children.is_empty() {
                         children_list.append(&mut children);
                     }
                 }
@@ -192,11 +192,11 @@ impl LogFile {
 
 #[cfg(test)]
 mod tests {
-    use std::path::PathBuf;
+    use std::str::FromStr;
 
     use super::*;
 
-    use crate::config::vars::Vars;
+    use crate::configuration::vars::Vars;
     #[derive(Debug, Deserialize)]
     struct JSONStream {
         pub args: Vec<String>,
@@ -204,29 +204,32 @@ mod tests {
     }
 
     // utility fn to receive JSON from a stream
-    // fn get_json_from_stream<T: std::io::Read>(
-    //     socket: &mut T,
-    // ) -> Result<JSONStream, std::io::Error> {
-    //     // try to read size first
-    //     let mut size_buffer = [0; std::mem::size_of::<u16>()];
-    //     let bytes_read = socket.read(&mut size_buffer)?;
-    //     //dbg!(bytes_read);
-    //     if bytes_read == 0 {
-    //         return Err(Error::new(ErrorKind::Interrupted, "socket closed"));
-    //     }
+    #[cfg(target_family = "unix")]
+    fn get_json_from_stream<T: std::io::Read>(
+        socket: &mut T,
+    ) -> Result<JSONStream, std::io::Error> {
+        use std::io::{Error, ErrorKind};
 
-    //     let json_size = u16::from_be_bytes(size_buffer);
+        // try to read size first
+        let mut size_buffer = [0; std::mem::size_of::<u16>()];
+        let bytes_read = socket.read(&mut size_buffer)?;
+        //dbg!(bytes_read);
+        if bytes_read == 0 {
+            return Err(Error::new(ErrorKind::Interrupted, "socket closed"));
+        }
 
-    //     // read JSON raw data
-    //     let mut json_buffer = vec![0; json_size as usize];
-    //     socket.read_exact(&mut json_buffer).unwrap();
+        let json_size = u16::from_be_bytes(size_buffer);
 
-    //     // get JSON
-    //     let s = std::str::from_utf8(&json_buffer).unwrap();
+        // read JSON raw data
+        let mut json_buffer = vec![0; json_size as usize];
+        socket.read_exact(&mut json_buffer).unwrap();
 
-    //     let json: JSONStream = serde_json::from_str(&s).unwrap();
-    //     Ok(json)
-    // }
+        // get JSON
+        let s = std::str::from_utf8(&json_buffer).unwrap();
+
+        let json: JSONStream = serde_json::from_str(&s).unwrap();
+        Ok(json)
+    }
 
     #[test]
     #[cfg(target_family = "unix")]
@@ -246,7 +249,7 @@ mod tests {
         assert_eq!(cow.into_owned(), "this an example");
     }
 
-    //#[test]
+    #[test]
     #[cfg(target_os = "linux")]
     fn new() {
         let mut logfile = LogFile::from_path("/var/log/kern.log").unwrap();
@@ -379,7 +382,7 @@ mod tests {
         let ten_millis = std::time::Duration::from_millis(10);
         std::thread::sleep(ten_millis);
 
-        let _ret = logfile.lookup::<FullReader>(&mut tag, &global);
+        let _ret = logfile.lookup::<crate::logfile::lookup::FullReader>(&mut tag, &global);
         let _res = child.join();
     }
 }

@@ -141,7 +141,7 @@ pub trait ListFiles {
 impl ListFiles for Vec<String> {
     fn get_file_list(&self) -> AppResult<Vec<PathBuf>> {
         // if no data is passed, just return an empty vector
-        if self.len() == 0 {
+        if self.is_empty() {
             return Ok(Vec::new());
         }
 

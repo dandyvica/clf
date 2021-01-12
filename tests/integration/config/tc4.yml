@@ -1,0 +1,28 @@
+---
+global:
+  path: "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+  snapshot_retention: 60
+  vars:
+    CLF_firstname: Al
+    CLF_lastname: Pacino
+    CLF_city: "Los Angeles"
+    CLF_profession: actor
+
+searches:
+  - logfile: 
+      name: ./tests/integration/logfiles/access_simple.log
+      format: plain
+    tags: 
+      - name: tag1
+        process: true
+        options: fastforward
+        callback: 
+          address: 127.0.0.1:8999
+          args: ["arg1", "arg2", "arg3"]
+        patterns:
+          critical:
+            regexes: ['GET\s+([/\w]+)\s+HTTP/1\.1"\s+(?P<code>\d+)\s+(?P<length>\d+)']
+            exceptions: ['AppleWebKit/537\.36']
+          warning:
+            regexes: ['POST\s+([/\w\.]+)\s+HTTP/1\.1"\s+(?P<code>\d+)\s+(?P<length>\d+)']
+            exceptions: ['^\d{2,3}\.']

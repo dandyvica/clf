@@ -12,3 +12,4 @@ clf.log
 clf_snapshot.json
 **/*.json
 /examples/tmp
+clippy.err

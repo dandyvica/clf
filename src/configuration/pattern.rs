@@ -91,11 +91,8 @@ impl Pattern {
         }
 
         // returns the first Regex involved in a match, None otherwise
-        self.regexes
-            .0
-            .iter()
-            .find(|re| re.is_match(text))
-            .map(|re| re)
+        self.regexes.0.iter().find(|re| re.is_match(text))
+        //.map(|re| re)
     }
 }
 

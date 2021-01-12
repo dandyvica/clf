@@ -40,4 +40,8 @@ jinja2 = ["tera"]
 # name = "uncompress"
 # path = "src/uncompress.rs"
 
+[[bin]]
+name = "integration_test"
+path = "src/integration_test.rs"
+
 

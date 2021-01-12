@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize, Serializer};
 
 use crate::misc::error::AppError;
 
-use crate::config::pattern::{PatternCounters, PatternType};
+use crate::configuration::pattern::{PatternCounters, PatternType};
 
 /// A wrapper to store log file processing data.
 #[derive(Debug, Serialize, Deserialize, Default, Clone)]

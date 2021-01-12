@@ -10,7 +10,7 @@ use crate::misc::{
     error::{AppError, AppResult},
 };
 
-use crate::config::{
+use crate::configuration::{
     callback::{CallbackHandle, ChildData},
     global::GlobalOptions,
     tag::Tag,
@@ -257,8 +257,8 @@ impl Lookup<FullReader> for LogFile {
                                 ) {
                                     Ok(child) => {
                                         // save child structure
-                                        if child.is_some() {
-                                            children.push(child.unwrap());
+                                        if let Some(c) = child {
+                                            children.push(c);
                                         }
 
                                         // increment number of script executions or number of JSON data sent
@@ -314,10 +314,9 @@ impl Lookup<FullReader> for LogFile {
         );
 
         // return error if we got one or the list of children from calling the script
-        if early_ret.is_some() {
-            Err(early_ret.unwrap())
-        } else {
-            Ok(children)
+        match early_ret {
+            None => Ok(children),
+            Some(e) => Err(e),
         }
     }
 }

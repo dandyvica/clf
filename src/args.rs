@@ -218,9 +218,7 @@ impl CliOptions {
             .value_of_t("max-logsize")
             .unwrap_or(MAX_LOGGER_SIZE * 1024 * 1024);
 
-        options.tera_context = matches
-            .value_of("context")
-            .and_then(|x| Some(x.to_string()));
+        options.tera_context = matches.value_of("context").map(|x| x.to_string());
 
         if matches.is_present("var") {
             let vars: Vec<&str> = matches.values_of("var").unwrap().collect();

@@ -25,7 +25,7 @@ impl LogFileAccessErrorList {
     pub fn set_error(&mut self, path: &PathBuf, error: AppError, nagios_error: &NagiosError) {
         let logfile_error = LogFileAccessError {
             nagios_error: nagios_error.clone(),
-            error: error,
+            error,
         };
         self.0.insert(path.clone(), logfile_error);
     }

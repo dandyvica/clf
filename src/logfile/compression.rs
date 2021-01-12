@@ -23,15 +23,14 @@ impl CompressionScheme {
 /// Conversion from a file extension.
 impl From<Option<&str>> for CompressionScheme {
     fn from(ext: Option<&str>) -> Self {
-        if ext.is_none() {
-            CompressionScheme::Uncompressed
-        } else {
-            match ext.unwrap() {
+        match ext {
+            None => CompressionScheme::Uncompressed,
+            Some(_ext) => match _ext {
                 "gz" => CompressionScheme::Gzip,
                 "bz2" => CompressionScheme::Bzip2,
                 "xz" => CompressionScheme::Xz,
                 _ => CompressionScheme::Uncompressed,
-            }
+            },
         }
     }
 }

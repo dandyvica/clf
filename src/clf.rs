@@ -31,8 +31,8 @@ extern crate simplelog;
 
 use wait_timeout::ChildExt;
 
-mod config;
-use config::{archive::LogArchive, callback::ChildData};
+mod configuration;
+use configuration::{archive::LogArchive, callback::ChildData};
 
 mod logfile;
 use logfile::{
@@ -245,7 +245,7 @@ fn main() {
     trace!("snapshot = {:#?}", &snapshot);
 
     // teardown
-    if children_list.len() != 0 {
+    if !children_list.is_empty() {
         info!(
             "waiting for all processes to finish, nb of children: {}",
             children_list.len()
