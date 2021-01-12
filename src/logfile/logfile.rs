@@ -277,7 +277,7 @@ mod tests {
         assert_eq!(logfile.id.extension.unwrap(), "exe");
         assert_eq!(
             logfile.id.directory.unwrap(),
-            PathBuf::from(r"\\?\C:\Windows\System32")
+            std::path::PathBuf::from(r"\\?\C:\Windows\System32")
         );
         assert_eq!(logfile.id.compression, CompressionScheme::Uncompressed);
         assert_eq!(logfile.run_data.len(), 0);

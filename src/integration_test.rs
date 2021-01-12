@@ -33,12 +33,12 @@ struct TestCase {
 impl TestCase {
     fn new(tag: &str, name: &str) -> Self {
         println!("running test case: {}: {}", tag, name);
-        TestCase { 
+        TestCase {
             name: name.to_string(),
             tag: tag.to_string(),
             snap: format!("./tests/integration/tmp/{}.json", tag),
-            config: format!("./tests/integration/config/{}.yml", tag)
-         }
+            config: format!("./tests/integration/config/{}.yml", tag),
+        }
     }
 
     // call CLF executable with optional arguments
@@ -52,7 +52,7 @@ impl TestCase {
             .expect("unable to start clf");
 
         let s = String::from_utf8_lossy(&output.stdout);
-        
+
         (output.status.code().unwrap(), s.to_string())
     }
 
@@ -68,15 +68,49 @@ impl TestCase {
 
     // extract JSON data
     fn get_json(&self) {
+        let file = std::fs::File::open(&self.snap)
+            .expect(&format!("unable to open snapshot {}", &self.snap));
+        let v: Value = serde_json::from_reader(file).unwrap();
 
+        let keys: Vec<_> = v["snapshot"].as_object().unwrap().keys().collect();
+        let logfile = keys[0];
+
+        
+        let v1 = v["snapshot"].as_object().unwrap().get(logfile).unwrap();
+        let id = v1
+            .as_object()
+            .unwrap()
+            .get("id")
+            .unwrap()
+            .as_object()
+            .unwrap();
+        println!("{:#?}", id);
+
+        let run_data = v1
+            .as_object()
+            .unwrap()
+            .get("run_data")
+            .unwrap()
+            .as_object()
+            .unwrap()
+            .get("tag1")
+            .unwrap()
+            .as_object()
+            .unwrap();
+        println!("{:#?}", run_data);
     }
 }
 
 fn main() {
     let mode = Target::Debug;
 
+    // create tmp directory if not present
+    if !std::path::Path::new("./tests/integration/tmp").exists() {
+        std::fs::create_dir("./tests/integration/tmp").expect("unable to create tmp dir");
+    }
+
     //------------------------------------------------------------------------------------------------
-    // command line flags 
+    // command line flags
     //------------------------------------------------------------------------------------------------
 
     // TC1: call help
@@ -98,7 +132,14 @@ fn main() {
     // TC3: good YAML syntax
     {
         let tc = TestCase::new("tc3", "good YAML syntax");
-        let rc = tc.exec(&mode, &["--config", "./tests/integration/config/tc3.yml", "--syntax-check"]);
+        let rc = tc.exec(
+            &mode,
+            &[
+                "--config",
+                "./tests/integration/config/tc3.yml",
+                "--syntax-check",
+            ],
+        );
 
         assert_eq!(rc, 0);
     }
@@ -106,7 +147,14 @@ fn main() {
     // TC4: bad YAML syntax
     {
         let tc = TestCase::new("tc4", "bad YAML syntax");
-        let rc = tc.exec(&mode, &["--config", "./tests/intergration/config/tc4.yml", "--syntax-check"]);
+        let rc = tc.exec(
+            &mode,
+            &[
+                "--config",
+                "./tests/intergration/config/tc4.yml",
+                "--syntax-check",
+            ],
+        );
 
         assert_eq!(rc, 2);
     }
@@ -128,26 +176,15 @@ fn main() {
     }
 
     //------------------------------------------------------------------------------------------------
-    // genuine search 
+    // genuine search
     //------------------------------------------------------------------------------------------------
 
     // TC6: fastforward
     {
         let tc = TestCase::new("tc6", "simple run");
         let rc = tc.run(&mode, &[]);
-
-        let file = std::fs::File::open(&tc.snap).expect(&format!("unable to open snapshot {}", &tc.snap));
-        let v: Value = serde_json::from_reader(file).unwrap();
-
-        let keys: Vec<_> = v["snapshot"].as_object().unwrap().keys().collect();
-        let logfile = keys[0];
-
-        let v1 = v["snapshot"].as_object().unwrap().get(logfile).unwrap();
-        let id = v1.as_object().unwrap().get("id").unwrap().as_object().unwrap();
-        println!("{:#?}", id);
-
-        let run_data = v1.as_object().unwrap().get("run_data").unwrap().as_object().unwrap().get("tag1").unwrap().as_object().unwrap();
-        println!("{:#?}", run_data);
+        tc.get_json();
+        
         assert_eq!(rc.0, 0);
     }
 }

@@ -59,6 +59,19 @@ mod tests {
     #[test]
     #[cfg(target_family = "windows")]
     fn spawn() {
-        unimplemented!("todo");
+        let mut script = Script {
+            command: vec![
+                "cmd.exe".to_string(),
+                "/c".to_string(),
+                r"dir c:\windows\system32 | findstr windows".to_string(),
+            ],
+            timeout: Some(1000),
+        };
+
+        let _pid = script.spawn();
+
+        script.command = vec!["foo".to_string(), ".".to_string()];
+        let res = script.spawn();
+        assert!(res.is_err());
     }
 }
