@@ -13,6 +13,8 @@ use crate::misc::{
 use crate::configuration::{
     callback::{CallbackHandle, ChildData},
     global::GlobalOptions,
+    options::SearchOptions,
+    pattern::PatternCounters,
     tag::Tag,
     vars::RuntimeVars,
 };
@@ -250,7 +252,7 @@ impl Lookup<FullReader> for LogFile {
                             if run_data.counters.exec_count < tag.options.runlimit {
                                 // in case of a callback error, stop iterating and save state here
                                 match tag.callback_call(
-                                    Some(&global_options.path),
+                                    Some(&global_options.script_path),
                                     &global_options.global_vars,
                                     &vars,
                                     &mut handle,
@@ -303,6 +305,10 @@ impl Lookup<FullReader> for LogFile {
         run_data.last_run = time.as_secs_f64();
         run_data.last_run_secs = time.as_secs();
 
+        // criticalthreshold or warning thresholds are set, need to reflect reality for error counts
+        // need to test against thresholds in case of high values
+        counters_calculation(&mut run_data.counters, &tag.options);
+
         info!(
             "number of callback execution: {}",
             run_data.counters.exec_count
@@ -317,6 +323,54 @@ impl Lookup<FullReader> for LogFile {
         match early_ret {
             None => Ok(children),
             Some(e) => Err(e),
+        }
+    }
+}
+
+// manage error counters depending on options
+fn counters_calculation(counters: &mut PatternCounters, options: &SearchOptions) {
+    // do we need to save our thresholds ?
+    if options.savethresholds {
+        // critical errors
+        if options.criticalthreshold != 0 {
+            if counters.critical_count < options.criticalthreshold {
+                // nothing to do
+            } else {
+                // or just the delta
+                counters.critical_count -= options.criticalthreshold;
+            }
+        }
+        // warning errors
+        if options.warningthreshold != 0 {
+            // warning errors
+            if counters.warning_count < options.warningthreshold {
+                // nothing to do
+            } else {
+                // or just the delta
+                counters.warning_count -= options.warningthreshold;
+            }
+        }
+    } else {
+        // critical errors
+        if options.criticalthreshold != 0 {
+            if counters.critical_count < options.criticalthreshold {
+                // no errors in this case
+                counters.critical_count = 0;
+            } else {
+                // or just the delta
+                counters.critical_count -= options.criticalthreshold;
+            }
+        }
+        // warning errors
+        if options.warningthreshold != 0 {
+            // warning errors
+            if counters.warning_count < options.warningthreshold {
+                // no errors in this case
+                counters.warning_count = 0;
+            } else {
+                // or just the delta
+                counters.warning_count -= options.warningthreshold;
+            }
         }
     }
 }

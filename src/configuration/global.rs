@@ -14,7 +14,7 @@ use crate::{fromstr, prefix_var};
 pub struct GlobalOptions {
     /// A list of paths, separated by either ':' for unix, or ';' for Windows. This is
     /// where the script, if any, will be searched for. Default to PATH or Path depending on the platform.
-    pub path: String,
+    pub script_path: String,
 
     /// A directory where matched lines will be stored.
     pub output_dir: PathBuf,
@@ -93,7 +93,7 @@ impl Default for GlobalOptions {
         logger_path.push("clf.log");
 
         GlobalOptions {
-            path: path_var,
+            script_path: path_var,
             output_dir: std::env::temp_dir(),
             snapshot_file: None,
             snapshot_retention: DEFAULT_RETENTION,
@@ -113,7 +113,7 @@ mod tests {
     #[cfg(target_family = "unix")]
     fn global_options() {
         let mut yaml = r#"
-path: /usr/foo1
+script_path: /usr/foo1
 snapshot_file: /usr/foo3/snap.foo
 output_dir: /usr/foo2
         "#;
@@ -121,7 +121,7 @@ output_dir: /usr/foo2
         let mut opts = GlobalOptions::from_str(yaml).expect("unable to read YAML");
         //println!("opts={:?}", opts);
 
-        assert_eq!(&opts.path, "/usr/foo1");
+        assert_eq!(&opts.script_path, "/usr/foo1");
         assert_eq!(opts.output_dir, PathBuf::from("/usr/foo2"));
         assert_eq!(
             opts.snapshot_file,
@@ -129,7 +129,7 @@ output_dir: /usr/foo2
         );
 
         yaml = r#"
-path: /usr/foo1
+script_path: /usr/foo1
 
 # a list of user variables, if any
 vars:
@@ -140,7 +140,7 @@ vars:
         "#;
 
         opts = GlobalOptions::from_str(yaml).expect("unable to read YAML");
-        assert_eq!(&opts.path, "/usr/foo1");
+        assert_eq!(&opts.script_path, "/usr/foo1");
         assert_eq!(opts.output_dir, PathBuf::from("/tmp"));
         assert_eq!(opts.snapshot_file, None);
 

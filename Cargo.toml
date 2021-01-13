@@ -42,6 +42,6 @@ jinja2 = ["tera"]
 
 [[bin]]
 name = "integration_test"
-path = "src/integration_test.rs"
+path = "tests/integration/integration_test.rs"
 
 

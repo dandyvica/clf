@@ -165,7 +165,7 @@ mod tests {
         dbg!(std::env::current_dir().unwrap());
         let yaml = r#"
         global:
-          path: "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+          script_path: "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
           output_dir: /tmp/foo
           snapshot_file: /tmp/my_snapshot.json
           snapshot_retention: 5
@@ -229,7 +229,7 @@ mod tests {
         let config: Config = serde_yaml::from_str(yaml).expect("unable to read YAML");
 
         assert_eq!(
-            &config.global.path,
+            &config.global.script_path,
             "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
         );
         assert_eq!(config.global.output_dir, PathBuf::from("/tmp/foo"));
