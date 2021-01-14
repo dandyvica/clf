@@ -62,7 +62,7 @@ fn main() {
     // command line flags
     //------------------------------------------------------------------------------------------------
 
-    // TC1: call help
+    // call help
     {
         let tc = TestCase::new("help");
         let rc = tc.exec(&opts.mode, &["--help"]);
@@ -70,7 +70,7 @@ fn main() {
         assert_eq!(rc, 0);
     }
 
-    // TC2: missing argument
+    // missing argument
     {
         let tc = TestCase::new("missing_argument");
         let rc = tc.exec(&opts.mode, &["--syntax-check"]);
@@ -78,7 +78,7 @@ fn main() {
         assert_eq!(rc, 2);
     }
 
-    // TC3: good YAML syntax
+    // good YAML syntax
     {
         let tc = TestCase::new("good_syntax");
         let rc = tc.exec(
@@ -93,7 +93,7 @@ fn main() {
         assert_eq!(rc, 0);
     }
 
-    // TC4: bad YAML syntax
+    // bad YAML syntax
     {
         let tc = TestCase::new("bad_syntax");
         let rc = tc.exec(
@@ -108,7 +108,7 @@ fn main() {
         assert_eq!(rc, 2);
     }
 
-    // TC5: show options
+    // show options
     {
         let tc = TestCase::new("show_options");
         let rc = tc.exec(
@@ -125,21 +125,21 @@ fn main() {
     }
 
     //------------------------------------------------------------------------------------------------
-    // genuine search
+    // genuine search with fastforward
     //------------------------------------------------------------------------------------------------
 
-    // TC6: fastforward
+    // fastforward
     {
         let mut tc = TestCase::new("fastforward");
         Config::default()
             .set_tag("options", "fastforward")
             .save_as(&tc.config_file);
-        let rc = tc.run(&opts.mode, &[]);
+        let rc = tc.run(&opts.mode, &["-d"]);
 
         jassert!(tc, "compression", "uncompressed");
         jassert!(tc, "extension", "log");
-        jassert!(tc, "last_offset", "197326");
-        jassert!(tc, "last_line", "999");
+        jassert!(tc, "last_offset", "19251");
+        jassert!(tc, "last_line", "201");
         jassert!(tc, "critical_count", "0");
         jassert!(tc, "warning_count", "0");
         jassert!(tc, "ok_count", "0");
@@ -152,14 +152,14 @@ fn main() {
         let mut tc = TestCase::new("fastforward_gzipped");
         Config::default()
             .set_tag("options", "fastforward")
-            .set_tag("path", "./tests/integration/logfiles/access_simple.log.gz")
+            .set_tag("path", "./tests/integration/logfiles/generated.log.gz")
             .save_as(&tc.config_file);
-        let rc = tc.run(&opts.mode, &[]);
+        let rc = tc.run(&opts.mode, &["-d"]);
 
         jassert!(tc, "compression", "gzip");
         jassert!(tc, "extension", "gz");
-        jassert!(tc, "last_offset", "197326");
-        jassert!(tc, "last_line", "999");
+        jassert!(tc, "last_offset", "19251");
+        jassert!(tc, "last_line", "201");
         jassert!(tc, "critical_count", "0");
         jassert!(tc, "warning_count", "0");
         jassert!(tc, "ok_count", "0");
@@ -169,20 +169,60 @@ fn main() {
     }
 
     //------------------------------------------------------------------------------------------------
+    // dummy search
+    //------------------------------------------------------------------------------------------------
+
+    {
+        let mut tc = TestCase::new("dummy");
+        Config::default()
+            .set_tag("options", "protocol")
+            .save_as(&tc.config_file);
+        let rc = tc.run(&opts.mode, &["-d"]);
+
+        jassert!(tc, "last_offset", "19251");
+        jassert!(tc, "last_line", "201");
+        jassert!(tc, "critical_count", "99");
+        jassert!(tc, "warning_count", "98");
+        jassert!(tc, "ok_count", "0");
+        jassert!(tc, "exec_count", "0");
+        assert_eq!(rc.0, 2);
+    }
+
+    //------------------------------------------------------------------------------------------------
+    // ok pattern
+    //------------------------------------------------------------------------------------------------
+
+    // {
+    //     let mut tc = TestCase::new("ok_pattern");
+    //     Config::from_file("./tests/integration/config/ok.yml")
+    //         .set_tag("options", "protocol")
+    //         .save_as(&tc.config_file);
+    //     let rc = tc.run(&opts.mode, &["-d"]);
+
+    //     jassert!(tc, "last_offset", "197326");
+    //     jassert!(tc, "last_line", "999");
+    //     jassert!(tc, "critical_count", "93");
+    //     jassert!(tc, "warning_count", "7");
+    //     jassert!(tc, "ok_count", "0");
+    //     jassert!(tc, "exec_count", "0");
+    //     assert_eq!(rc.0, 2);
+    // }
+
+    //------------------------------------------------------------------------------------------------
     // thresholds
     //------------------------------------------------------------------------------------------------
     // criticalthreshold
     {
         let mut tc = TestCase::new("thresholds");
         Config::default()
-            .set_tag("options", "criticalthreshold=400,warningthreshold=10")
+            .set_tag("options", "criticalthreshold=50,warningthreshold=60")
             .save_as(&tc.config_file);
         let rc = tc.run(&opts.mode, &["-d"]);
 
-        jassert!(tc, "last_offset", "197326");
-        jassert!(tc, "last_line", "999");
-        jassert!(tc, "critical_count", "40");
-        jassert!(tc, "warning_count", "18");
+        jassert!(tc, "last_offset", "19251");
+        jassert!(tc, "last_line", "201");
+        jassert!(tc, "critical_count", "49");
+        jassert!(tc, "warning_count", "38");
         jassert!(tc, "ok_count", "0");
         jassert!(tc, "exec_count", "0");
         assert_eq!(rc.0, 2);
@@ -197,8 +237,8 @@ fn main() {
             .save_as(&tc.config_file);
         let rc = tc.run(&opts.mode, &["-d"]);
 
-        jassert!(tc, "last_offset", "197326");
-        jassert!(tc, "last_line", "999");
+        jassert!(tc, "last_offset", "19251");
+        jassert!(tc, "last_line", "201");
         jassert!(tc, "critical_count", "0");
         jassert!(tc, "warning_count", "0");
         jassert!(tc, "ok_count", "0");
@@ -223,7 +263,7 @@ fn main() {
     //     jassert!(tc, "exec_count", "0");
     //     assert_eq!(rc.0, 0);
     //     jassert!(rc, "OK");
-    // }    
+    // }
 
     //------------------------------------------------------------------------------------------------
     // run scripts
@@ -241,12 +281,12 @@ fn main() {
             .save_as(&tc.config_file);
         let rc = tc.run(&opts.mode, &["-d"]);
 
-        jassert!(tc, "last_offset", "197326");
-        jassert!(tc, "last_line", "999");
-        jassert!(tc, "critical_count", "440");
-        jassert!(tc, "warning_count", "28");
+        jassert!(tc, "last_offset", "19251");
+        jassert!(tc, "last_line", "201");
+        jassert!(tc, "critical_count", "99");
+        jassert!(tc, "warning_count", "98");
         jassert!(tc, "ok_count", "0");
-        jassert!(tc, "exec_count", "468");
+        jassert!(tc, "exec_count", "197");
         assert_eq!(rc.0, 2);
         jassert!(rc, "CRITICAL");
     }
@@ -255,17 +295,24 @@ fn main() {
     {
         let mut tc = TestCase::new("script_threshold");
         Config::default()
-            .set_tag("options", "runcallback,criticalthreshold=400,warningthreshold=1500")
-            .replace_tag("address", "script", "./tests/integration/scripts/echovars.py")
+            .set_tag(
+                "options",
+                "runcallback,criticalthreshold=50,warningthreshold=60",
+            )
+            .replace_tag(
+                "address",
+                "script",
+                "./tests/integration/scripts/echovars.py",
+            )
             .save_as(&tc.config_file);
         let rc = tc.run(&opts.mode, &["-d"]);
 
-        jassert!(tc, "last_offset", "197326");
-        jassert!(tc, "last_line", "999");
-        jassert!(tc, "critical_count", "40");
-        jassert!(tc, "warning_count", "0");
+        jassert!(tc, "last_offset", "19251");
+        jassert!(tc, "last_line", "201");
+        jassert!(tc, "critical_count", "49");
+        jassert!(tc, "warning_count", "38");
         jassert!(tc, "ok_count", "0");
-        jassert!(tc, "exec_count", "41");
+        jassert!(tc, "exec_count", "87");
         assert_eq!(rc.0, 2);
         jassert!(rc, "CRITICAL");
     }
@@ -274,14 +321,14 @@ fn main() {
     {
         let mut tc = TestCase::new("stopat");
         Config::default()
-            .set_tag("options", "stopat=900")
+            .set_tag("options", "stopat=70")
             .save_as(&tc.config_file);
         let rc = tc.run(&opts.mode, &["-d"]);
 
-        jassert!(tc, "last_offset", "177955");
-        jassert!(tc, "last_line", "900");
-        jassert!(tc, "critical_count", "395");
-        jassert!(tc, "warning_count", "23");
+        jassert!(tc, "last_offset", "6676");
+        jassert!(tc, "last_line", "70");
+        jassert!(tc, "critical_count", "35");
+        jassert!(tc, "warning_count", "34");
         jassert!(tc, "ok_count", "0");
         jassert!(tc, "exec_count", "0");
         assert_eq!(rc.0, 2);
@@ -289,30 +336,28 @@ fn main() {
     }
 
     // successive runs simulation
-    {
-        let mut tc = TestCase::new("successive_runs");
+    // {
+    //     let mut tc = TestCase::new("successive_runs");
 
-        // first run
-        Config::default()
-            .set_tag("options", "stopat=900")
-            .save_as(&tc.config_file);
-        let rc = tc.run(&opts.mode, &["-d"]);
+    //     // first run
+    //     Config::default()
+    //         .set_tag("options", "stopat=900")
+    //         .save_as(&tc.config_file);
+    //     let rc = tc.run(&opts.mode, &["-d"]);
 
-        // second run
-        Config::default()
-            .set_tag("options", "protocol")
-            .save_as(&tc.config_file);
-        let rc = tc.run(&opts.mode, &[]);
+    //     // second run
+    //     Config::default()
+    //         .set_tag("options", "protocol")
+    //         .save_as(&tc.config_file);
+    //     let rc = tc.run(&opts.mode, &[]);
 
-
-        jassert!(tc, "last_offset", "197326");
-        jassert!(tc, "last_line", "999");
-        jassert!(tc, "critical_count", "44");
-        jassert!(tc, "warning_count", "5");
-        jassert!(tc, "ok_count", "0");
-        jassert!(tc, "exec_count", "0");
-        assert_eq!(rc.0, 2);
-        jassert!(rc, "CRITICAL");
-    }
-
+    //     jassert!(tc, "last_offset", "197326");
+    //     jassert!(tc, "last_line", "999");
+    //     jassert!(tc, "critical_count", "44");
+    //     jassert!(tc, "warning_count", "5");
+    //     jassert!(tc, "ok_count", "0");
+    //     jassert!(tc, "exec_count", "0");
+    //     assert_eq!(rc.0, 2);
+    //     jassert!(rc, "CRITICAL");
+    // }
 }

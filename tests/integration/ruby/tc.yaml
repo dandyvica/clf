@@ -1,0 +1,20 @@
+# an example of setting testcases for clf
+setup:
+  clf: ~/projects/clf/target/debug/clf
+  test_dir: ~/projects/clf/tests/integration
+
+
+testcases:
+  - tc1:
+      name: with_help
+      args: ["-h"]
+      assert:
+        - rc == 0
+        - critical_coutn == 440
+
+  - tc2:
+      name: syntax
+      args: ["-h"]
+      assert:
+        - rc == 0
+        - critical_coutn == 440

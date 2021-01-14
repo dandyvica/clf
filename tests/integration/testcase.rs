@@ -58,7 +58,7 @@ impl fmt::Display for Target {
 }
 
 // manage YAML configurations
-const DEFAULT_CONFIG_FILE: &'static str = "./tests/integration/config/default.yml";
+const DEFAULT_CONFIG_FILE: &'static str = "./tests/integration/config/generated.yml";
 pub struct Config {
     config_file: String,
     yaml: String,

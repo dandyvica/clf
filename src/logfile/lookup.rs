@@ -5,10 +5,10 @@ use std::time::SystemTime;
 
 use log::{debug, error, info, trace};
 
-use crate::misc::{
+use crate::{misc::{
     constants::*,
     error::{AppError, AppResult},
-};
+}, wait_children};
 
 use crate::configuration::{
     callback::{CallbackHandle, ChildData},
@@ -219,6 +219,11 @@ impl Lookup<FullReader> for LogFile {
                             tag.options.criticalthreshold,
                             tag.options.warningthreshold,
                         ) {
+                            trace!(
+                                "threshold is not yet reached: current critical={}, warning={}",
+                                run_data.counters.critical_count,
+                                run_data.counters.critical_count
+                            );
                             buffer.clear();
                             continue;
                         }
@@ -245,6 +250,11 @@ impl Lookup<FullReader> for LogFile {
                             let nb_caps = vars.insert_captures(pattern_match.regex, &line);
                             let nb_caps_s = nb_caps.to_string();
                             vars.insert_var(prefix_var!("NB_CG"), &nb_caps_s);
+
+                            let critical_count = format!("{}", run_data.counters.critical_count);
+                            let warning_count = format!("{}", run_data.counters.warning_count);
+                            vars.insert_var(prefix_var!("CRITICAL_COUNT"), &critical_count);
+                            vars.insert_var(prefix_var!("WARNING_COUNT"), &warning_count);
 
                             debug!("added variables: {:?}", vars);
 

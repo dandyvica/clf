@@ -78,13 +78,13 @@ impl RunData {
         match pattern_type {
             PatternType::critical => {
                 self.counters.critical_count += 1;
-                if self.counters.critical_count < critical_threshold {
+                if self.counters.critical_count <= critical_threshold {
                     return false;
                 }
             }
             PatternType::warning => {
                 self.counters.warning_count += 1;
-                if self.counters.warning_count < warning_threshold {
+                if self.counters.warning_count <= warning_threshold {
                     return false;
                 }
             }
