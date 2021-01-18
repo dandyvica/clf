@@ -32,7 +32,7 @@ extern crate simplelog;
 use wait_timeout::ChildExt;
 
 mod configuration;
-use configuration::{archive::LogArchive, callback::ChildData};
+use configuration::callback::ChildData;
 
 mod logfile;
 use logfile::{
@@ -184,7 +184,8 @@ fn main() {
         if logfile_is_archived {
             info!("logfile has changed, probably archived and rotated");
 
-            let archive_path = LogArchive::rotated_path(search.logfile.path());
+            //let archive_path = LogArchive::default_path(search.logfile.path());
+            let archive_path = search.logfile.archive_path();
             trace!("archived logfile = {:?}", &archive_path);
 
             // clone search and assign archive logfile instead of original logfile
@@ -212,11 +213,15 @@ fn main() {
                 );
             }
 
-            // add logfile to snapshot for reference and debug
-            //snapshot
-
             // reset run_data into original search because this is a new file
-            logfile_from_snapshot.run_data.clear();
+            for tag in &search.tags {
+                if !tag.options.savethresholds {
+                    logfile_from_snapshot.reset_tag(&tag.name);
+                } else {
+                    logfile_from_snapshot.reset_tag_offsets(&tag.name);
+                    logfile_from_snapshot.copy_counters(&archived_logfile, &tag.name);
+                }
+            }
         }
 
         // call adequate reader according to command line

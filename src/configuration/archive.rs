@@ -11,22 +11,22 @@ use serde::Deserialize;
 #[derive(Debug, Deserialize, Clone)]
 pub struct LogArchive {
     /// the logfile name to check
-    dir: Option<PathBuf>,
+    pub dir: Option<PathBuf>,
 
     /// the most recent archived path
-    extension: Option<String>,
+    pub extension: Option<String>,
 
     /// a regex pattern to determine which archive to get
-    pattern: Option<String>,
+    pub pattern: Option<String>,
 }
 
 impl LogArchive {
     /// When no archive is specified, just get the standard logrotate file name: add .1 at the end of the logfile
-    pub fn rotated_path<P: AsRef<Path> + Clone>(path: P) -> PathBuf {
+    pub fn default_path<P: AsRef<Path> + Clone>(path: P) -> PathBuf {
         // build the file name by appending .1 to its path
-        let rotated_path = format!("{}.1", path.as_ref().to_string_lossy());
+        let default_path = format!("{}.1", path.as_ref().to_string_lossy());
 
-        PathBuf::from(rotated_path)
+        PathBuf::from(default_path)
     }
 
     // When a LogArchive struct is specified in the config file, build the archive file name
@@ -42,6 +42,7 @@ impl LogArchive {
             Some(dir) => &dir,
         };
         debug_assert!(dir.is_dir());
+        println!("dir={:?}", dir);
 
         // extract file name
         debug_assert!(path.as_ref().file_name().is_some());
@@ -49,7 +50,7 @@ impl LogArchive {
 
         // if not archive is specified, just add .1 at the end of the path
         #[cfg(target_family = "windows")]
-        let rotated_path = if self.extension.is_none() {
+        let default_path = if self.extension.is_none() {
             format!("{}\\{}.1", dir.to_string_lossy(), file_name)
         } else {
             format!(
@@ -62,7 +63,7 @@ impl LogArchive {
 
         // if not archive is specified, just add .1 at the end of the path
         #[cfg(target_family = "unix")]
-        let rotated_path = if self.extension.is_none() {
+        let default_path = if self.extension.is_none() {
             format!("{}/{}.1", dir.to_string_lossy(), file_name)
         } else {
             format!(
@@ -78,10 +79,10 @@ impl LogArchive {
             path,
             dir.display(),
             file_name,
-            rotated_path
+            default_path
         );
 
-        PathBuf::from(rotated_path)
+        PathBuf::from(default_path)
     }
 }
 
@@ -93,16 +94,23 @@ mod tests {
 
     #[test]
     #[cfg(target_family = "unix")]
-    fn rotated_path() {
+    fn default_path() {
+        let yaml = r#"
+dir: /var/log
+extension: xz
+"#;
+        let archive: LogArchive = serde_yaml::from_str(yaml).expect("unable to read YAML");
+        println!("{:#?}", archive);
+
         let mut p = PathBuf::from("/var/log/kern.log");
         assert_eq!(
-            LogArchive::rotated_path(p),
+            LogArchive::default_path(p),
             PathBuf::from("/var/log/kern.log.1")
         );
 
         p = PathBuf::from("/var/log/syslog");
         assert_eq!(
-            LogArchive::rotated_path(p),
+            LogArchive::default_path(p),
             PathBuf::from("/var/log/syslog.1")
         );
     }
@@ -110,6 +118,7 @@ mod tests {
     #[test]
     #[cfg(target_family = "unix")]
     fn archived_path() {
+        //
         let p = PathBuf::from("/var/log/kern.log");
 
         let archive = LogArchive {
@@ -122,28 +131,29 @@ mod tests {
             PathBuf::from("/var/log/kern.log.1")
         );
 
-        let archive = LogArchive {
-            dir: Some(PathBuf::from("/tmp")),
-            extension: None,
-            pattern: None,
-        };
+        //
+        let yaml = r#"
+dir: /tmp
+"#;
+        let archive: LogArchive = serde_yaml::from_str(yaml).expect("unable to read YAML");
         assert_eq!(archive.archived_path(&p), PathBuf::from("/tmp/kern.log.1"));
 
-        let archive = LogArchive {
-            dir: None,
-            extension: Some("gz".to_string()),
-            pattern: None,
-        };
+        //
+        let yaml = r#"
+extension: gz
+"#;
+        let archive: LogArchive = serde_yaml::from_str(yaml).expect("unable to read YAML");
         assert_eq!(
             archive.archived_path(&p),
             PathBuf::from("/var/log/kern.log.gz")
         );
 
-        let archive = LogArchive {
-            dir: Some(PathBuf::from(r"/tmp")),
-            extension: Some("gz".to_string()),
-            pattern: None,
-        };
+        //
+        let yaml = r#"
+dir: /tmp
+extension: gz
+"#;
+        let archive: LogArchive = serde_yaml::from_str(yaml).expect("unable to read YAML");
         assert_eq!(archive.archived_path(&p), PathBuf::from("/tmp/kern.log.gz"));
     }
 

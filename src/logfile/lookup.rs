@@ -5,10 +5,10 @@ use std::time::SystemTime;
 
 use log::{debug, error, info, trace};
 
-use crate::{misc::{
+use crate::misc::{
     constants::*,
     error::{AppError, AppResult},
-}, wait_children};
+};
 
 use crate::configuration::{
     callback::{CallbackHandle, ChildData},
@@ -77,7 +77,7 @@ impl Lookup<FullReader> for LogFile {
         // 1. initialize local variables
         //------------------------------------------------------------------------------------
         info!(
-            "start processing logfile:{} for tag:{}",
+            "========================> start processing logfile:{} for tag:{}",
             self.id.canon_path.display(),
             tag.name
         );
@@ -108,7 +108,7 @@ impl Lookup<FullReader> for LogFile {
 
         // get run_data corresponding to tag name, or insert that new one if not yet in the snapshot file
         let mut run_data = self.rundata_for_tag(&tag.name);
-        trace!("tagname: {:?}, run_data:{:?}\n\n", &tag.name, run_data);
+        trace!("tagname: {:?}, run_data:{:?}", &tag.name, run_data);
 
         // store pid: it'll be used for output message
         run_data.pid = std::process::id();
@@ -186,16 +186,19 @@ impl Lookup<FullReader> for LogFile {
                     line_number += 1;
                     bytes_count += bytes_read as u64;
 
-                    // if stopat is reached, stop here
-                    if tag.options.stopat == line_number {
-                        break;
-                    }
-
                     // do we just need to go to EOF ?
                     // TODO: implement go to EOF directly
                     if tag.options.fastforward {
                         buffer.clear();
                         continue;
+                    }
+
+                    // if stopat is reached, stop here. We stop before processing the line, so we need to decrement the bytes read
+                    // because it was already incremented before
+                    if tag.options.stopat == line_number {
+                        line_number -= 1;
+                        bytes_count -= bytes_read as u64;
+                        break;
                     }
 
                     trace!("====> line#={}, line={}", line_number, line);
@@ -212,6 +215,15 @@ impl Lookup<FullReader> for LogFile {
                             run_data.counters.warning_count,
                             run_data.counters.critical_count
                         );
+
+                        // check for ok pattern => so reset counters and continue
+                        // if pattern_match.pattern_type == PatternType::ok {
+                        //     trace!("resetting pattern counters");
+                        //     run_data.counters.critical_count = 0;
+                        //     run_data.counters.warning_count = 0;
+                        //     buffer.clear();
+                        //     continue;
+                        // }
 
                         // when a threshold is reached, give up
                         if !run_data.is_threshold_reached(
@@ -308,6 +320,14 @@ impl Lookup<FullReader> for LogFile {
         run_data.last_offset = bytes_count;
         run_data.last_line = line_number;
 
+        trace!(
+            "bytes_count={}, line_number={}, critical={}, warning={}",
+            bytes_count,
+            line_number,
+            run_data.counters.critical_count,
+            run_data.counters.warning_count
+        );
+
         // and last run
         let time = SystemTime::now()
             .duration_since(SystemTime::UNIX_EPOCH)
@@ -320,13 +340,14 @@ impl Lookup<FullReader> for LogFile {
         counters_calculation(&mut run_data.counters, &tag.options);
 
         info!(
-            "number of callback execution: {}",
-            run_data.counters.exec_count
-        );
-        trace!(
-            "========================> end processing logfile:{} for tag:{}",
-            self.id.canon_path.display(),
-            tag.name
+            "========================> end processing logfile for tag:{}, bytes_count={}, line_number={}, callback execution: {}, critical={}, warning={}",
+            //self.id.canon_path.display(),
+            tag.name,
+            bytes_count,
+            line_number,
+            run_data.counters.exec_count,
+            run_data.counters.critical_count,
+            run_data.counters.warning_count,
         );
 
         // return error if we got one or the list of children from calling the script

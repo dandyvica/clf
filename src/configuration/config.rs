@@ -180,7 +180,9 @@ mod tests {
                 path: tests/logfiles/small_access.log
                 format: plain
                 exclude: '^error'
-                archive: /var/log/syslog.1
+                archive: 
+                    dir: /var/log
+                    extension: gz
             tags: 
               - name: http_access_get_or_post
                 process: true
@@ -205,7 +207,9 @@ mod tests {
                 list: ['/usr/bin/find', '/var/log', '-type', '-f']
                 format: plain
                 exclude: '^error'
-                archive: /var/log/syslog.1
+                archive: 
+                    dir: /var/log
+                    extension: gz
             tags: 
               - name: http_access_get_or_post
                 process: true

@@ -109,6 +109,34 @@ impl LogFile {
         self.run_data.get_mut(tag_name).unwrap().last_error = Some(error);
     }
 
+    /// Reset counters and offsets for a specific tag
+    pub fn reset_tag(&mut self, tag_name: &str) {
+        debug_assert!(self.run_data.contains_key(tag_name));
+
+        let tag = self.run_data.get_mut(tag_name).unwrap();
+        tag.counters = PatternCounters::default();
+        tag.last_line = 0;
+        tag.last_offset = 0;
+    }
+
+    /// Reset offsets for a specific tag
+    pub fn reset_tag_offsets(&mut self, tag_name: &str) {
+        debug_assert!(self.run_data.contains_key(tag_name));
+
+        let tag = self.run_data.get_mut(tag_name).unwrap();
+        tag.last_line = 0;
+        tag.last_offset = 0;
+    }
+
+    /// Copy counters from another logfile
+    pub fn copy_counters(&mut self, other: &Self, tag_name: &str) {
+        debug_assert!(self.run_data.contains_key(tag_name));
+        debug_assert!(other.run_data.contains_key(tag_name));
+
+        let tag = self.run_data.get_mut(tag_name).unwrap();
+        tag.counters = other.run_data.get(tag_name).unwrap().counters.clone();
+    }
+
     ///Just a wrapper function for a file.
     pub fn lookup<T>(
         &mut self,

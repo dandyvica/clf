@@ -157,11 +157,17 @@ impl Callback {
                 let mut stream = handle.tcp_socket.as_ref().unwrap();
 
                 // create a dedicated JSON structure
-                let mut json = json!({
-                    "args": &self.args,
-                    "global": global_vars,
-                    "vars": runtime_vars
-                })
+                let mut json = match &self.args {
+                    Some(args) => json!({
+                        "args": &args,
+                        "global": global_vars,
+                        "vars": runtime_vars
+                    }),
+                    None => json!({
+                        "global": global_vars,
+                        "vars": runtime_vars
+                    }),
+                }
                 .to_string();
 
                 // 64KB a payload is more than enough
@@ -205,11 +211,17 @@ impl Callback {
                 let mut stream = handle.domain_socket.as_ref().unwrap();
 
                 // create a dedicated JSON structure
-                let mut json = json!({
-                    "args": &self.args,
-                    "global": global_vars,
-                    "vars": runtime_vars
-                })
+                let mut json = match &self.args {
+                    Some(args) => json!({
+                        "args": &args,
+                        "global": global_vars,
+                        "vars": runtime_vars
+                    }),
+                    None => json!({
+                        "global": global_vars,
+                        "vars": runtime_vars
+                    }),
+                }
                 .to_string();
 
                 // 64KB a payload is more than enough

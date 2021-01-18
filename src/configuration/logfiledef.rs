@@ -5,6 +5,7 @@ use regex::Regex;
 use serde::{de, Deserialize, Deserializer};
 use serde_yaml::Value;
 
+use super::archive::LogArchive;
 use super::logsource::LogSource;
 use crate::misc::nagios::NagiosError;
 
@@ -40,7 +41,7 @@ pub struct LogFileDef {
     pub exclude: Option<Regex>,
 
     // optional archive file name. If not specified, itr's just the same file + .1
-    pub archive: Option<PathBuf>,
+    pub archive: Option<LogArchive>,
 
     // what to expect when logfile is not accessible
     #[serde(default)]
@@ -56,6 +57,14 @@ impl LogFileDef {
                 "LogSource::LogList not permitted here in {} !",
                 module_path!()
             ),
+        }
+    }
+
+    /// Get archive path
+    pub fn archive_path(&self) -> PathBuf {
+        match &self.archive {
+            None => LogArchive::default_path(self.path()),
+            Some(archive) => archive.archived_path(self.path()),
         }
     }
 
@@ -95,28 +104,30 @@ mod tests {
     #[test]
     fn logfiledef() {
         let mut yaml = r#"
-path: /var/log
+path: /var/log/syslog
 format: json
 exclude: "^error"
-archive: /var/log/syslog.1.xz
-        "#;
+archive: 
+    extension: xz
+"#;
         let lfd: LogFileDef = serde_yaml::from_str(yaml).expect("unable to read YAML");
-        assert_eq!(lfd.path(), &PathBuf::from("/var/log"));
+        assert_eq!(lfd.path(), &PathBuf::from("/var/log/syslog"));
         assert_eq!(lfd.format, LogFileFormat::json);
-        assert_eq!(lfd.exclude.unwrap().as_str(), "^error");
-        assert_eq!(lfd.archive.unwrap(), PathBuf::from("/var/log/syslog.1.xz"));
+        assert_eq!(lfd.exclude.as_ref().unwrap().as_str(), "^error");
+        assert_eq!(lfd.archive_path(), PathBuf::from("/var/log/syslog.xz"));
 
         yaml = r#"
-path: /var/log
+path: /var/log/syslog
         "#;
         let lfd: LogFileDef = serde_yaml::from_str(yaml).expect("unable to read YAML");
-        assert_eq!(lfd.path(), &PathBuf::from("/var/log"));
+        assert_eq!(lfd.path(), &PathBuf::from("/var/log/syslog"));
         assert_eq!(lfd.format, LogFileFormat::plain);
         assert!(lfd.exclude.is_none());
+        assert_eq!(lfd.archive_path(), PathBuf::from("/var/log/syslog.1"));
 
         // test with a regex error
         yaml = r#"
-path: /var/log
+path: /var/log/syslog
 format: json
 exclude: "^(error"
         "#;
@@ -125,7 +136,7 @@ exclude: "^(error"
 
         // test with no regex
         yaml = r#"
-path: /var/log
+path: /var/log/syslog
 format: json
 exclude: "^(error"
         "#;

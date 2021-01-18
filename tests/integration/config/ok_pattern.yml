@@ -11,21 +11,24 @@ global:
 
 searches:
   - logfile: 
-      path: ./tests/integration/logfiles/access_simple.log
+      path: ./tests/integration/logfiles/generated.log
       format: plain
+      logfilemissing: critical
+      archive:
+        extension: gz
     tags: 
       - name: tag1
         process: true
-        options: fastforward
+        options: protocol
         callback: 
-          address: 127.0.0.1:8999
+          domain: ./tests/integration/tmp/generated.sock
           args: ["arg1", "arg2", "arg3"]
         patterns:
           critical:
-            regexes: ['GET\s+([/\w]+)\s+HTTP/1\.1"\s+(?P<code>\d+)\s+(?P<length>\d+)']
-            exceptions: ['AppleWebKit/537\.36']
+            regexes: ['number = (\d+), error id = (\d+)$']
+            exceptions: ['line number = 192']
           warning:
-            regexes: ['POST\s+([/\w\.]+)\s+HTTP/1\.1"\s+(?P<code>\d+)\s+(?P<length>\d+)']
-            exceptions: ['^\d{2,3}\.']
+            regexes: ['number = (\d+), warning id = (\d+)$']
+            exceptions: ['line number = (193|195)']
           ok:
-            regexes: ['2015:11:32:36']
+            regexes: ['this is a fake ok pattern generated for tests']

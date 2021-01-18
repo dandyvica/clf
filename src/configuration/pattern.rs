@@ -92,7 +92,6 @@ impl Pattern {
 
         // returns the first Regex involved in a match, None otherwise
         self.regexes.0.iter().find(|re| re.is_match(text))
-        //.map(|re| re)
     }
 }
 
@@ -169,6 +168,7 @@ impl PatternSet {
                 .is_match(text)
                 .map(|re| PatternMatchResult::new(PatternType::critical, re));
             if ret.is_some() {
+                trace!("critical pattern is matching");
                 return ret;
             }
         }
@@ -180,6 +180,7 @@ impl PatternSet {
                 .is_match(text)
                 .map(|re| PatternMatchResult::new(PatternType::warning, re));
             if ret.is_some() {
+                trace!("warning pattern is matching");
                 return ret;
             }
         }
@@ -191,6 +192,7 @@ impl PatternSet {
                 .is_match(text)
                 .map(|re| PatternMatchResult::new(PatternType::ok, re));
             if ret.is_some() {
+                trace!("ok pattern is matching");
                 return ret;
             }
         }

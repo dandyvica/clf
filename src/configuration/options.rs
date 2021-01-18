@@ -99,8 +99,9 @@ impl TryFrom<String> for SearchOptions {
         // create a default options structure
         let mut opt = SearchOptions::default();
 
-        // runlimit is special
+        // runlimit and stopat are special
         opt.runlimit = std::u64::MAX;
+        opt.stopat = std::u64::MAX;
 
         // convert the input list to a vector
         let opt_list: Vec<_> = option_list.split(',').map(|x| x.trim()).collect();
@@ -149,11 +150,6 @@ impl TryFrom<String> for SearchOptions {
                 add_typed_option!(splitted_options, runlimit, opt, u64);
                 add_typed_option!(splitted_options, truncate, opt, usize);
                 add_typed_option!(splitted_options, stopat, opt, u64);
-
-                // special case for this
-                // if key == "logfilemissing" {
-                //     opt.logfilemissing = LogfileMissing::from_str(value).unwrap();
-                // }
             }
         }
 

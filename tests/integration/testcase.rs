@@ -1,9 +1,11 @@
 use std::fmt;
 use std::fs::*;
-use std::io::Write;
+use std::io::{BufWriter, Write};
+use std::process::Command;
 use std::str::FromStr;
 use std::{collections::HashMap, unimplemented};
 
+use rand::{thread_rng, Rng};
 use regex::Regex;
 
 /// Helper macro to assert values in snapshot
@@ -59,6 +61,7 @@ impl fmt::Display for Target {
 
 // manage YAML configurations
 const DEFAULT_CONFIG_FILE: &'static str = "./tests/integration/config/generated.yml";
+#[allow(dead_code)]
 pub struct Config {
     config_file: String,
     yaml: String,
@@ -80,6 +83,7 @@ impl Default for Config {
 
 impl Config {
     // load file data into a string
+    #[allow(dead_code)]
     pub fn from_file(path: &str) -> Self {
         // load file data
         let yaml = read_to_string(path)
@@ -173,7 +177,7 @@ impl TestCase {
     // call CLF executable with arguments
     pub fn exec(&self, target: &Target, args: &[&str]) -> i32 {
         let clf = target.path();
-        let mut output = std::process::Command::new(clf)
+        let output = Command::new(clf)
             .args(args)
             .output()
             .expect("unable to start clf");
@@ -198,5 +202,145 @@ impl TestCase {
         }
 
         hmap
+    }
+}
+
+// manage creation or growth of a fake logfile
+const FAKE_LOGFILE: &'static str = "./tests/integration/logfiles/generated.log";
+const FAKE_LOGFILE_GZIP: &'static str = "./tests/integration/logfiles/generated.log.gz";
+
+pub struct FakeLogfile;
+
+impl FakeLogfile {
+    fn _create(append: bool) {
+        // open file in write or append mode
+        let log = if append {
+            OpenOptions::new()
+                .append(true)
+                .open(FAKE_LOGFILE)
+                .expect("unable to create fake logfile")
+        } else {
+            File::create(FAKE_LOGFILE).expect("unable to create fake logfile")
+        };
+        let mut writer = BufWriter::new(&log);
+
+        // initialize random seed
+        let mut rng = thread_rng();
+
+        // now write into our fake logfile
+        let mut line_number = 0;
+
+        for _ in 1..102 {
+            line_number += 1;
+
+            // insert ok pattern once
+            if line_number == 51 {
+                writeln!(
+                    &mut writer,
+                    "1970-01-01 00:00:00: ############# this is a fake ok pattern generated for tests, line number = {:03}",
+                    line_number
+                )
+                .unwrap();
+                continue;
+            }
+
+            // otherwise add error and warning lines
+            let error_id: u32 = rng.gen_range(10000..=99999);
+            writeln!(
+                &mut writer,
+                "1970-01-01 00:00:00: ---- this is an error generated for tests, line number = {:03}, error id = {}",
+                line_number, error_id
+            ).unwrap();
+
+            let warning_id: u32 = rng.gen_range(10000..=99999);
+            line_number += 1;
+
+            writeln!(
+                &mut writer,
+                "1970-01-01 00:00:00: * this is a warning generated for tests, line number = {:03}, warning id = {}",
+                line_number, warning_id
+            )
+            .unwrap();
+        }
+    }
+
+    // simulate file growth
+    pub fn init() {
+        FakeLogfile::_create(false);
+    }
+
+    // simulate file growth
+    pub fn grow() {
+        FakeLogfile::_create(true);
+    }
+
+    // simulate file rotation
+    pub fn rotate() {
+        let output = Command::new("gzip")
+            .args(&[FAKE_LOGFILE])
+            .output()
+            .expect("unable to gzip dummy logfile");
+
+        if output.status.code().unwrap() != 0 {
+            println!("error compressing dummy logfile");
+        }
+
+        // regenerate a new logfile
+        FakeLogfile::init();
+    }
+
+    // simulate gzip
+    pub fn gzip(keep: bool) {
+        let args = if keep {
+            vec!["-k", FAKE_LOGFILE]
+        } else {
+            vec![FAKE_LOGFILE]
+        };
+
+        let _ = Command::new("gzip")
+            .args(&args)
+            .output()
+            .expect("unable to gzip dummy logfile");
+    }
+
+    // delete gzipped logfile
+    pub fn gzip_delete() {
+        std::fs::remove_file(FAKE_LOGFILE_GZIP).expect("unable to delete gzip fake logfile");
+    }
+}
+
+// This is made for testing using a UDS
+use serde::Deserialize;
+#[derive(Debug, Deserialize)]
+pub struct JSONStream {
+    pub args: Vec<String>,
+    pub global: HashMap<String, String>,
+    pub vars: HashMap<String, String>,
+}
+
+// utility fn to receive JSON from a stream
+impl JSONStream {
+    pub fn get_json_from_stream<T: std::io::Read>(socket: &mut T) -> std::io::Result<JSONStream> {
+        // try to read size first
+        let mut size_buffer = [0; std::mem::size_of::<u16>()];
+
+        let bytes_read = socket.read(&mut size_buffer)?;
+        if bytes_read == 0 {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::Interrupted,
+                "socket closed",
+            ));
+        }
+
+        let json_size = u16::from_be_bytes(size_buffer);
+
+        // read JSON raw data
+        let mut json_buffer = vec![0; json_size as usize];
+        socket.read_exact(&mut json_buffer).unwrap();
+
+        // get JSON
+        let s = std::str::from_utf8(&json_buffer).unwrap();
+        let json: JSONStream = serde_json::from_str(&s).unwrap();
+        Ok(json)
     }
 }
