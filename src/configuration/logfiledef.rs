@@ -102,6 +102,7 @@ mod tests {
     use super::*;
 
     #[test]
+    #[cfg(target_os = "linux")]
     fn logfiledef() {
         let mut yaml = r#"
 path: /var/log/syslog

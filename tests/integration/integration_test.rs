@@ -345,6 +345,7 @@ fn main() {
     // run a script
     {
         let mut tc = TestCase::new("start_script");
+        #[cfg(target_family = "unix")]
         Config::default()
             .set_tag("options", "runcallback")
             .replace_tag(
@@ -353,6 +354,19 @@ fn main() {
                 "./tests/integration/scripts/echovars.py",
             )
             .save_as(&tc.config_file);
+        #[cfg(target_family = "windows")]
+        Config::default()
+            .set_tag("options", "runcallback")
+            .replace_tag(
+                "address",
+                "script",
+                "python",
+            )
+            .set_tag(
+                "args",
+                r"['.\tests\integration\scripts\echovars.py']",
+            )
+            .save_as(&tc.config_file);            
         let rc = tc.run(&opts.mode, &["-d"]);
 
         jassert!(tc, "last_offset", "20100");
@@ -368,6 +382,7 @@ fn main() {
     // run a script with a threshold
     {
         let mut tc = TestCase::new("script_threshold");
+        #[cfg(target_family = "unix")]
         Config::default()
             .set_tag(
                 "options",
@@ -378,6 +393,22 @@ fn main() {
                 "script",
                 "./tests/integration/scripts/echovars.py",
             )
+            .save_as(&tc.config_file);
+        #[cfg(target_family = "windows")]
+        Config::default()
+            .set_tag(
+                "options",
+                "runcallback,criticalthreshold=50,warningthreshold=60",
+            )
+            .replace_tag(
+                "address",
+                "script",
+                "python",
+            )
+            .set_tag(
+                "args",
+                r"['.\tests\integration\scripts\echovars.py']",
+            )            
             .save_as(&tc.config_file);
         let rc = tc.run(&opts.mode, &["-d"]);
 
