@@ -583,7 +583,7 @@ fn main() {
     }
 
     // callback call
-    #[cfg(target_os = "linux")]
+    #[cfg(target_family = "unix")]
     {
         let mut tc = TestCase::new("callback_call");
         Config::default()
@@ -591,7 +591,8 @@ fn main() {
             .replace_tag(
                 "address",
                 "domain",
-                "./tests/integration/tmp/generated.sock",
+                "./tests/integration/tmp/generated.sock
+                ",
             )            
             .save_as(&tc.config_file);
 
