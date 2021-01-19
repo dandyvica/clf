@@ -164,12 +164,12 @@ impl TestCase {
             .args(optargs)
             .output()
             .expect("unable to start clf");
+        //println!("{:?}", output);
 
         let s = String::from_utf8_lossy(&output.stdout);
 
         // load json as hashmap
         self.json = self.json(&self.snap_file);
-        //println!("{:?}", &self.json);
 
         (output.status.code().unwrap(), s.to_string())
     }
@@ -207,6 +207,7 @@ impl TestCase {
 
 // manage creation or growth of a fake logfile
 const FAKE_LOGFILE: &'static str = "./tests/integration/logfiles/generated.log";
+const FAKE_LOGFILE_UTF8: &'static str = "./tests/integration/logfiles/generated_utf8.log";
 const FAKE_LOGFILE_GZIP: &'static str = "./tests/integration/logfiles/generated.log.gz";
 
 pub struct FakeLogfile;
@@ -258,6 +259,52 @@ impl FakeLogfile {
             writeln!(
                 &mut writer,
                 "1970-01-01 00:00:00: * this is a warning generated for tests, line number = {:03}, warning id = {}",
+                line_number, warning_id
+            )
+            .unwrap();
+        }
+    }
+
+    // create a log with japanese utf8 chars
+    pub fn create_utf8() {
+        // open file in write or append mode
+        let log = File::create(FAKE_LOGFILE_UTF8).expect("unable to create fake logfile");
+        let mut writer = BufWriter::new(&log);
+
+        // initialize random seed
+        let mut rng = thread_rng();
+
+        // now write into our fake logfile
+        let mut line_number = 0;
+
+        for _ in 1..102 {
+            line_number += 1;
+
+            // insert ok pattern once
+            if line_number == 51 {
+                writeln!(
+                    &mut writer,
+                    "1970-01-01 00:00:00: ############# これはテスト用に生成された偽の OK パターンで、行番号 = {:03} です。",
+                    line_number
+                )
+                .unwrap();
+                continue;
+            }
+
+            // otherwise add error and warning lines
+            let error_id: u32 = rng.gen_range(10000..=99999);
+            writeln!(
+                &mut writer,
+                "1970-01-01 00:00:00: ---- これはテストに対して生成されたエラーで、行番号 = {:03}, エラー ID = {} です。",
+                line_number, error_id
+            ).unwrap();
+
+            let warning_id: u32 = rng.gen_range(10000..=99999);
+            line_number += 1;
+
+            writeln!(
+                &mut writer,
+                "1970-01-01 00:00:00: * これはテストに対して生成された警告で、行番号 = {:03}、警告 ID = {} です。",
                 line_number, warning_id
             )
             .unwrap();

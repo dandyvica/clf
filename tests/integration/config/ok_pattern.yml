@@ -21,7 +21,7 @@ searches:
         process: true
         options: protocol
         callback: 
-          domain: ./tests/integration/tmp/generated.sock
+          address: 127.0.0.1:8999
           args: ["arg1", "arg2", "arg3"]
         patterns:
           critical:

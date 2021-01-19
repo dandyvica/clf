@@ -128,7 +128,6 @@ fn main() {
     //------------------------------------------------------------------------------------------------
     // genuine search with fastforward
     //------------------------------------------------------------------------------------------------
-
     // fastforward
     {
         let mut tc = TestCase::new("fastforward");
@@ -210,7 +209,7 @@ fn main() {
     //------------------------------------------------------------------------------------------------
     // dummy search
     //------------------------------------------------------------------------------------------------
-
+    // ascii
     {
         let mut tc = TestCase::new("dummy");
         Config::default()
@@ -227,10 +226,64 @@ fn main() {
         assert_eq!(rc.0, 2);
     }
 
+    // utf8
+    {
+        // create utf8 file
+        FakeLogfile::create_utf8();
+
+        let mut tc = TestCase::new("utf8");
+        Config::from_file("./tests/integration/config/utf8.yml")
+            .set_tag("options", "protocol")
+            .set_tag("path", "./tests/integration/logfiles/generated_utf8.log")
+            .save_as(&tc.config_file);
+        let rc = tc.run(&opts.mode, &["-d"]);
+
+        jassert!(tc, "last_offset", "26128");
+        jassert!(tc, "last_line", "201");
+        jassert!(tc, "critical_count", "100");
+        jassert!(tc, "warning_count", "0");
+        jassert!(tc, "ok_count", "0");
+        jassert!(tc, "exec_count", "0");
+        assert_eq!(rc.0, 2);
+    }
+
+    // tera
+    {
+        let mut tc = TestCase::new("tera");
+        Config::from_file("./tests/integration/config/tera.yml")
+            .set_tag("options", "protocol")
+            .save_as(&tc.config_file);
+        let context = "{\"path\":\"./tests/integration/logfiles/generated.log\"}";
+        let rc = tc.run(&opts.mode, &["-d", "-x", context]);
+
+        jassert!(tc, "last_offset", "20100");
+        jassert!(tc, "last_line", "201");
+        jassert!(tc, "critical_count", "99");
+        jassert!(tc, "warning_count", "98");
+        jassert!(tc, "ok_count", "0");
+        jassert!(tc, "exec_count", "0");
+        assert_eq!(rc.0, 2);
+    }
+
+    //------------------------------------------------------------------------------------------------
+    // list files Linux
+    //------------------------------------------------------------------------------------------------
+    #[cfg(target_os = "linux")]
+    {
+        let mut tc = TestCase::new("list_files");
+        Config::from_file("./tests/integration/config/list_linux.yml")
+            .set_tag("options", "protocol")
+            .set_tag("list", r#"["find", "/var/log", "-type", "f", "-name", "*.log"]"#)
+            .save_as(&tc.config_file);
+        let rc = tc.run(&opts.mode, &["-d"]);
+
+        assert_eq!(rc.0, 2);
+        jassert!(rc, "/var/log");
+    }    
+
     //------------------------------------------------------------------------------------------------
     // ok pattern
     //------------------------------------------------------------------------------------------------
-
     {
         let mut tc = TestCase::new("ok_pattern");
         Config::from_file("./tests/integration/config/ok_pattern.yml")
@@ -295,7 +348,7 @@ fn main() {
         Config::default()
             .set_tag("options", "runcallback")
             .replace_tag(
-                "domain",
+                "address",
                 "script",
                 "./tests/integration/scripts/echovars.py",
             )
@@ -321,7 +374,7 @@ fn main() {
                 "runcallback,criticalthreshold=50,warningthreshold=60",
             )
             .replace_tag(
-                "domain",
+                "address",
                 "script",
                 "./tests/integration/scripts/echovars.py",
             )
@@ -530,10 +583,16 @@ fn main() {
     }
 
     // callback call
+    #[cfg(target_os = "linux")]
     {
         let mut tc = TestCase::new("callback_call");
         Config::default()
             .set_tag("options", "runcallback")
+            .replace_tag(
+                "address",
+                "domain",
+                "./tests/integration/tmp/generated.sock",
+            )            
             .save_as(&tc.config_file);
 
         // create UDS server

@@ -2,7 +2,7 @@
 ---
 global:
   script_path: "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
-  snapshot_retention: 1
+  snapshot_retention: 60
   vars:
     CLF_firstname: Al
     CLF_lastname: Pacino
@@ -11,7 +11,7 @@ global:
 
 searches:
   - logfile: 
-      path: ./tests/integration/logfiles/generated.log
+      list: ["bash", "-c", "ls /var/log/*.log | grep -v font"]
       format: plain
       logfilemissing: critical
       archive:
@@ -25,8 +25,4 @@ searches:
           args: ["arg1", "arg2", "arg3"]
         patterns:
           critical:
-            regexes: ['number = (\d+), error id = (\d+)$']
-            exceptions: ['line number = 192']
-          warning:
-            regexes: ['number = (\d+), warning id = (\d+)$']
-            exceptions: ['line number = (193|195)']
+            regexes: ['error']

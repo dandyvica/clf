@@ -1,6 +1,6 @@
 /target
 Cargo.lock
-/tests/logfiles/*.log
+/tests/integration/logfiles/*.*
 **/large*.log
 **/large*.log.gz
 clf.log

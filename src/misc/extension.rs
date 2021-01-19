@@ -222,8 +222,9 @@ mod tests {
         assert!(PathBuf::from("foo.txt").is_usable().is_err());
         assert!(PathBuf::from("/var/log/foo.txt").is_usable().is_err());
         assert!(PathBuf::from("/var/log").is_usable().is_err());
-        assert!(PathBuf::from("/var/log/syslog").is_usable().is_ok());
+        assert!(PathBuf::from("/etc/resolv.conf").is_usable().is_ok());
     }
+    
     #[test]
     #[cfg(target_family = "windows")]
     fn is_usable() {
