@@ -337,7 +337,7 @@ impl FakeLogfile {
 
         // wait a little before calling
         let ten_millis = std::time::Duration::from_millis(500);
-        std::thread::sleep(ten_millis);        
+        std::thread::sleep(ten_millis);
     }
 
     // simulate gzip

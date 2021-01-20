@@ -29,7 +29,6 @@ macro_rules! prefix_var {
         Cow::from(format!("CLF_{}{}", $n, $i))
     };
 }
-
 #[derive(Debug, Serialize, Deserialize, Clone)]
 /// A generic variable structure.
 pub struct Vars<K: Hash + Eq, V>(HashMap<K, V>);

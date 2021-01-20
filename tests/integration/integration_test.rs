@@ -273,17 +273,21 @@ fn main() {
         let mut tc = TestCase::new("list_files");
         Config::from_file("./tests/integration/config/list_linux.yml")
             .set_tag("options", "protocol")
-            .set_tag("list", r#"["find", "/var/log", "-type", "f", "-name", "*.log"]"#)
+            .set_tag(
+                "list",
+                r#"["find", "/var/log", "-type", "f", "-name", "*.log"]"#,
+            )
             .save_as(&tc.config_file);
         let rc = tc.run(&opts.mode, &["-d"]);
 
         assert_eq!(rc.0, 2);
         jassert!(rc, "/var/log");
-    }    
+    }
 
     //------------------------------------------------------------------------------------------------
     // ok pattern
     //------------------------------------------------------------------------------------------------
+    // ok pattern but runifok = false
     {
         let mut tc = TestCase::new("ok_pattern");
         Config::from_file("./tests/integration/config/ok_pattern.yml")
@@ -295,9 +299,43 @@ fn main() {
         jassert!(tc, "last_line", "201");
         jassert!(tc, "critical_count", "74");
         jassert!(tc, "warning_count", "73");
-        jassert!(tc, "ok_count", "0");
+        jassert!(tc, "ok_count", "1");
         jassert!(tc, "exec_count", "0");
         assert_eq!(rc.0, 2);
+    }
+
+    // ok pattern but runifok = true
+    {
+        let mut tc = TestCase::new("runifok");
+        #[cfg(target_family = "unix")]
+        Config::from_file("./tests/integration/config/ok_pattern.yml")
+            .set_tag("options", "runcallback,runifok")
+            .replace_tag(
+                "address",
+                "script",
+                "./tests/integration/scripts/echovars.py",
+            )
+            .set_tag("args", "['runifok', 'arg2']")
+            .save_as(&tc.config_file);
+        #[cfg(target_family = "windows")]
+        Config::from_file("./tests/integration/config/ok_pattern.yml")
+            .set_tag("options", "runcallback")
+            .replace_tag("address", "script", "python")
+            .set_tag(
+                "args",
+                r"['.\tests\integration\scripts\echovars.py', 'runifok']",
+            )
+            .save_as(&tc.config_file);
+        let rc = tc.run(&opts.mode, &["-d"]);
+
+        jassert!(tc, "last_offset", "20100");
+        jassert!(tc, "last_line", "201");
+        jassert!(tc, "critical_count", "74");
+        jassert!(tc, "warning_count", "73");
+        jassert!(tc, "ok_count", "1");
+        jassert!(tc, "exec_count", "198");
+        assert_eq!(rc.0, 2);
+        jassert!(rc, "CRITICAL");
     }
 
     //------------------------------------------------------------------------------------------------
@@ -321,7 +359,7 @@ fn main() {
         jassert!(rc, "CRITICAL");
     }
 
-    // criticalthreshold
+    // warningthreshold
     {
         let mut tc = TestCase::new("huge_thresholds");
         Config::default()
@@ -353,20 +391,17 @@ fn main() {
                 "script",
                 "./tests/integration/scripts/echovars.py",
             )
+            .set_tag("args", "['start_script', 'arg2']")
             .save_as(&tc.config_file);
         #[cfg(target_family = "windows")]
         Config::default()
             .set_tag("options", "runcallback")
-            .replace_tag(
-                "address",
-                "script",
-                "python",
-            )
+            .replace_tag("address", "script", "python")
             .set_tag(
                 "args",
-                r"['.\tests\integration\scripts\echovars.py']",
+                r"['.\tests\integration\scripts\echovars.py', 'start_script']",
             )
-            .save_as(&tc.config_file);            
+            .save_as(&tc.config_file);
         let rc = tc.run(&opts.mode, &["-d"]);
 
         jassert!(tc, "last_offset", "20100");
@@ -400,15 +435,8 @@ fn main() {
                 "options",
                 "runcallback,criticalthreshold=50,warningthreshold=60",
             )
-            .replace_tag(
-                "address",
-                "script",
-                "python",
-            )
-            .set_tag(
-                "args",
-                r"['.\tests\integration\scripts\echovars.py']",
-            )            
+            .replace_tag("address", "script", "python")
+            .set_tag("args", r"['.\tests\integration\scripts\echovars.py']")
             .save_as(&tc.config_file);
         let rc = tc.run(&opts.mode, &["-d"]);
 
@@ -624,7 +652,7 @@ fn main() {
                 "domain",
                 "./tests/integration/tmp/generated.sock
                 ",
-            )            
+            )
             .save_as(&tc.config_file);
 
         // create UDS server

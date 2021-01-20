@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize, Serializer};
 
 use crate::misc::error::AppError;
 
+use crate::configuration::options::SearchOptions;
 use crate::configuration::pattern::{PatternCounters, PatternType};
 
 /// A wrapper to store log file processing data.
@@ -71,30 +72,32 @@ impl RunData {
     pub fn is_threshold_reached(
         &mut self,
         pattern_type: &PatternType,
-        critical_threshold: u64,
-        warning_threshold: u64,
+        options: &SearchOptions,
     ) -> bool {
+        trace!("pattern_type={:?}, runifok={}", pattern_type, options.runifok);
         // increments thresholds and compare with possible defined limits and accumulate counters for plugin output
         match pattern_type {
             PatternType::critical => {
                 self.counters.critical_count += 1;
-                if self.counters.critical_count <= critical_threshold {
+                if self.counters.critical_count <= options.criticalthreshold {
                     return false;
                 }
             }
             PatternType::warning => {
                 self.counters.warning_count += 1;
-                if self.counters.warning_count <= warning_threshold {
+                if self.counters.warning_count <= options.warningthreshold {
                     return false;
                 }
             }
             // this special Ok pattern resets counters
             PatternType::ok => {
+                self.counters.ok_count += 1;
                 self.counters.critical_count = 0;
                 self.counters.warning_count = 0;
 
-                // no need to process further: don't call a script
-                return true;
+                // no need to process further: don't call a script if runifok is not set
+                return options.runifok;
+                //return true;
             }
         }
         true

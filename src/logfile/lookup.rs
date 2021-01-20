@@ -147,12 +147,6 @@ impl Lookup<FullReader> for LogFile {
         // 3. loop to read each line of the file
         //------------------------------------------------------------------------------------
         loop {
-            // reset runtime variables because they change for every line read, apart from CLF_LOGFILE
-            // which is the same for each log
-            //vars.retain(&[&var!("LOGFILE"), &var!("TAG")]);
-            // test
-            let mut vars = RuntimeVars::default();
-
             // read until '\n' (which is included in the buffer)
             let ret = reader.read_until(b'\n', &mut buffer);
 
@@ -164,15 +158,8 @@ impl Lookup<FullReader> for LogFile {
             // to deal with UTF-8 conversion problems, use the lossy method. It will replace non-UTF-8 chars with ?
             let mut line = String::from_utf8_lossy(&buffer);
 
-            // remove newline
-            //line.to_mut().pop();
-
             // delete '\n' or '\r\n' from the eol
             LogFile::purge_line(&mut line);
-
-            // and line feed for Windows platforms
-            // #[cfg(target_family = "windows")]
-            // line.to_mut().pop();
 
             // read_line() returns a Result<usize>
             match ret {
@@ -201,19 +188,20 @@ impl Lookup<FullReader> for LogFile {
                         break;
                     }
 
-                    trace!("====> line#={}, line={}", line_number, line);
+                    trace!("====> line#={}, line={}", line_number, &line);
 
                     // is there a match, regarding also exceptions?
                     if let Some(pattern_match) = tag.is_match(&line) {
                         debug!(
-                            "found a match tag={}, line={}, line#={}, re=({:?},{}), warning_count={}, critical_count={}",
+                            "found a match tag={}, line={}, line#={}, re=({:?},{}), critical_count={}, warning_count={}, ok_count={}",
                             tag.name,
-                            line.clone(),
+                            &line,
                             line_number,
                             pattern_match.pattern_type,
                             pattern_match.regex.as_str(),
+                            run_data.counters.critical_count,
                             run_data.counters.warning_count,
-                            run_data.counters.critical_count
+                            run_data.counters.ok_count,
                         );
 
                         // check for ok pattern => so reset counters and continue
@@ -226,11 +214,8 @@ impl Lookup<FullReader> for LogFile {
                         // }
 
                         // when a threshold is reached, give up
-                        if !run_data.is_threshold_reached(
-                            &pattern_match.pattern_type,
-                            tag.options.criticalthreshold,
-                            tag.options.warningthreshold,
-                        ) {
+                        if !run_data.is_threshold_reached(&pattern_match.pattern_type, &tag.options)
+                        {
                             trace!(
                                 "threshold is not yet reached: current critical={}, warning={}",
                                 run_data.counters.critical_count,
@@ -242,6 +227,8 @@ impl Lookup<FullReader> for LogFile {
 
                         // if we've been asked to trigger the script, first add relevant variables
                         if tag.options.runcallback {
+                            let mut vars = RuntimeVars::default();
+
                             // create variables which will be set as environment variables when script is called
                             vars.insert_var(
                                 prefix_var!("LOGFILE"),
@@ -263,10 +250,14 @@ impl Lookup<FullReader> for LogFile {
                             let nb_caps_s = nb_caps.to_string();
                             vars.insert_var(prefix_var!("NB_CG"), &nb_caps_s);
 
+                            // add counters
                             let critical_count = format!("{}", run_data.counters.critical_count);
                             let warning_count = format!("{}", run_data.counters.warning_count);
+                            let ok_count = format!("{}", run_data.counters.ok_count);
+
                             vars.insert_var(prefix_var!("CRITICAL_COUNT"), &critical_count);
                             vars.insert_var(prefix_var!("WARNING_COUNT"), &warning_count);
+                            vars.insert_var(prefix_var!("OK_COUNT"), &ok_count);
 
                             debug!("added variables: {:?}", vars);
 

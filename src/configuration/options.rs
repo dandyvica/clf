@@ -51,6 +51,9 @@ pub struct SearchOptions {
 
     /// Stop processing of the logfile at this specific line number
     pub stopat: u64,
+
+    /// If set, run callback if OK pattern is found
+    pub runifok: bool,
 }
 
 /// Convenient macro to add a boolean option
@@ -94,6 +97,7 @@ impl TryFrom<String> for SearchOptions {
             "runlimit",
             "truncate",
             "stopat",
+            "runifok",
         ];
 
         // create a default options structure
@@ -125,7 +129,8 @@ impl TryFrom<String> for SearchOptions {
             keepoutput,
             savethresholds,
             protocol,
-            fastforward
+            fastforward,
+            runifok
         );
 
         // other options like key=value if any
