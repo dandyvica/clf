@@ -1,12 +1,16 @@
-use std::fmt;
 use std::fs::*;
 use std::io::{BufWriter, Write};
+#[cfg(target_family = "unix")]
+use std::os::unix::fs::MetadataExt;
 use std::process::Command;
 use std::str::FromStr;
 use std::{collections::HashMap, unimplemented};
+use std::{fmt, path::PathBuf};
 
+use log::{error, info, trace};
 use rand::{thread_rng, Rng};
 use regex::Regex;
+use simplelog::*;
 
 /// Helper macro to assert values in snapshot
 #[macro_export]
@@ -56,6 +60,24 @@ impl FromStr for Target {
 impl fmt::Display for Target {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
         write!(fmt, "{}", Target::debug)
+    }
+}
+
+// list of cli options
+#[derive(Debug)]
+pub struct Options {
+    pub mode: Target,
+    pub verbose: bool,
+    pub clf: String,
+}
+
+impl Default for Options {
+    fn default() -> Self {
+        Options {
+            mode: Target::debug,
+            verbose: false,
+            clf: String::new(),
+        }
     }
 }
 
@@ -133,24 +155,104 @@ pub struct TestCase {
     pub snap_file: String,
     pub config_file: String,
     pub json: HashMap<String, String>,
+    pub logfile: String,
+    pub logfile_gzip: String,
 }
 
 impl TestCase {
     // a new testcase with the default config
     pub fn new(tag: &str) -> Self {
         println!("running test case: {}", tag);
+        info!(
+            "==============================================> running test case: {}",
+            tag
+        );
 
-        TestCase {
+        let tc = TestCase {
             tag: tag.to_string(),
             snap_file: format!("./tests/integration/tmp/{}.json", tag),
             config_file: format!("./tests/integration/tmp/{}.yml", tag),
             json: HashMap::new(),
+            logfile: format!("./tests/integration/logfiles/{}.log", tag),
+            logfile_gzip: format!("./tests/integration/logfiles/{}.log.gz", tag),
+        };
+
+        // safe to delete logfile if any
+        let _ = std::fs::remove_file(&tc.logfile);
+        let _ = std::fs::remove_file(&tc.logfile_gzip);
+        let _ = std::fs::remove_file(&tc.snap_file);
+
+        // create dummy log file from the tc name
+        tc.create_log(None, false);
+
+        tc
+    }
+
+    // create a logfile which is specific to the tc
+    pub fn create_log(&self, path: Option<&str>, append: bool) {
+        match path {
+            None => FakeLogfile::create(&self.logfile, append),
+            Some(path) => FakeLogfile::create(path, append),
         }
     }
 
+    // create an utf8 logfile which is specific to the tc
+    pub fn create_log_utf8(&self) {
+        FakeLogfile::create_utf8(&self.logfile);
+    }
+
+    // simulate file growth
+    pub fn grow(&self) {
+        self.create_log(None, true);
+    }
+
+    // create multiple logfiles
+    pub fn multiple_logs(&self) {
+        trace!("creating fake logfiles");
+        for i in 1..=10 {
+            let logfile = format!("{}.{}", &self.logfile, i);
+            self.create_log(Some(&logfile), false);
+        }
+    }
+
+    // gzip internal logfile
+    pub fn gzip(&self) {
+        let output = Command::new("gzip")
+            .args(&[&self.logfile])
+            .output()
+            .expect(&format!("unable to gzip dummy logfile {}", self.logfile));
+        trace!("gzip, output={:?}", output);
+    }
+
+    // simulate file rotation
+    pub fn rotate(&self) {
+        // if .gz is already existing, delete it first
+        let _ = std::fs::remove_file(&self.logfile_gzip);
+        trace!("rotating file {}", &self.logfile);
+
+        let output = Command::new("gzip")
+            .args(&[&self.logfile])
+            .output()
+            .expect("unable to gzip dummy logfile");
+
+        trace!("gzip file={}, {:?}", &self.logfile, output);
+        if output.status.code().unwrap() != 0 {
+            error!("error compressing logfile {}", &self.logfile);
+            println!("error compressing logfile {}", &self.logfile);
+        }
+
+        // regenerate a new logfile
+        self.create_log(None, false);
+        trace!("created new file {}", &self.logfile);
+
+        // wait a little before calling
+        let ten_millis = std::time::Duration::from_millis(100);
+        std::thread::sleep(ten_millis);
+    }
+
     // call CLF executable with optional arguments
-    pub fn run(&mut self, target: &Target, optargs: &[&str]) -> (i32, String) {
-        let clf = target.path();
+    pub fn run(&mut self, opts: &Options, optargs: &[&str]) -> (i32, String) {
+        let clf = &opts.clf;
 
         let output = std::process::Command::new(clf)
             .args(&[
@@ -164,28 +266,40 @@ impl TestCase {
             .args(optargs)
             .output()
             .expect("unable to start clf");
-        //println!("{:?}", output);
 
+        // wait a little before calling
+        let ten_millis = std::time::Duration::from_millis(1000);
+        std::thread::sleep(ten_millis);
+
+        trace!("{:?}", output);
         let s = String::from_utf8_lossy(&output.stdout);
 
         // load json as hashmap
-        self.json = self.json(&self.snap_file);
+        self.json = self.json(&self.snap_file).unwrap_or(HashMap::new());
 
         (output.status.code().unwrap(), s.to_string())
     }
 
     // call CLF executable with arguments
-    pub fn exec(&self, target: &Target, args: &[&str]) -> i32 {
-        let clf = target.path();
+    pub fn exec(&self, opts: &Options, args: &[&str]) -> i32 {
+        let clf = &opts.clf;
+
         let output = Command::new(clf)
             .args(args)
             .output()
             .expect("unable to start clf");
+
+        trace!("{:?}", output);
         output.status.code().unwrap()
     }
 
     // extract JSON data
-    fn json(&self, name: &str) -> HashMap<String, String> {
+    fn json(&self, name: &str) -> Option<HashMap<String, String>> {
+        // if JSON is not existing, give up
+        if !std::path::Path::new(name).exists() {
+            return None;
+        }
+
         let data =
             read_to_string(&name).expect(&format!("unable to open snapshot file: {}", &name));
         let re = Regex::new(r#""([\w_]+)":([^{]+?)(,?)$"#).unwrap();
@@ -201,27 +315,27 @@ impl TestCase {
             }
         }
 
-        hmap
+        Some(hmap)
     }
 }
 
 // manage creation or growth of a fake logfile
-const FAKE_LOGFILE: &'static str = "./tests/integration/logfiles/generated.log";
-const FAKE_LOGFILE_UTF8: &'static str = "./tests/integration/logfiles/generated_utf8.log";
-const FAKE_LOGFILE_GZIP: &'static str = "./tests/integration/logfiles/generated.log.gz";
+//const FAKE_LOGFILE_UTF8: &'static str = "./tests/integration/logfiles/generated_utf8.log";
 
 pub struct FakeLogfile;
 
 impl FakeLogfile {
-    fn _create(append: bool) {
+    pub fn create(logfile: &str, append: bool) {
+        trace!("creating logfile {}", logfile);
+
         // open file in write or append mode
         let log = if append {
             OpenOptions::new()
                 .append(true)
-                .open(FAKE_LOGFILE)
-                .expect("unable to create fake logfile")
+                .open(logfile)
+                .expect(&format!("unable to create fake logfile {}", logfile))
         } else {
-            File::create(FAKE_LOGFILE).expect("unable to create fake logfile")
+            File::create(logfile).expect(&format!("unable to create fake logfile {}", logfile))
         };
         let mut writer = BufWriter::new(&log);
 
@@ -266,9 +380,9 @@ impl FakeLogfile {
     }
 
     // create a log with japanese utf8 chars
-    pub fn create_utf8() {
+    pub fn create_utf8(logfile: &str) {
         // open file in write or append mode
-        let log = File::create(FAKE_LOGFILE_UTF8).expect("unable to create fake logfile");
+        let log = File::create(&logfile).expect("unable to create fake logfile");
         let mut writer = BufWriter::new(&log);
 
         // initialize random seed
@@ -311,52 +425,13 @@ impl FakeLogfile {
         }
     }
 
-    // simulate file growth
-    pub fn init() {
-        FakeLogfile::_create(false);
-    }
+    // file signature
+    fn signature(path: &str) -> (u64, u64, i64) {
+        let metadata = PathBuf::from(path)
+            .metadata()
+            .expect(&format!("error fetching metadata from {}", path));
 
-    // simulate file growth
-    pub fn grow() {
-        FakeLogfile::_create(true);
-    }
-
-    // simulate file rotation
-    pub fn rotate() {
-        let output = Command::new("gzip")
-            .args(&[FAKE_LOGFILE])
-            .output()
-            .expect("unable to gzip dummy logfile");
-
-        if output.status.code().unwrap() != 0 {
-            println!("error compressing dummy logfile");
-        }
-
-        // regenerate a new logfile
-        FakeLogfile::init();
-
-        // wait a little before calling
-        let ten_millis = std::time::Duration::from_millis(500);
-        std::thread::sleep(ten_millis);
-    }
-
-    // simulate gzip
-    pub fn gzip(keep: bool) {
-        let args = if keep {
-            vec!["-k", FAKE_LOGFILE]
-        } else {
-            vec![FAKE_LOGFILE]
-        };
-
-        let _ = Command::new("gzip")
-            .args(&args)
-            .output()
-            .expect("unable to gzip dummy logfile");
-    }
-
-    // delete gzipped logfile
-    pub fn gzip_delete() {
-        std::fs::remove_file(FAKE_LOGFILE_GZIP).expect("unable to delete gzip fake logfile");
+        (metadata.ino(), metadata.dev(), metadata.ctime())
     }
 }
 
@@ -365,7 +440,7 @@ use serde::Deserialize;
 #[derive(Debug, Deserialize)]
 pub struct JSONStream {
     pub args: Vec<String>,
-    pub global: HashMap<String, String>,
+    pub global: Option<HashMap<String, String>>,
     pub vars: HashMap<String, String>,
 }
 
@@ -393,5 +468,45 @@ impl JSONStream {
         let s = std::str::from_utf8(&json_buffer).unwrap();
         let json: JSONStream = serde_json::from_str(&s).unwrap();
         Ok(json)
+    }
+}
+
+/// Prepare test execution
+pub struct TestScenario;
+
+impl TestScenario {
+    pub fn prepare() {
+        // create tmp directory if not present
+        if !std::path::Path::new("./tests/integration/tmp").exists() {
+            std::fs::create_dir("./tests/integration/tmp").expect("unable to create tmp dir");
+        }
+        // create logfiles directory if not present
+        if !std::path::Path::new("./tests/integration/logfiles").exists() {
+            std::fs::create_dir("./tests/integration/logfiles")
+                .expect("unable to create logfiles dir");
+        }
+
+        // create logger
+        TestScenario::init_log();
+    }
+
+    /// Create new logger and optionally delete logfile is bigger than cli value
+    fn init_log() {
+        // initialize logger
+        WriteLogger::init(
+            LevelFilter::Trace,
+            simplelog::ConfigBuilder::new()
+                .set_time_format("%Y-%b-%d %H:%M:%S.%f".to_string())
+                .build(),
+            OpenOptions::new()
+                .write(true)
+                .create(true)
+                .open("integration_test.log")
+                .unwrap(),
+        )
+        .expect("unable to create integration_test.log");
+
+        // useful traces
+        trace!("created log");
     }
 }

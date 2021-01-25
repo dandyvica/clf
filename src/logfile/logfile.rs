@@ -20,8 +20,8 @@ use crate::context;
 use crate::logfile::{
     compression::CompressionScheme, logfileid::LogFileID, lookup::Lookup, rundata::RunData,
 };
-use crate::misc::error::{AppError, AppResult};
-use crate::misc::extension::{ReadFs, Signature};
+use crate::misc::error::{AppCustomErrorKind, AppError, AppResult};
+use crate::misc::extension::ReadFs;
 
 /// A wrapper to get logfile information and its related attributes.
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
@@ -41,12 +41,18 @@ impl LogFile {
     /// Creates a `LogFile` by providing the full logfile path. It also sets platform specific features
     /// like file *inode* or *dev*. The file path is checked for accessibility and is canonicalized. It also
     /// contains run time data, which correspond to the data created each time a logfile instance is searched
-    /// for patterns.
-    pub fn from_path<P: AsRef<Path>>(path: P) -> AppResult<LogFile> {
+    /// for patterns. If a definition is provided, assign it
+    pub fn from_path<P: AsRef<Path>>(path: P, def: Option<LogFileDef>) -> AppResult<LogFile> {
         // create a default logfile and update it later. This is used to not duplicate code
         let mut logfile = LogFile::default();
 
-        logfile.id.update(path)?;
+        // if a definition is provided, assign it
+        if let Some(definition) = def {
+            logfile.definition = definition;
+        }
+
+        // now update all fields
+        logfile.id.update(path, logfile.definition.hash_window)?;
 
         Ok(logfile)
     }
@@ -57,17 +63,50 @@ impl LogFile {
     }
 
     /// Recalculate the signature to check whether it has changed
-    pub fn has_changed(&self) -> AppResult<bool> {
+    pub fn hash_been_rotated(&self) -> AppResult<bool> {
         // get most recent signature
-        let signature = self.id.canon_path.signature()?;
+        let old_signature = &self.id.signature;
+        let new_signature = self.id.canon_path.signature(self.definition.hash_window)?;
+
         trace!(
             "file = {:?}, current signature = {:?}, recalculated = {:?}",
             &self.id.canon_path,
-            self.id.signature,
-            signature
+            old_signature,
+            new_signature
         );
-        Ok(self.id.signature != signature && self.id.signature != Signature::default())
+
+        // dev number are different: files are located in different file systems
+        if old_signature.dev != new_signature.dev {
+            Ok(true)
+        }
+        // dev are equal but inodes are different
+        else if old_signature.inode != new_signature.inode {
+            Ok(true)
+        }
+        // dev, inodes are equal => test hashes
+        else {
+            // if either hash is None (this means the file size is < hash_window) we can't decide
+            if old_signature.hash.is_none() || new_signature.hash.is_none() {
+                Err(AppError::new_custom(
+                    AppCustomErrorKind::FileSizeIsLessThanHashWindow,
+                    &format!("unable to determine a safe hash"),
+                ))
+            }
+            // if hashes are equal we can assume file has not been rotated
+            else if old_signature.hash.unwrap() == new_signature.hash.unwrap() {
+                Ok(false)
+            }
+            // if not we can assume this is a new file
+            else {
+                Ok(true)
+            }
+        }
     }
+
+    // pub fn get_signatures(&self) -> (Signature, Signature) {
+    //     let new_signature = self.id.canon_path.signature().unwrap();
+    //     (self.id.signature.clone(), new_signature)
+    // }
 
     /// Returns an Option on a reference of a `RunData`, mapping the first
     /// tag name passed in argument.
@@ -280,7 +319,10 @@ mod tests {
     #[test]
     #[cfg(target_os = "linux")]
     fn new() {
-        let mut logfile = LogFile::from_path("/var/log/kern.log").unwrap();
+        let mut def = LogFileDef::default();
+        def.hash_window = 4096;
+
+        let mut logfile = LogFile::from_path("/var/log/kern.log", Some(def.clone())).unwrap();
         assert_eq!(logfile.id.declared_path.to_str(), Some("/var/log/kern.log"));
         assert_eq!(logfile.id.canon_path.to_str(), Some("/var/log/kern.log"));
         assert_eq!(
@@ -291,7 +333,7 @@ mod tests {
         assert_eq!(logfile.id.compression, CompressionScheme::Uncompressed);
         assert_eq!(logfile.run_data.len(), 0);
 
-        logfile = LogFile::from_path("/etc/hosts").unwrap();
+        logfile = LogFile::from_path("/etc/hosts", Some(def.clone())).unwrap();
         assert_eq!(logfile.id.canon_path.to_str(), Some("/etc/hosts"));
         assert!(logfile.id.extension.is_none());
         assert_eq!(logfile.id.compression, CompressionScheme::Uncompressed);
@@ -348,7 +390,10 @@ mod tests {
 
         let mut tag = Tag::from_str(yaml).expect("unable to read YAML");
 
-        let mut logfile = LogFile::from_path("tests/unittest/adhoc.txt").unwrap();
+        let mut def = LogFileDef::default();
+        def.hash_window = 4096;
+
+        let mut logfile = LogFile::from_path("tests/unittest/adhoc.txt", Some(def)).unwrap();
 
         // create a very simple TCP server: wait for data and test them
         let child = std::thread::spawn(move || {
@@ -369,7 +414,7 @@ mod tests {
                         "critical" => {
                             assert_eq!(json_data.args, vec!["arg1", "arg2", "arg3"]);
                             assert_eq!(
-                                json_data.vars.get("CLF_CAPTURE1").unwrap(),
+                                json_data.vars.get("CLF_CG_1").unwrap(),
                                 &format!(
                                     "{}{}",
                                     "/var/log/messages",
@@ -377,15 +422,15 @@ mod tests {
                                 )
                             );
                             assert_eq!(
-                                json_data.vars.get("CLF_CAPTURE2").unwrap(),
+                                json_data.vars.get("CLF_CG_2").unwrap(),
                                 "server01.domain.com"
                             );
-                            assert_ne!(json_data.vars.get("CLF_CAPTURE3").unwrap(), "5");
+                            assert_ne!(json_data.vars.get("CLF_CG_3").unwrap(), "5");
                         }
                         "warning" => {
                             assert_eq!(json_data.args, vec!["arg1", "arg2", "arg3"]);
                             assert_eq!(
-                                json_data.vars.get("CLF_CAPTURE1").unwrap(),
+                                json_data.vars.get("CLF_CG_1").unwrap(),
                                 &format!(
                                     "{}{}",
                                     "/var/log/syslog",
@@ -393,10 +438,10 @@ mod tests {
                                 )
                             );
                             assert_eq!(
-                                json_data.vars.get("CLF_CAPTURE2").unwrap(),
+                                json_data.vars.get("CLF_CG_2").unwrap(),
                                 "server01.domain.com"
                             );
-                            assert_ne!(json_data.vars.get("CLF_CAPTURE3").unwrap(), "5");
+                            assert_ne!(json_data.vars.get("CLF_CG_3").unwrap(), "5");
                         }
                         "ok" => (),
                         &_ => panic!("unexpected case"),

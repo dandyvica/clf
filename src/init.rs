@@ -4,10 +4,11 @@ use std::path::PathBuf;
 
 use simplelog::*;
 
-use crate::args::CliOptions;
-use crate::configuration::config::Config;
+use crate::configuration::{config::Config, script::Script};
 use crate::logfile::snapshot::Snapshot;
+use crate::misc::extension::Expect;
 use crate::misc::nagios::Nagios;
+use crate::{args::CliOptions, configuration::vars::GlobalVars};
 
 /// Create a new config struct
 pub fn init_config(options: &CliOptions) -> Config {
@@ -33,8 +34,8 @@ pub fn init_config(options: &CliOptions) -> Config {
     let mut config = _config.unwrap();
 
     // add process environment variables and optional extra variables
-    config.global.insert_process_env();
-    config.global.insert_extar_vars(&options.extra_vars);
+    config.global.insert_process_env(&options.config_file);
+    config.global.insert_extra_vars(&options.extra_vars);
 
     config
 }
@@ -44,17 +45,29 @@ pub fn init_log(options: &CliOptions) {
     // builds the logger from cli or the default one from platform specifics
     let logger = &options.clf_logger;
 
+    // options depend on wheter we need to reset the log
+    let writable = if options.reset_log {
+        OpenOptions::new()
+            .write(true)
+            .truncate(true)
+            .create(true)
+            .open(logger)
+            .unwrap()
+    } else {
+        OpenOptions::new()
+            .append(true)
+            .create(true)
+            .open(logger)
+            .unwrap()
+    };
+
     // initialize logger
     match WriteLogger::init(
         options.logger_level,
         simplelog::ConfigBuilder::new()
             .set_time_format("%Y-%b-%d %H:%M:%S.%f".to_string())
             .build(),
-        OpenOptions::new()
-            .append(true)
-            .create(true)
-            .open(logger)
-            .unwrap(),
+        writable,
     ) {
         Ok(_) => (),
         Err(e) => {
@@ -67,16 +80,10 @@ pub fn init_log(options: &CliOptions) {
     };
 
     // check if we have to delete the log, because it's bigger than max logger size
-    let metadata = std::fs::metadata(&logger);
-    if let Err(e) = &metadata {
-        Nagios::exit_critical(&format!("error on metadata() API: {}", e));
-    }
+    let metadata = std::fs::metadata(&logger).expect_critical(&format!("error on metadata() API"));
 
-    debug!(
-        "current logger size is: {} bytes",
-        metadata.as_ref().unwrap().len()
-    );
-    if metadata.as_ref().unwrap().len() > options.max_logger_size {
+    debug!("current logger size is: {} bytes", metadata.len());
+    if metadata.len() > options.max_logger_size {
         if let Err(e) = std::fs::remove_file(&logger) {
             // 'not found' could be a viable error
             if e.kind() != std::io::ErrorKind::NotFound {
@@ -88,7 +95,10 @@ pub fn init_log(options: &CliOptions) {
     }
 
     // useful traces
-    info!("using configuration file: {:?}", &options.config_file);
+    info!(
+        "=============================> using configuration file: {:?}",
+        &options.config_file
+    );
     info!("options: {:?}", &options);
 }
 
@@ -120,20 +130,22 @@ pub fn load_snapshot(options: &CliOptions, config_snap: &Option<PathBuf>) -> (Sn
     info!("using snapshot file:{}", &snapfile.display());
 
     // read snapshot data from file
-    let snapshot = Snapshot::load(&snapfile);
-    if let Err(e) = &snapshot {
-        Nagios::exit_critical(&format!(
-            "unable to load snapshot file: {:?}, error: {}",
-            &snapfile, e
-        ));
-    }
+    let snapshot = Snapshot::load(&snapfile)
+        .expect_critical(&format!("unable to load snapshot file: {:?},", &snapfile));
+    // let snapshot = Snapshot::load(&snapfile);
+    // if let Err(e) = &snapshot {
+    //     Nagios::exit_critical(&format!(
+    //         "unable to load snapshot file: {:?}, error: {}",
+    //         &snapfile, e
+    //     ));
+    // }
 
     info!(
-        "loaded snapshot file {:?}, data = {:?}",
+        "loaded snapshot file {:?}, data = {:#?}",
         &snapfile, &snapshot
     );
 
-    (snapshot.unwrap(), snapfile)
+    (snapshot, snapfile)
 }
 
 /// Saves snapshot file into provided path
@@ -144,5 +156,51 @@ pub fn save_snapshot(snapshot: &mut Snapshot, snapfile: &PathBuf, retention: u64
             "unable to save snapshot file: {:?}, error: {}",
             &snapfile, e
         ));
+    }
+}
+
+/// Spawn a prescript and returns its pid
+pub fn spawn_prescript(prescript: &Script, vars: Option<&GlobalVars>) -> u32 {
+    let result = prescript.spawn(vars);
+
+    // check rc
+    if let Err(e) = &result {
+        error!("error: {} spawning prescript: {:?}", e, prescript.command);
+        Nagios::exit_critical(&format!(
+            "error: {} spawning prescript: {:?}",
+            e, prescript.command
+        ));
+    }
+
+    // now it's safe to unwrap to get pid
+    debug_assert!(result.is_ok());
+    let prescript_pid = result.unwrap();
+
+    // info!(
+    //     "prescript command successfully executed, pid={}",
+    //     prescript_pid
+    // );
+
+    prescript_pid
+}
+
+/// Spawn postscript
+pub fn spawn_postscript(postscript: &mut Script, pids: &[u32]) {
+    // add all pids to the end of arguments
+    for pid in pids {
+        postscript.command.push(pid.to_string());
+    }
+
+    // run script
+    let result = postscript.spawn(None);
+
+    // check rc
+    if let Err(e) = &result {
+        error!("error: {} spawning command: {:?}", e, postscript.command);
+    } else {
+        info!(
+            "postcript command successfully executed, pid={}",
+            result.unwrap()
+        )
     }
 }

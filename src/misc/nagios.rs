@@ -10,7 +10,7 @@ use crate::logfile::rundata::RunData;
 macro_rules! create_exit {
     ($name:ident, $code:expr) => {
         #[allow(dead_code)]
-        pub fn $name(msg: &str) {
+        pub fn $name(msg: &str) -> ! {
             Nagios::exit(msg, $code);
         }
     };
@@ -20,7 +20,7 @@ pub struct Nagios;
 
 impl Nagios {
     #[inline(always)]
-    pub fn exit(msg: &str, code: NagiosError) {
+    pub fn exit(msg: &str, code: NagiosError) -> ! {
         println!("{}: {}", String::from(&code), msg);
         std::process::exit(code as i32);
     }

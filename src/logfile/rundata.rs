@@ -74,7 +74,11 @@ impl RunData {
         pattern_type: &PatternType,
         options: &SearchOptions,
     ) -> bool {
-        trace!("pattern_type={:?}, runifok={}", pattern_type, options.runifok);
+        trace!(
+            "pattern_type={:?}, runifok={}",
+            pattern_type,
+            options.runifok
+        );
         // increments thresholds and compare with possible defined limits and accumulate counters for plugin output
         match pattern_type {
             PatternType::critical => {
@@ -110,16 +114,26 @@ mod tests {
 
     #[test]
     fn is_threshold_reached() {
+        let mut opts = SearchOptions::default();
         let mut s = RunData::default();
+
         s.counters.critical_count = 5;
         s.counters.warning_count = 5;
-        assert!(s.is_threshold_reached(&PatternType::critical, 4, 4));
+
+        opts.criticalthreshold = 4;
+        opts.warningthreshold = 4;
+        assert!(s.is_threshold_reached(&PatternType::critical, &opts));
         assert_eq!(s.counters.critical_count, 6);
 
-        assert!(!s.is_threshold_reached(&PatternType::warning, 10, 10));
+        opts.criticalthreshold = 10;
+        opts.warningthreshold = 10;
+        assert!(!s.is_threshold_reached(&PatternType::warning, &opts));
         assert_eq!(s.counters.warning_count, 6);
 
-        assert!(s.is_threshold_reached(&PatternType::ok, 1, 1));
+        opts.criticalthreshold = 1;
+        opts.warningthreshold = 1;
+        opts.runifok = true;
+        assert!(s.is_threshold_reached(&PatternType::ok, &opts));
         assert_eq!(s.counters.critical_count, 0);
         assert_eq!(s.counters.warning_count, 0);
     }

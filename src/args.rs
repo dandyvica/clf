@@ -5,6 +5,7 @@ use clap::{App, Arg};
 use simplelog::LevelFilter;
 
 use crate::logfile::lookup::ReaderCallType;
+use crate::misc::extension::Expect;
 use crate::misc::{
     constants::*,
     nagios::{Nagios, NagiosVersion},
@@ -26,6 +27,7 @@ pub struct CliOptions {
     pub tera_context: Option<String>,
     pub extra_vars: Option<Vec<String>>,
     pub show_rendered: bool,
+    pub reset_log: bool,
 }
 
 /// Implements `Default` trait for `CliOptions`.
@@ -49,6 +51,7 @@ impl Default for CliOptions {
             tera_context: None,
             extra_vars: None,
             show_rendered: false,
+            reset_log: false,
         }
     }
 }
@@ -97,9 +100,9 @@ impl CliOptions {
                     .takes_value(false),
             )
             .arg(
-                Arg::new("loglevel")
+                Arg::new("log-level")
                     .short('g')
-                    .long("loglevel")
+                    .long("log-level")
                     .required(false)
                     .long_about("When log is enabled, set the minimum log level. Defaults to 'Info'")
                     .possible_values(&["Off", "Error", "Warn", "Info", "Debug", "Trace"])
@@ -171,6 +174,14 @@ impl CliOptions {
                     .multiple(true)
                     .takes_value(true),
             )
+            .arg(
+                Arg::new("overwrite-log")
+                    .short('r')
+                    .long("overwrite-log")
+                    .required(false)
+                    .long_about("Overwrite clf log if specified")
+                    .takes_value(false),
+            )
             .get_matches();
 
         // save all cli options into a structure
@@ -178,15 +189,18 @@ impl CliOptions {
 
         // config file is mandatory. Try to canonicalize() at the same time.
         let config_file = PathBuf::from(matches.value_of("config").unwrap());
-        let canonicalized_config_file = config_file.canonicalize();
-        if let Err(ref e) = canonicalized_config_file {
-            Nagios::exit_critical(&format!(
-                "error trying to canonicalize config file: {}, error: {}",
-                config_file.display(),
-                e
-            ));
-        }
-        options.config_file = canonicalized_config_file.unwrap();
+        // let canonicalized_config_file = config_file.canonicalize();
+        // if let Err(ref e) = canonicalized_config_file {
+        //     Nagios::exit_critical(&format!(
+        //         "error trying to canonicalize config file: {}, error: {}",
+        //         config_file.display(),
+        //         e
+        //     ));
+        // }
+        options.config_file = config_file.canonicalize().expect_critical(&format!(
+            "error trying to canonicalize config file: {}",
+            config_file.display()
+        ));
 
         // optional log file
         if matches.is_present("log") {
@@ -203,8 +217,9 @@ impl CliOptions {
         options.delete_snapfile = matches.is_present("delete-snapshot");
         options.show_options = matches.is_present("show-options");
         options.show_rendered = matches.is_present("show-rendered");
+        options.reset_log = matches.is_present("overwrite-log");
 
-        options.logger_level = matches.value_of_t("loglevel").unwrap_or(LevelFilter::Info);
+        options.logger_level = matches.value_of_t("log-level").unwrap_or(LevelFilter::Info);
 
         options.nagios_version = matches
             .value_of_t("nagios-version")

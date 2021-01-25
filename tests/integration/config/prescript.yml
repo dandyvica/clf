@@ -8,6 +8,15 @@ global:
     CLF_lastname: Pacino
     CLF_city: "Los Angeles"
     CLF_profession: actor
+  prescript:
+    - command: ['/bin/uname', '-a']
+    
+    - command: ['/bin/sleep', '10']
+      timeout: 1000    
+    
+    - command: ['date', '%f']
+      exit_on_error: true
+
 
 searches:
   - logfile: 
@@ -16,7 +25,6 @@ searches:
       logfilemissing: critical
       archive:
         extension: gz
-      hash_window: 1024
     tags: 
       - name: tag1
         process: true

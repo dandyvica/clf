@@ -1,10 +1,11 @@
 //! Traits defined here to extend Rust standard structures.
-use std::fs::{read_dir, File};
 use std::io::{BufReader, Read};
-#[cfg(target_family = "unix")]
-use std::os::unix::fs::MetadataExt;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::{
+    fmt::Debug,
+    fs::{read_dir, File},
+};
 
 // #[cfg(target_family = "windows")]
 // use std::os::windows::prelude::*;
@@ -14,6 +15,7 @@ use regex::Regex;
 use serde::{Deserialize, Serialize};
 
 use crate::misc::error::{AppCustomErrorKind, AppError, AppResult};
+use crate::misc::nagios::Nagios;
 
 // specific linking for Windows signature
 #[cfg(target_family = "windows")]
@@ -27,8 +29,37 @@ extern "C" {
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone, Default)]
 /// A way to uniquely identify a logfile and to know whether is has been archived.
 pub struct Signature {
-    inode: u64,
-    dev: u64,
+    pub inode: u64,
+    pub dev: u64,
+    pub size: u64,
+    pub hash: Option<u64>,
+}
+
+impl Signature {
+    fn hash<P: AsRef<Path> + Debug>(path: P, hash_buffer_size: usize) -> AppResult<u64> {
+        use crc::crc64;
+        debug_assert!(hash_buffer_size != 0);
+        trace!("hash_buffer_size = {}", hash_buffer_size);
+
+        // open file
+        let mut file = File::open(path.as_ref())
+            .map_err(|e| context!(e, "unable to open file for calculating hash {:?}", path))?;
+
+        //let mut reader = BufReader::new(&file);
+        let mut buffer = vec![0; hash_buffer_size];
+
+        file.read_exact(&mut buffer)
+            .map_err(|e| context!(e, "path={:?}, read_exact()", path))?;
+
+        // calculate xxhash64
+        let hash = crc64::checksum_iso(&buffer);
+        debug!(
+            "path={:?}, hash_buffer_size={}, hash={}",
+            path, hash_buffer_size, hash
+        );
+
+        Ok(hash)
+    }
 }
 
 /// All `PathBuf` utility functions.
@@ -36,7 +67,7 @@ pub trait ReadFs {
     fn is_match(self, re: &Regex) -> bool;
     fn is_usable(&self) -> AppResult<()>;
     fn list_files(&self, regex: &str) -> AppResult<Vec<PathBuf>>;
-    fn signature(&self) -> AppResult<Signature>;
+    fn signature(&self, hash_buffer_size: usize) -> AppResult<Signature>;
 }
 
 impl ReadFs for PathBuf {
@@ -86,27 +117,40 @@ impl ReadFs for PathBuf {
         Ok(files)
     }
 
-    // get inode and dev from file
+    // get inode and dev from file and calculate hash
     #[cfg(target_family = "unix")]
-    fn signature(&self) -> AppResult<Signature> {
+    fn signature(&self, hash_buffer_size: usize) -> AppResult<Signature> {
+        use std::os::unix::fs::MetadataExt;
+
+        // first get metadata fields for signature
         let metadata = self
             .metadata()
             .map_err(|e| context!(e, "error fetching metadata for file {:?} ", self))?;
 
-        Ok(Signature {
-            inode: metadata.ino(),
-            dev: metadata.dev(),
-        })
+        let mut signature = Signature::default();
+        signature.inode = metadata.ino();
+        signature.dev = metadata.dev();
+        signature.size = metadata.size();
+
+        // only calculate hash if file size is larger than hash buffer size
+        signature.hash = if signature.size < hash_buffer_size as u64 {
+            None
+        } else {
+            let hash = Signature::hash(&self, hash_buffer_size)?;
+            Some(hash)
+        };
+
+        Ok(signature)
     }
 
     #[cfg(target_family = "windows")]
     // needs to convert a regular Rust string to an UTF16 unicode null-terminated string
     // this is because Win32 APIs needs a LPWCSTR type which a pointer on a null-terminated
     // UTF16 string
-    fn signature(&self) -> AppResult<Signature> {
+    fn signature(&self, hash_buffer_size: usize) -> AppResult<Signature> {
+        use std::os::windows::fs::MetadataExt;
         use widestring::U16CString;
 
-        //let mut rc: u32 = 0;
         let sign = Signature::default();
 
         // convert path to UTF16 Windows string
@@ -208,8 +252,22 @@ impl<R: Read> JsonRead for BufReader<R> {
     }
 }
 
-// specific Windows function to convert a Rust string into an UTF16 Windows unicode
-// string. This is used to receive a LPWCSTR string to a Windows API
+// helper functions to exit in case of error
+pub trait Expect<T> {
+    fn expect_critical(self, text: &str) -> T;
+}
+
+impl<T, E: Debug> Expect<T> for std::result::Result<T, E> {
+    fn expect_critical(self, msg: &str) -> T {
+        match self {
+            Ok(inner) => inner,
+            Err(e) => unwrap_failed(msg, &e),
+        }
+    }
+}
+fn unwrap_failed(msg: &str, error: &dyn Debug) -> ! {
+    Nagios::exit_critical(&format!("{}, error: {:?}", msg, error))
+}
 
 #[cfg(test)]
 mod tests {
@@ -254,7 +312,7 @@ mod tests {
     #[test]
     #[cfg(target_family = "unix")]
     fn signature() {
-        let s = PathBuf::from("/var/log").signature();
+        let s = PathBuf::from("/var/log").signature(4096);
 
         assert!(s.is_ok());
     }

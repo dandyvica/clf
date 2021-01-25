@@ -113,7 +113,11 @@ impl Snapshot {
         // is logfile already in the snapshot ?
         if !self.snapshot.contains_key(path) {
             // create a new LogFile
-            let logfile = LogFile::from_path(&path)?;
+            trace!(
+                "snapshot is not containing path {:?}, creating a new entry",
+                path
+            );
+            let logfile = LogFile::from_path(&path, Some(def.clone()))?;
             let opt = self.snapshot.insert(path.clone(), logfile);
             debug_assert!(opt.is_none());
             debug_assert!(self.snapshot.contains_key(path));
@@ -124,6 +128,8 @@ impl Snapshot {
         // get element mutable ref and set missing fields
         let logfile = self.snapshot.get_mut(path).unwrap();
         logfile.set_definition(def.clone());
+
+        trace!("created logfile struct: {:#?}", logfile);
 
         Ok(logfile)
     }
@@ -205,8 +211,9 @@ mod tests {
             "extension": "log",
             "compression": "uncompressed",
             "signature": {
-            "inode": 1116186,
-            "dev": 28
+                "inode": 1275587,
+                "dev": 28,
+                "size": 4000
             }
         },
         "run_data": {
@@ -235,8 +242,9 @@ mod tests {
             "extension": "log",
             "compression": "uncompressed",
             "signature": {
-            "inode": 1116188,
-            "dev": 28
+                "inode": 1275587,
+                "dev": 28,
+                "size": 4000
             }
         },
         "run_data": {
@@ -265,8 +273,9 @@ mod tests {
             "extension": "log",
             "compression": "uncompressed",
             "signature": {
-            "inode": 1274327,
-            "dev": 28
+                "inode": 1275587,
+                "dev": 28,
+                "size": 4000
             }
         },
         "run_data": {
@@ -310,8 +319,9 @@ mod tests {
             "extension": null,
             "compression": "uncompressed",
             "signature": {
-            "inode": 1275587,
-            "dev": 28
+                "inode": 1275587,
+                "dev": 28,
+                "size": 4000
             }
         },
         "run_data": {
@@ -362,7 +372,8 @@ mod tests {
     #[cfg(target_os = "linux")]
     fn logfile_mut() {
         let mut data: Snapshot = serde_json::from_str(SNAPSHOT_SAMPLE).unwrap();
-        let def = LogFileDef::default();
+        let mut def = LogFileDef::default();
+        def.hash_window = 4096;
 
         assert!(data
             .snapshot

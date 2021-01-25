@@ -16,6 +16,7 @@ pub enum AppCustomErrorKind {
     FilePathNotAbsolute,
     UnsupportedSearchOption,
     OsStringConversionError,
+    FileSizeIsLessThanHashWindow,
     PhantomCloneError,
     #[cfg(target_family = "windows")]
     WindowsApiError,
@@ -35,6 +36,9 @@ impl fmt::Display for AppCustomErrorKind {
             }
             AppCustomErrorKind::FilePathNotAbsolute => write!(f, "the file path is not absolute"),
             AppCustomErrorKind::UnsupportedSearchOption => write!(f, "search option not supported"),
+            AppCustomErrorKind::FileSizeIsLessThanHashWindow => {
+                write!(f, "file size is lass than hash window")
+            }
             AppCustomErrorKind::OsStringConversionError => {
                 write!(f, "conversion from OsString failed")
             }

@@ -1,0 +1,112 @@
+---
+# list of global definitions
+global:
+  # path where script callbacks are searched for
+  script_path: "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+
+  # path of the snapshot file
+  snapshot_file: /tmp/full.json
+
+  # how long will entries in the snapshot file are kept (in ??)
+  snapshot_retention: 60
+
+  # a list of user-defined variables which are sent to callback. Those are also sent to prescript (see below)
+  # the CLF_ prefix is optional
+  vars:
+    CLF_firstname: Al
+    CLF_lastname: Pacino
+    CLF_city: "Los Angeles"
+    CLF_profession: actor
+    my_awesomescript: |
+      #!/bin/bash
+      for i in /var/log/syslog.*gz
+      do
+        gunzip -c $i >> /tmp/concatenated.log
+      done
+
+  # an array of commands or scripts being started before searching into logfiles
+  prescript:
+    # command and its arguments
+    - command: ['./tests/integration/scripts/echodomain.py']
+      timeout: 1000
+      async: true
+      exit_on_error: false
+
+    - command: ['./tests/integration/scripts/create_file.pl']
+      timeout: 1000
+      exit_on_error: true
+
+  # a command run at the end of the searches
+  postcript:
+    command: ['./tests/integration/scripts/kill.py']
+    async: true
+
+# an array of searches. Each search defines a logfile or command which gives a list of logfiles
+searches:
+  # full path to the logfile
+  - logfile:
+      path: /tmp/concatenated.log
+      format: plain
+      hash_window: 1024
+    
+    # an array of tags which uniquely identifies a search
+    tags:
+      - name: syslog_nokernel
+        # if false, that tag is not processed
+        process: true
+
+        # list of comma-separated options specific to the tag
+        options: "runcallback,fastforward"
+
+        # callback which will be called
+        callback:
+          # script path
+          script: "./tests/integration/scripts/echovars.py"
+          # and optional arguments          
+          args:
+            - /tmp/full.yml.txt
+
+        # a list of regexes
+        patterns:
+          critical:
+            regexes: ['(\w+)[(\d+)]']
+            exceptions: ["kernel:"]
+
+      - name: syslog_kernel
+        process: true
+        options: "runcallback"
+        callback:
+          script: "./syslog.py"
+          args: ["arg1", "arg2", "arg3"]
+        patterns:
+          warning:
+            regexes: ["kernel: (.*)"]
+
+  - logfile:
+      path: /var/log/kern.log
+      format: plain
+    tags:
+      - name: kern_nokernel
+        process: true
+        options: "runcallback"
+        callback: { domain: "/tmp/clf.sock", args: ["arg1", "arg2", "arg3"] }
+        patterns:
+          warning: { regexes: ["kernel: (.*)$"], exceptions: ["NVidia"] }
+
+      - name: kern_kernel
+        process: true
+        options: "runcallback,runlimit=10"
+        callback: { domain: "/tmp/clf.sock", args: ["arg1", "arg2", "arg3"] }
+        patterns:
+          warning: { regexes: ["kernel: (.*)"] }
+
+  - logfile:
+      list: ['/usr/bin/find', '/var/log/apt', '-name', '*.log']
+      format: plain
+    tags:
+      - name: apt
+        process: true
+        options: "runcallback"
+        callback: { domain: "/tmp/clf.sock", args: ["arg1", "arg2", "arg3"] }
+        patterns:
+          warning: { regexes: ["Deleting"] }

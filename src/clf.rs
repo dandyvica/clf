@@ -1,8 +1,8 @@
 // TODO:
 // - create a reader for JSON files
-// - implement logfilemissing
 // - implement a unique ID iso pid. FIXME: check exit message from snapshot
 // - add error msg if rewind & fastforward ?
+// - add script unit tests
 
 // DONE:
 // - serialize/deserialize date correctly
@@ -19,6 +19,7 @@
 // - manage errors when logfile is not found
 // - output message: put canon_path iso declared_path
 // - add missing variables: CLF_HOSTNAME, CLF_IPADDRESS, CLF_TIMESTAMP, CLF_USER. FIXME: missing CLF_IPADDRESS
+// - implement logfilemissing
 
 use log::{debug, info};
 use std::io::ErrorKind;
@@ -83,7 +84,7 @@ fn main() {
     //---------------------------------------------------------------------------------------------------
     // load configuration file as specified from the command line
     //---------------------------------------------------------------------------------------------------
-    let mut config = init_config(&options);
+    let config = init_config(&options);
     debug!("{:#?}", config);
 
     // print out config if requested and exit
@@ -97,30 +98,15 @@ fn main() {
     let (mut snapshot, snapfile) = load_snapshot(&options, &config.global.snapshot_file);
 
     //---------------------------------------------------------------------------------------------------
-    // start the prescript if any
+    // start prescripts if any
     //---------------------------------------------------------------------------------------------------
-    let mut prescript_pid = 0;
+    // we'll keep all prescript pid's in order to send them back, if any, to the postscript
+    let mut prescript_pids = Vec::new();
+
     if config.global.prescript.is_some() {
-        // execute script
-        let prescript = &config.global.prescript.as_ref().unwrap();
-        let result = prescript.spawn();
-
-        // check rc
-        if let Err(e) = &result {
-            error!("error: {} spawning command: {:?}", e, prescript.command);
-            Nagios::exit_critical(&format!(
-                "error: {} spawning command: {:?}",
-                e, prescript.command
-            ));
+        for prescript in config.global.prescript.as_ref().unwrap() {
+            prescript_pids.push(spawn_prescript(prescript, Some(&config.global.global_vars)));
         }
-
-        // now it's safe to unwrap to get pid
-        prescript_pid = result.unwrap();
-
-        info!(
-            "prescript command successfully executed, pid={}",
-            prescript_pid
-        );
     }
 
     //---------------------------------------------------------------------------------------------------
@@ -168,8 +154,12 @@ fn main() {
             .retain(|k, _| tag_names.contains(&k.as_str()));
 
         // check if the rotation occured. This means the logfile signature has changed
+        trace!(
+            "checking if logfile {:?} has changed",
+            logfile_from_snapshot.id.canon_path.display()
+        );
         let logfile_is_archived = {
-            let temp = logfile_from_snapshot.has_changed();
+            let temp = logfile_from_snapshot.hash_been_rotated();
             if let Err(e) = temp {
                 error!(
                     "error on fetching metadata on logfile {}: {}",
@@ -180,9 +170,18 @@ fn main() {
             }
             temp.unwrap()
         };
+        // trace!(
+        //     "logfile={:?}, logfile_is_archived={}, signatures={:?}",
+        //     logfile_from_snapshot.id.canon_path.display(),
+        //     logfile_is_archived,
+        //     logfile_from_snapshot.get_signatures()
+        // );
 
         if logfile_is_archived {
-            info!("logfile has changed, probably archived and rotated");
+            info!(
+                "logfile {} has changed, probably archived and rotated",
+                logfile_from_snapshot.id.canon_path.display()
+            );
 
             //let archive_path = LogArchive::default_path(search.logfile.path());
             let archive_path = search.logfile.archive_path();
@@ -190,7 +189,10 @@ fn main() {
 
             // clone search and assign archive logfile instead of original logfile
             let mut archived_logfile = logfile_from_snapshot.clone();
-            if let Err(e) = archived_logfile.id.update(&archive_path) {
+            if let Err(e) = archived_logfile
+                .id
+                .update(&archive_path, archived_logfile.definition.hash_window)
+            {
                 error!(
                     "error on updating core data on logfile {}: {}",
                     logfile_from_snapshot.id.canon_path.display(),
@@ -260,22 +262,23 @@ fn main() {
 
     // optionally call postscript
     if config.global.postcript.is_some() {
-        // add the pid to the end of arguments
-        let postcript = &mut config.global.postcript.as_mut().unwrap();
-        postcript.command.push(prescript_pid.to_string());
+        // // add the pid to the end of arguments
+        // let postcript = &mut config.global.postcript.as_mut().unwrap();
+        // postcript.command.push(prescript_pid.to_string());
 
-        // run script
-        let result = postcript.spawn();
+        // // run script
+        // let result = postcript.spawn();
 
-        // check rc
-        if let Err(e) = &result {
-            error!("error: {} spawning command: {:?}", e, postcript.command);
-        } else {
-            info!(
-                "postcript command successfully executed, pid={}",
-                prescript_pid
-            )
-        }
+        // // check rc
+        // if let Err(e) = &result {
+        //     error!("error: {} spawning command: {:?}", e, postcript.command);
+        // } else {
+        //     info!(
+        //         "postcript command successfully executed, pid={}",
+        //         prescript_pid
+        //     )
+        // }
+        spawn_postscript(&mut config.global.postcript.unwrap(), &prescript_pids);
     }
 
     info!(

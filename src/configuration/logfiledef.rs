@@ -7,6 +7,7 @@ use serde_yaml::Value;
 
 use super::archive::LogArchive;
 use super::logsource::LogSource;
+use crate::misc::constants::DEFAULT_HASH_BUFFER_SIZE;
 use crate::misc::nagios::NagiosError;
 
 // a logfile could be of different format. Necessary to effectively read them
@@ -46,6 +47,10 @@ pub struct LogFileDef {
     // what to expect when logfile is not accessible
     #[serde(default)]
     pub logfilemissing: NagiosError,
+
+    // hash buffer size
+    #[serde(default = "LogFileDef::default_hash_window")]
+    pub hash_window: usize,
 }
 
 impl LogFileDef {
@@ -78,6 +83,11 @@ impl LogFileDef {
             ),
             LogSource::LogList(list) => list,
         }
+    }
+
+    // returns the default buffer size
+    fn default_hash_window() -> usize {
+        DEFAULT_HASH_BUFFER_SIZE
     }
 
     // /// Return the list variant from LogSource

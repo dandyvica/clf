@@ -34,15 +34,15 @@ pub struct LogFileID {
 impl LogFileID {
     /// Fill all variable fields from declared
     #[cfg(test)]
-    pub fn from_declared<P: AsRef<Path>>(path: P) -> AppResult<Self> {
+    pub fn from_declared<P: AsRef<Path>>(path: P, hash_buffer_size: usize) -> AppResult<Self> {
         let mut id = LogFileID::default();
-        id.update(path)?;
+        id.update(path, hash_buffer_size)?;
 
         Ok(id)
     }
 
     /// Update some logfile fields with up to date path values. This is used when detecting rotation for logfiles
-    pub fn update<P: AsRef<Path>>(&mut self, path: P) -> AppResult<()> {
+    pub fn update<P: AsRef<Path>>(&mut self, path: P, hash_buffer_size: usize) -> AppResult<()> {
         // check if we can really use the file
         self.declared_path = PathBuf::from(path.as_ref());
 
@@ -58,7 +58,7 @@ impl LogFileID {
         self.compression = CompressionScheme::from(self.extension.as_deref());
 
         // // get inode & dev ID
-        self.signature = canon.signature()?;
+        self.signature = canon.signature(hash_buffer_size)?;
         trace!(
             "current signature for {:?} is {:?}",
             &canon,
@@ -79,13 +79,13 @@ mod tests {
     #[test]
     #[cfg(target_os = "linux")]
     fn id() {
-        let id = LogFileID::from_declared("/lib/ld-linux.so.2").unwrap();
+        let id = LogFileID::from_declared("/lib/ld-linux.so.2", 4096).unwrap();
         assert_eq!(
             id.canon_path,
             PathBuf::from("/lib/i386-linux-gnu/ld-2.31.so")
         );
 
-        let id = LogFileID::from_declared("/foo");
+        let id = LogFileID::from_declared("/foo", 4096);
         assert!(id.is_err());
     }
 }

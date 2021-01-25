@@ -20,3 +20,9 @@ pub const MAX_LOGGER_SIZE: u64 = 50;
 pub const fn default_timeout() -> u64 {
     180
 }
+
+/// Default hash buffer size
+pub const DEFAULT_HASH_BUFFER_SIZE: usize = 4096;
+
+// default time for waiting to spawned scripts
+pub const DEFAULT_SCRIPT_TIMEOUT: u64 = 10;

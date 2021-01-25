@@ -1,6 +1,6 @@
 //! Contains the global configuration when processing logfiles. These values are independant from the ones solely related to a logfile when searching.
 use std::borrow::Cow;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use serde::Deserialize;
 
@@ -30,7 +30,7 @@ pub struct GlobalOptions {
     pub global_vars: GlobalVars,
 
     // A command called before starting reading
-    pub prescript: Option<Script>,
+    pub prescript: Option<Vec<Script>>,
 
     // A command called before the end of clf
     pub postcript: Option<Script>,
@@ -38,8 +38,14 @@ pub struct GlobalOptions {
 
 impl GlobalOptions {
     /// Add variables like user, platform etc not dependant from a logfile
-    pub fn insert_process_env(&mut self) {
-        // now just add relevant variables
+    pub fn insert_process_env<P: AsRef<Path>>(&mut self, path: P) {
+        // add config file name
+        self.global_vars.insert_var(
+            prefix_var!("CONFIG_FILE"),
+            path.as_ref().to_string_lossy().to_string(),
+        );
+
+        // now just add variables
         self.global_vars
             .insert_var(prefix_var!("USER"), whoami::username());
         self.global_vars
@@ -49,7 +55,7 @@ impl GlobalOptions {
     }
 
     /// Add optional extra global variables coming from the command line
-    pub fn insert_extar_vars(&mut self, vars: &Option<Vec<String>>) {
+    pub fn insert_extra_vars(&mut self, vars: &Option<Vec<String>>) {
         if vars.is_some() {
             let vars = vars.as_ref().unwrap();
 

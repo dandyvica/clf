@@ -145,12 +145,17 @@ impl Callback {
                 debug_assert!(address.is_some());
                 let addr = address.as_ref().unwrap();
 
+                // this is to control to send globals only once
+                let mut first_time = false;
+
                 // test whether a TCP socket is already created
                 if handle.tcp_socket.is_none() {
                     let stream = TcpStream::connect(addr)
                         .map_err(|e| context!(e, "unable to connect to TCP address: {}", addr))?;
                     handle.tcp_socket = Some(stream);
                     debug!("creating TCP socket for: {}", address.as_ref().unwrap());
+
+                    first_time = true;
                 }
 
                 // send JSON data through TCP socket
@@ -158,15 +163,29 @@ impl Callback {
 
                 // create a dedicated JSON structure
                 let mut json = match &self.args {
-                    Some(args) => json!({
-                        "args": &args,
-                        "global": global_vars,
-                        "vars": runtime_vars
-                    }),
-                    None => json!({
-                        "global": global_vars,
-                        "vars": runtime_vars
-                    }),
+                    Some(args) => {
+                        if first_time {
+                            json!({
+                                "args": &args,
+                                "global": global_vars,
+                                "vars": runtime_vars
+                            })
+                        } else {
+                            json!({
+                            "args": &args,
+                            "vars": runtime_vars})
+                        }
+                    }
+                    None => {
+                        if first_time {
+                            json!({
+                                "global": global_vars,
+                                "vars": runtime_vars
+                            })
+                        } else {
+                            json!({ "vars": runtime_vars })
+                        }
+                    }
                 }
                 .to_string();
 
@@ -198,6 +217,9 @@ impl Callback {
                 debug_assert!(address.is_some());
                 let addr = address.as_ref().unwrap();
 
+                // this is to control to send globals only once
+                let mut first_time = false;
+
                 // test whether a UNIX socket is already created
                 if handle.domain_socket.is_none() {
                     let stream = UnixStream::connect(address.as_ref().unwrap()).map_err(|e| {
@@ -205,22 +227,39 @@ impl Callback {
                     })?;
                     handle.domain_socket = Some(stream);
                     debug!("creating UNIX socket for: {:?}", address.as_ref().unwrap());
+
+                    first_time = true;
                 }
 
                 // send JSON data through UNIX socket
                 let mut stream = handle.domain_socket.as_ref().unwrap();
 
                 // create a dedicated JSON structure
+                // create a dedicated JSON structure
                 let mut json = match &self.args {
-                    Some(args) => json!({
-                        "args": &args,
-                        "global": global_vars,
-                        "vars": runtime_vars
-                    }),
-                    None => json!({
-                        "global": global_vars,
-                        "vars": runtime_vars
-                    }),
+                    Some(args) => {
+                        if first_time {
+                            json!({
+                                "args": &args,
+                                "global": global_vars,
+                                "vars": runtime_vars
+                            })
+                        } else {
+                            json!({
+                            "args": &args,
+                            "vars": runtime_vars})
+                        }
+                    }
+                    None => {
+                        if first_time {
+                            json!({
+                                "global": global_vars,
+                                "vars": runtime_vars
+                            })
+                        } else {
+                            json!({ "vars": runtime_vars })
+                        }
+                    }
                 }
                 .to_string();
 
@@ -387,10 +426,10 @@ pub mod tests {
 
                     assert_eq!(json.args, vec!["one", "two", "three"]);
 
-                    assert_eq!(json.vars.get("CLF_CAPTURE1").unwrap(), "my name is");
-                    assert_eq!(json.vars.get("CLF_CAPTURE2").unwrap(), "john");
-                    assert_eq!(json.vars.get("CLF_CAPTURE3").unwrap(), "fitzgerald");
-                    assert_eq!(json.vars.get("CLF_LASTNAME").unwrap(), "kennedy");
+                    assert_eq!(json.vars.get("CLF_CG_1").unwrap(), "my name is");
+                    assert_eq!(json.vars.get("CLF_CG_2").unwrap(), "john");
+                    assert_eq!(json.vars.get("CLF_CG_3").unwrap(), "fitzgerald");
+                    assert_eq!(json.vars.get("CLF_CG_LASTNAME").unwrap(), "kennedy");
                 }
                 Err(e) => panic!("couldn't get client: {:?}", e),
             }
@@ -443,10 +482,10 @@ pub mod tests {
 
                     assert_eq!(json.args, vec!["one", "two", "three"]);
 
-                    assert_eq!(json.vars.get("CLF_CAPTURE1").unwrap(), "my name is");
-                    assert_eq!(json.vars.get("CLF_CAPTURE2").unwrap(), "john");
-                    assert_eq!(json.vars.get("CLF_CAPTURE3").unwrap(), "fitzgerald");
-                    assert_eq!(json.vars.get("CLF_LASTNAME").unwrap(), "kennedy");
+                    assert_eq!(json.vars.get("CLF_CG_1").unwrap(), "my name is");
+                    assert_eq!(json.vars.get("CLF_CG_2").unwrap(), "john");
+                    assert_eq!(json.vars.get("CLF_CG_3").unwrap(), "fitzgerald");
+                    assert_eq!(json.vars.get("CLF_CG_LASTNAME").unwrap(), "kennedy");
                 }
                 Err(e) => panic!("couldn't get client: {:?}", e),
             }
