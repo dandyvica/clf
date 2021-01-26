@@ -27,7 +27,7 @@ global:
   # an array of commands or scripts being started before searching into logfiles
   prescript:
     # command and its arguments
-    - command: ['./tests/integration/scripts/echodomain.py']
+    - command: ['./tests/integration/scripts/echodomain.py', '/tmp/echodomain.txt']
       timeout: 1000
       async: true
       exit_on_error: false
@@ -47,6 +47,11 @@ searches:
   - logfile:
       path: /tmp/concatenated.log
       format: plain
+      exclude: 'systemd\[\d+\]'
+      archive:
+        dir: /tmp
+        extension: gz
+      logfilemissing: critical
       hash_window: 1024
     
     # an array of tags which uniquely identifies a search
@@ -61,10 +66,10 @@ searches:
         # callback which will be called
         callback:
           # script path
-          script: "./tests/integration/scripts/echovars.py"
+          script: ./tests/integration/scripts/echovars.py
           # and optional arguments          
           args:
-            - /tmp/full.yml.txt
+            - /tmp/syslog_nokernel.txt
 
         # a list of regexes
         patterns:
@@ -76,8 +81,9 @@ searches:
         process: true
         options: "runcallback"
         callback:
-          script: "./syslog.py"
-          args: ["arg1", "arg2", "arg3"]
+          script: ./tests/integration/scripts/echovars.py
+          args:
+            - /tmp/syslog_kernel.txt
         patterns:
           warning:
             regexes: ["kernel: (.*)"]

@@ -170,12 +170,6 @@ fn main() {
             }
             temp.unwrap()
         };
-        // trace!(
-        //     "logfile={:?}, logfile_is_archived={}, signatures={:?}",
-        //     logfile_from_snapshot.id.canon_path.display(),
-        //     logfile_is_archived,
-        //     logfile_from_snapshot.get_signatures()
-        // );
 
         if logfile_is_archived {
             info!(
@@ -261,24 +255,8 @@ fn main() {
     }
 
     // optionally call postscript
-    if config.global.postcript.is_some() {
-        // // add the pid to the end of arguments
-        // let postcript = &mut config.global.postcript.as_mut().unwrap();
-        // postcript.command.push(prescript_pid.to_string());
-
-        // // run script
-        // let result = postcript.spawn();
-
-        // // check rc
-        // if let Err(e) = &result {
-        //     error!("error: {} spawning command: {:?}", e, postcript.command);
-        // } else {
-        //     info!(
-        //         "postcript command successfully executed, pid={}",
-        //         prescript_pid
-        //     )
-        // }
-        spawn_postscript(&mut config.global.postcript.unwrap(), &prescript_pids);
+    if config.global.postscript.is_some() {
+        spawn_postscript(&mut config.global.postscript.unwrap(), &prescript_pids);
     }
 
     info!(

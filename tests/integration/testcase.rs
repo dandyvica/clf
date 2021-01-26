@@ -1,11 +1,10 @@
+use std::fmt;
 use std::fs::*;
 use std::io::{BufWriter, Write};
 #[cfg(target_family = "unix")]
-use std::os::unix::fs::MetadataExt;
 use std::process::Command;
 use std::str::FromStr;
 use std::{collections::HashMap, unimplemented};
-use std::{fmt, path::PathBuf};
 
 use log::{error, info, trace};
 use rand::{thread_rng, Rng};
@@ -173,8 +172,8 @@ impl TestCase {
             snap_file: format!("./tests/integration/tmp/{}.json", tag),
             config_file: format!("./tests/integration/tmp/{}.yml", tag),
             json: HashMap::new(),
-            logfile: format!("./tests/integration/logfiles/{}.log", tag),
-            logfile_gzip: format!("./tests/integration/logfiles/{}.log.gz", tag),
+            logfile: format!("./tests/integration/tmp/{}.log", tag),
+            logfile_gzip: format!("./tests/integration/tmp/{}.log.gz", tag),
         };
 
         // safe to delete logfile if any
@@ -423,15 +422,6 @@ impl FakeLogfile {
             )
             .unwrap();
         }
-    }
-
-    // file signature
-    fn signature(path: &str) -> (u64, u64, i64) {
-        let metadata = PathBuf::from(path)
-            .metadata()
-            .expect(&format!("error fetching metadata from {}", path));
-
-        (metadata.ino(), metadata.dev(), metadata.ctime())
     }
 }
 

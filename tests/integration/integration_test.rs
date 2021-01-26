@@ -138,6 +138,20 @@ fn main() {
         jassert!(tc, "ok_count", "0");
         jassert!(tc, "exec_count", "0");
         assert_eq!(rc.0, 0);
+
+        // run another time
+        tc.grow();
+        let rc = tc.run(&opts, &[]);
+
+        jassert!(tc, "compression", "uncompressed");
+        jassert!(tc, "extension", "log");
+        jassert!(tc, "last_offset", "40200");
+        jassert!(tc, "last_line", "402");
+        jassert!(tc, "critical_count", "99");
+        jassert!(tc, "warning_count", "98");
+        jassert!(tc, "ok_count", "0");
+        jassert!(tc, "exec_count", "0");
+        assert_eq!(rc.0, 2);
     }
 
     // fastforward gzipped
@@ -150,7 +164,7 @@ fn main() {
             .set_tag("options", "fastforward")
             .set_tag(
                 "path",
-                "./tests/integration/logfiles/fastforward_gzipped.log.gz",
+                "./tests/integration/tmp/fastforward_gzipped.log.gz",
             )
             .save_as(&tc.config_file);
         let rc = tc.run(&opts, &["-d"]);
@@ -247,7 +261,7 @@ fn main() {
             .set_tag("options", "protocol")
             .set_tag("path", &tc.logfile)
             .save_as(&tc.config_file);
-        let context = "{\"path\":\"./tests/integration/logfiles/generated.log\"}";
+        let context = "{\"path\":\"./tests/integration/tmp/generated.log\"}";
         let rc = tc.run(&opts, &["-d", "-x", context]);
 
         jassert!(tc, "last_offset", "20100");
@@ -271,7 +285,7 @@ fn main() {
             .set_tag("options", "protocol")
             .set_tag(
                 "list",
-                r#"["find", "./tests/integration/logfiles", "-type", "f", "-name", "list_files.log.*"]"#,
+                r#"["find", "./tests/integration/tmp", "-type", "f", "-name", "list_files.log.*"]"#,
             )
             .save_as(&tc.config_file);
         let rc = tc.run(&opts, &["-d"]);

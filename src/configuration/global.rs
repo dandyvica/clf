@@ -33,7 +33,7 @@ pub struct GlobalOptions {
     pub prescript: Option<Vec<Script>>,
 
     // A command called before the end of clf
-    pub postcript: Option<Script>,
+    pub postscript: Option<Script>,
 }
 
 impl GlobalOptions {
@@ -105,7 +105,7 @@ impl Default for GlobalOptions {
             snapshot_retention: DEFAULT_RETENTION,
             global_vars: GlobalVars::default(),
             prescript: None,
-            postcript: None,
+            postscript: None,
         }
     }
 }

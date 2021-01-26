@@ -173,9 +173,8 @@ impl Lookup<FullReader> for LogFile {
                     line_number += 1;
                     bytes_count += bytes_read as u64;
 
-                    // do we just need to go to EOF ?
-                    // TODO: implement go to EOF directly
-                    if tag.options.fastforward {
+                    // do we just need to go to EOF ? Only in case of first run
+                    if tag.options.fastforward && run_data.start_offset == 0 {
                         buffer.clear();
                         continue;
                     }
@@ -203,15 +202,6 @@ impl Lookup<FullReader> for LogFile {
                             run_data.counters.warning_count,
                             run_data.counters.ok_count,
                         );
-
-                        // check for ok pattern => so reset counters and continue
-                        // if pattern_match.pattern_type == PatternType::ok {
-                        //     trace!("resetting pattern counters");
-                        //     run_data.counters.critical_count = 0;
-                        //     run_data.counters.warning_count = 0;
-                        //     buffer.clear();
-                        //     continue;
-                        // }
 
                         // when a threshold is reached, give up
                         if !run_data.is_threshold_reached(&pattern_match.pattern_type, &tag.options)

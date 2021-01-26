@@ -59,13 +59,14 @@ impl Script {
         let pid = child.id();
         info!("script:{:?} started, pid:{}", &self.command, pid);
 
+        // wait for timeout
+        self.sleep();        
+
         // if async, don't wait and just leave
         if self.async_flag {
+            trace!("async flag set, returning with pid:{}", pid);
             return Ok(pid);
         }
-
-        // wait for timeout
-        self.sleep();
 
         // try to get the exit status
         match child.try_wait() {
@@ -116,6 +117,7 @@ impl Script {
     fn sleep(&self) {
         let timeout = self.timeout;
         if timeout != 0 {
+            trace!("sleeping {} ms", timeout);
             let wait_timeout = std::time::Duration::from_millis(timeout);
             info!("script timeout specified, waiting {} ms", timeout);
             std::thread::sleep(wait_timeout);

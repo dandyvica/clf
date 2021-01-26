@@ -176,11 +176,6 @@ pub fn spawn_prescript(prescript: &Script, vars: Option<&GlobalVars>) -> u32 {
     debug_assert!(result.is_ok());
     let prescript_pid = result.unwrap();
 
-    // info!(
-    //     "prescript command successfully executed, pid={}",
-    //     prescript_pid
-    // );
-
     prescript_pid
 }
 
@@ -192,6 +187,7 @@ pub fn spawn_postscript(postscript: &mut Script, pids: &[u32]) {
     }
 
     // run script
+    trace!("postscript: {:?}", &postscript.command);
     let result = postscript.spawn(None);
 
     // check rc

@@ -5,8 +5,16 @@ import json
 import struct
 import os
 
-# UDS name
-server_address = '/tmp/clf.sock'
+# file name to save input data
+saved = sys.argv[1]
+f = open(saved, "w")
+
+
+# UDS name might be passed as an argument
+if len(sys.argv) == 2:
+    server_address = '/tmp/clf.sock'
+else:
+    server_address = sys.argv[2]
 
 # Make sure the socket does not already exist
 try:
@@ -41,23 +49,28 @@ while True:
             # receive JSON size in network order (big endian)
             data = connection.recv(2)
             if not data:
+                f.write("end of data\n")
                 break
-            size = int.from_bytes(data, byteorder='big')
-            #print("size==", size)
+            
+            # first receive JSON data size
+            json_size = int.from_bytes(data, byteorder='big')
+            f.write(f"received size = {json_size}\n")
 
             # receive JSON payload
-            data = connection.recv(size)
-            if not data:
+            json_data = connection.recv(json_size)
+            if not json_data:
+                f.write("end of data\n")
                 break
 
             # decode and display JSON
             nb_json += 1
-            decode = data.decode("ascii", errors="ignore")
+            decode = json_data.decode("ascii", errors="ignore")
             parsed = json.loads(decode)
             pretty = json.dumps(parsed, indent=4, sort_keys=False)
-            print('JSON# %s, received "%s"' % (nb_json, pretty))
+            f.write(f"JSON#: {nb_json}, received data: {pretty}\n")
             
     finally:
         # Clean up the connection
+        f.write("close connection\n")
         connection.close()
 

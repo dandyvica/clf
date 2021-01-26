@@ -10,7 +10,7 @@ global:
 
 searches:
   - logfile: 
-      name: ./tests/integration/logfiles/access_simple.log
+      name: ./tests/integration/tmp/generated.log
       format: plain
     tags: 
       - name: tag1
