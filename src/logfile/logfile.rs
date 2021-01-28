@@ -89,7 +89,10 @@ impl LogFile {
             if old_signature.hash.is_none() || new_signature.hash.is_none() {
                 Err(AppError::new_custom(
                     AppCustomErrorKind::FileSizeIsLessThanHashWindow,
-                    &format!("unable to determine a safe hash"),
+                    &format!(
+                        "unable to determine a safe hash for logfile {:?}",
+                        self.id.declared_path
+                    ),
                 ))
             }
             // if hashes are equal we can assume file has not been rotated

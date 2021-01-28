@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 use serde::Deserialize;
 
 use crate::configuration::{script::Script, vars::GlobalVars};
-use crate::misc::constants::*;
+use crate::misc::util::*;
 
 use crate::{fromstr, prefix_var};
 #[derive(Debug, Deserialize, Clone)]

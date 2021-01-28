@@ -5,7 +5,6 @@ use std::fmt::Debug;
 use std::fs::File;
 use std::io::{BufReader, ErrorKind};
 use std::path::{Path, PathBuf};
-use std::time::SystemTime;
 
 use log::debug;
 use serde::{Deserialize, Serialize};
@@ -16,6 +15,7 @@ use crate::logfile::{logfile::LogFile, logfileerror::LogFileAccessErrorList};
 use crate::misc::{
     error::{AppError, AppResult},
     nagios::{NagiosError, NagiosExit},
+    util::from_epoch_secs,
 };
 
 /// This structure will keep all run time information for each logfile searched. This is
@@ -86,17 +86,17 @@ impl Snapshot {
         snapshot_file: P,
         snapshot_retention: u64,
     ) -> AppResult<()> {
-        // get number of seconds
-        let time = SystemTime::now()
-            .duration_since(SystemTime::UNIX_EPOCH)
-            .map_err(|e| context!(e, "duration_since() error: {:?}", snapshot_file))?;
+        let seconds_from_epoch = from_epoch_secs()?;
 
         // first delete tags having run before retention
         debug!("checking retention time for snapshot");
         for logfile in self.snapshot.values_mut() {
             let run_data = logfile.rundata_mut();
-            run_data.retain(|_, v| time.as_secs() - v.last_run_secs < snapshot_retention);
+            run_data.retain(|_, v| seconds_from_epoch - v.last_run_secs < snapshot_retention);
         }
+
+        // because of before deletion, some logfiles might not include run_data anymore. So no need to keep them
+        self.snapshot.retain(|_, v| !v.run_data.is_empty());
 
         // then just saves this file.
         let json_file = File::create(&snapshot_file)
@@ -224,6 +224,7 @@ mod tests {
             "last_offset": 98607,
             "last_line": 1100,
             "last_run": "2020-12-22 16:10:55.286912679",
+            "last_run_secs": 1611857382,
             "counters": {
                 "critical_count": 0,
                 "warning_count": 5,
@@ -255,6 +256,7 @@ mod tests {
             "last_offset": 13996,
             "last_line": 68,
             "last_run": "2020-12-22 16:10:55.287475585",
+            "last_run_secs": 1611857382,
             "counters": {
                 "critical_count": 0,
                 "warning_count": 0,
@@ -286,6 +288,7 @@ mod tests {
             "last_offset": 392201,
             "last_line": 3885,
             "last_run": "2020-12-22 16:10:55.280019283",
+            "last_run_secs": 1611857382,
             "counters": {
                 "critical_count": 0,
                 "warning_count": 3885,
@@ -301,6 +304,7 @@ mod tests {
             "last_offset": 392201,
             "last_line": 3885,
             "last_run": "2020-12-22 16:10:54.102239131",
+            "last_run_secs": 1611857382,
             "counters": {
                 "critical_count": 0,
                 "warning_count": 3867,
@@ -332,6 +336,7 @@ mod tests {
             "last_offset": 334147,
             "last_line": 3152,
             "last_run": "2020-12-22 16:10:48.877119302",
+            "last_run_secs": 1611857382,
             "counters": {
                 "critical_count": 0,
                 "warning_count": 0,
@@ -347,6 +352,7 @@ mod tests {
             "last_offset": 334147,
             "last_line": 3152,
             "last_run": "2020-12-22 16:10:51.412855148",
+            "last_run_secs": 1611857382,
             "counters": {
                 "critical_count": 0,
                 "warning_count": 1400,

@@ -7,8 +7,8 @@ use simplelog::LevelFilter;
 use crate::logfile::lookup::ReaderCallType;
 use crate::misc::extension::Expect;
 use crate::misc::{
-    constants::*,
     nagios::{Nagios, NagiosVersion},
+    util::*,
 };
 
 /// This structure holds the command line arguments.

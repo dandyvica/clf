@@ -80,7 +80,8 @@ pub fn init_log(options: &CliOptions) {
     };
 
     // check if we have to delete the log, because it's bigger than max logger size
-    let metadata = std::fs::metadata(&logger).expect_critical(&format!("error on metadata() API"));
+    let metadata = std::fs::metadata(&logger)
+        .expect_critical(&format!("error on metadata() API, path {:?}", &logger));
 
     debug!("current logger size is: {} bytes", metadata.len());
     if metadata.len() > options.max_logger_size {
@@ -174,9 +175,7 @@ pub fn spawn_prescript(prescript: &Script, vars: Option<&GlobalVars>) -> u32 {
 
     // now it's safe to unwrap to get pid
     debug_assert!(result.is_ok());
-    let prescript_pid = result.unwrap();
-
-    prescript_pid
+    result.unwrap()
 }
 
 /// Spawn postscript

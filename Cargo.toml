@@ -1,6 +1,6 @@
 [package]
 name = "clf"
-version = "0.1.0"
+version = "0.8.0"
 authors = ["dandyvica <dandyvica@gmail.com>"]
 edition = "2018"
 
@@ -10,18 +10,18 @@ edition = "2018"
 clap = "3.0.0-beta.2"
 simplelog = "^0.9.0"
 wait-timeout = "0.2.0"
-regex = "^1.3.6"
-serde = { version = "1.0.104", features = ["derive"] }
-serde_json = "1.0.51"
-log = "0.4.8"
+regex = "^1.4.3"
+serde = { version = "1.0.123", features = ["derive"] }
+serde_json = "1.0.61"
+log = "0.4.14"
 flate2 = "1.0.19"
-serde_yaml = "0.8.14"
+serde_yaml = "0.8.15"
 bzip2 = "0.4.1"
 xz2 = "0.1.6"
 chrono = "0.4.19"
 hostname = "^0.3.1"
-whoami = "1.0.3"
-rand = "0.8.2"
+whoami = "1.1.0"
+rand = "0.8.3"
 crc = "1.8.1"
 
 # necessary for managing UTF16 LPWCSTR Windows strings
@@ -34,7 +34,7 @@ name = "clf"
 path = "src/clf.rs"
 
 [dependencies.tera]
-version = "^1.5.0"
+version = "^1.6.1"
 optional = true
 
 [features]

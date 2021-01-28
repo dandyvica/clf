@@ -7,8 +7,8 @@ use serde_yaml::Value;
 
 use super::archive::LogArchive;
 use super::logsource::LogSource;
-use crate::misc::constants::DEFAULT_HASH_BUFFER_SIZE;
 use crate::misc::nagios::NagiosError;
+use crate::misc::util::DEFAULT_HASH_BUFFER_SIZE;
 
 // a logfile could be of different format. Necessary to effectively read them
 #[derive(Debug, Deserialize, Clone, PartialEq)]

@@ -1,4 +1,9 @@
-//! All constants reside here.
+use std::time::{Duration, SystemTime};
+
+use crate::context;
+use crate::misc::error::{AppError, AppResult};
+
+/// All constants reside here.
 
 /// A default value for the retention of data in the snapshot file.
 pub const DEFAULT_RETENTION: u64 = 86000 * 7;
@@ -26,3 +31,14 @@ pub const DEFAULT_HASH_BUFFER_SIZE: usize = 4096;
 
 // default time for waiting to spawned scripts
 pub const DEFAULT_SCRIPT_TIMEOUT: u64 = 10;
+
+fn from_epoch() -> AppResult<Duration> {
+    SystemTime::now()
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .map_err(|e| context!(e, "duration_since() error",))
+}
+
+pub fn from_epoch_secs() -> AppResult<u64> {
+    let from_epoch = from_epoch()?;
+    Ok(from_epoch.as_secs())
+}

@@ -1,12 +1,11 @@
 #!/usr/bin/ruby
 require './testcase'
 
-# an experiment to run dedicated testcases for clf
+clf = "/home/alain/projects/clf/target/release/clf"
 
-# testcase is a YAML file as first argument
-tc_file = ARGV[0]
+tc = TestCase.new("ruby", ".", clf)
+tc.create_log
+tc.run("-d")
 
-# load YAML data
-tc = TestScenario.new(tc_file)
+config = Config.new(tc.config_file)
 
-tc.run

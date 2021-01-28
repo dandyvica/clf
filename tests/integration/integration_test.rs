@@ -44,7 +44,7 @@ fn main() {
         .value_of_t("clf")
         .unwrap_or(opts.mode.path().to_string());
 
-    println!("options={:?}", opts);
+    //println!("options={:?}", opts);
 
     //------------------------------------------------------------------------------------------------
     // prepare run by creating necessary directories if necessary
@@ -162,10 +162,7 @@ fn main() {
 
         Config::default()
             .set_tag("options", "fastforward")
-            .set_tag(
-                "path",
-                "./tests/integration/tmp/fastforward_gzipped.log.gz",
-            )
+            .set_tag("path", "./tests/integration/tmp/fastforward_gzipped.log.gz")
             .save_as(&tc.config_file);
         let rc = tc.run(&opts, &["-d"]);
 
@@ -273,6 +270,46 @@ fn main() {
         assert_eq!(rc.0, 2);
     }
 
+    // check retention deletion
+    {
+        let mut tc = TestCase::new("retention");
+
+        // run once
+        Config::default()
+            .set_tag("options", "protocol")
+            .set_tag("path", &tc.logfile)
+            .save_as(&tc.config_file);
+        let _ = tc.run(&opts, &["-d"]);
+
+        // wait a little before calling a second time to test retention
+        let timeout = std::time::Duration::from_millis(2000);
+        std::thread::sleep(timeout);
+
+        // now change logfile: reuse previous one
+        let new_file = "./tests/integration/tmp/tera.log";
+        Config::default()
+            .set_tag("options", "protocol")
+            .set_tag("path", &new_file)
+            .save_as(&tc.config_file);
+        let _ = tc.run(&opts, &[]);
+
+        // read whole snapshot file
+        let snap =
+            std::fs::read_to_string(&tc.snap_file).expect("unable to read JSON for retention");
+
+        // should contain a single logfile
+        assert!(snap.contains("./tests/integration/tmp/tera.log"));
+        assert!(!snap.contains("./tests/integration/tmp/retention.log"));
+
+        // jassert!(tc, "last_offset", "20100");
+        // jassert!(tc, "last_line", "201");
+        // jassert!(tc, "critical_count", "99");
+        // jassert!(tc, "warning_count", "98");
+        // jassert!(tc, "ok_count", "0");
+        // jassert!(tc, "exec_count", "0");
+        // assert_eq!(rc.0, 2);
+    }
+
     //------------------------------------------------------------------------------------------------
     // list files Linux
     //------------------------------------------------------------------------------------------------
@@ -327,15 +364,15 @@ fn main() {
                 "script",
                 "./tests/integration/scripts/echovars.py",
             )
-            .set_tag("args", "['runifok', 'arg2']")
+            .set_tag("args", "['/tmp/runifok.txt', 'arg2']")
             .save_as(&tc.config_file);
         #[cfg(target_family = "windows")]
         Config::from_file("./tests/integration/config/ok_pattern.yml")
             .set_tag("options", "runcallback")
-            .replace_tag("address", "script", "python")
+            .replace_tag("address", "script", "python.exe")
             .set_tag(
                 "args",
-                r"['.\tests\integration\scripts\echovars.py', 'runifok']",
+                r"['.\tests\integration\scripts\echovars.py', 'c:\windows\temp\runifok.txt']",
             )
             .save_as(&tc.config_file);
         let rc = tc.run(&opts, &["-d"]);
@@ -348,6 +385,11 @@ fn main() {
         jassert!(tc, "exec_count", "198");
         assert_eq!(rc.0, 2);
         jassert!(rc, "CRITICAL");
+
+        // check reuslting file created from running script
+        let data: String = std::fs::read_to_string(&tc.tmpfile)
+            .expect(&format!("unable to open file {}", &tc.tmpfile));
+        assert_eq!(data.chars().filter(|c| *c == '\n').count(), 198);
     }
 
     //------------------------------------------------------------------------------------------------
@@ -406,7 +448,7 @@ fn main() {
                 "script",
                 "./tests/integration/scripts/echovars.py",
             )
-            .set_tag("args", "['start_script', 'arg2']")
+            .set_tag("args", "['/tmp/start_script.txt', 'arg2']")
             .save_as(&tc.config_file);
         #[cfg(target_family = "windows")]
         Config::default()
@@ -414,7 +456,7 @@ fn main() {
             .replace_tag("address", "script", "python")
             .set_tag(
                 "args",
-                r"['.\tests\integration\scripts\echovars.py', 'start_script']",
+                r"['.\tests\integration\scripts\echovars.py', 'c:\windows\temp\start_script.txt']",
             )
             .save_as(&tc.config_file);
         let rc = tc.run(&opts, &["-d"]);
@@ -427,6 +469,11 @@ fn main() {
         jassert!(tc, "exec_count", "197");
         assert_eq!(rc.0, 2);
         jassert!(rc, "CRITICAL");
+
+        // check reuslting file created from running script
+        let data: String = std::fs::read_to_string(&tc.tmpfile)
+            .expect(&format!("unable to open file {}", &tc.tmpfile));
+        assert_eq!(data.chars().filter(|c| *c == '\n').count(), 197);
     }
 
     // run a script with a threshold
@@ -444,6 +491,7 @@ fn main() {
                 "script",
                 "./tests/integration/scripts/echovars.py",
             )
+            .set_tag("args", "['/tmp/script_threshold.txt', 'arg2']")
             .save_as(&tc.config_file);
         #[cfg(target_family = "windows")]
         Config::default()
@@ -452,7 +500,7 @@ fn main() {
                 "runcallback,criticalthreshold=50,warningthreshold=60",
             )
             .replace_tag("address", "script", "python")
-            .set_tag("args", r"['.\tests\integration\scripts\echovars.py']")
+            .set_tag("args", r"['.\tests\integration\scripts\echovars.py', c:\windows\temp\script_threshold.txt']")
             .save_as(&tc.config_file);
         let rc = tc.run(&opts, &["-d"]);
 

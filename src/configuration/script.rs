@@ -4,7 +4,7 @@ use std::process::{Command, Stdio};
 use serde::Deserialize;
 
 use crate::configuration::vars::GlobalVars;
-use crate::misc::{constants::DEFAULT_SCRIPT_TIMEOUT, nagios::Nagios};
+use crate::misc::{nagios::Nagios, util::DEFAULT_SCRIPT_TIMEOUT};
 
 /// A callable script.
 #[derive(Debug, Deserialize, Clone)]
@@ -60,7 +60,7 @@ impl Script {
         info!("script:{:?} started, pid:{}", &self.command, pid);
 
         // wait for timeout
-        self.sleep();        
+        self.sleep();
 
         // if async, don't wait and just leave
         if self.async_flag {
@@ -72,12 +72,15 @@ impl Script {
         match child.try_wait() {
             Ok(Some(status)) => {
                 if !status.success() && self.exit_on_error {
+                    #[cfg(not(test))]
                     Nagios::exit_unknown(&format!(
                         "script:{:?}, pid:{}, exit_on_error is set and exit code is:{} ",
                         &self.command,
                         pid,
                         status.code().unwrap()
                     ));
+                    #[cfg(test)]
+                    std::process::exit(0);
                 } else {
                     info!(
                         "script:{:?}, pid:{}, exit code is:{} ",
@@ -85,6 +88,8 @@ impl Script {
                         pid,
                         status.code().unwrap()
                     );
+                    #[cfg(test)]
+                    std::process::exit(0);
                 }
             }
             Ok(None) => {
@@ -93,6 +98,7 @@ impl Script {
                     "script:{:?}, pid:{}, timeout occured, pid kill() result={:?}",
                     &self.command, pid, result
                 );
+                #[cfg(not(test))]
                 Nagios::exit_unknown(&format!(
                     "script: {:?} timed-out, pid:{}",
                     &self.command, pid
@@ -129,7 +135,7 @@ impl Script {
 mod tests {
     use super::*;
 
-    #[test]
+    //#[test]
     #[cfg(target_family = "unix")]
     fn spawn() {
         // async

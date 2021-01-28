@@ -9,7 +9,7 @@ use std::ops::{Deref, DerefMut};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 
-use crate::misc::constants::DEFAULT_CONTAINER_CAPACITY;
+use crate::misc::util::DEFAULT_CONTAINER_CAPACITY;
 
 /// Macro to build a variable name prepended with its prefix
 #[macro_export]

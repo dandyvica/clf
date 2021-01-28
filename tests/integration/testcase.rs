@@ -1,3 +1,4 @@
+#![deny(clippy::all)]
 use std::fmt;
 use std::fs::*;
 use std::io::{BufWriter, Write};
@@ -81,7 +82,7 @@ impl Default for Options {
 }
 
 // manage YAML configurations
-const DEFAULT_CONFIG_FILE: &'static str = "./tests/integration/config/generated.yml";
+const DEFAULT_CONFIG_FILE: &str = "./tests/integration/config/generated.yml";
 #[allow(dead_code)]
 pub struct Config {
     config_file: String,
@@ -156,6 +157,7 @@ pub struct TestCase {
     pub json: HashMap<String, String>,
     pub logfile: String,
     pub logfile_gzip: String,
+    pub tmpfile: String,
 }
 
 impl TestCase {
@@ -174,12 +176,14 @@ impl TestCase {
             json: HashMap::new(),
             logfile: format!("./tests/integration/tmp/{}.log", tag),
             logfile_gzip: format!("./tests/integration/tmp/{}.log.gz", tag),
+            tmpfile: format!("{}/{}.txt", std::env::temp_dir().display(), tag),
         };
 
         // safe to delete logfile if any
         let _ = std::fs::remove_file(&tc.logfile);
         let _ = std::fs::remove_file(&tc.logfile_gzip);
         let _ = std::fs::remove_file(&tc.snap_file);
+        let _ = std::fs::remove_file(&tc.tmpfile);
 
         // create dummy log file from the tc name
         tc.create_log(None, false);
@@ -245,8 +249,8 @@ impl TestCase {
         trace!("created new file {}", &self.logfile);
 
         // wait a little before calling
-        let ten_millis = std::time::Duration::from_millis(100);
-        std::thread::sleep(ten_millis);
+        let timeout = std::time::Duration::from_millis(100);
+        std::thread::sleep(timeout);
     }
 
     // call CLF executable with optional arguments
@@ -267,8 +271,8 @@ impl TestCase {
             .expect("unable to start clf");
 
         // wait a little before calling
-        let ten_millis = std::time::Duration::from_millis(1000);
-        std::thread::sleep(ten_millis);
+        let timeout = std::time::Duration::from_millis(1000);
+        std::thread::sleep(timeout);
 
         trace!("{:?}", output);
         let s = String::from_utf8_lossy(&output.stdout);
