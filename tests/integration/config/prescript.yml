@@ -9,9 +9,9 @@ global:
     CLF_city: "Los Angeles"
     CLF_profession: actor
   prescript:
-    - command: ['/bin/uname', '-a']
+    - command: ['uname', '-a']
     
-    - command: ['/bin/sleep', '10']
+    - command: ['sleep', '10']
       timeout: 1000    
     
     - command: ['date', '%f']

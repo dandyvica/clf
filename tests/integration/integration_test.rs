@@ -702,6 +702,7 @@ fn main() {
     }
 
     // prescript
+    #[cfg(target_family = "unix")]
     {
         let mut tc = TestCase::new("prescript");
 
@@ -718,7 +719,7 @@ fn main() {
     // callback call
     #[cfg(target_family = "unix")]
     {
-        let mut tc = TestCase::new("callback_call");
+        let mut tc = TestCase::new("callback_domain");
         Config::default()
             .set_tag("options", "runcallback")
             .set_tag("path", &tc.logfile)
@@ -737,6 +738,100 @@ fn main() {
         let child = std::thread::spawn(move || {
             // create a listener
             let listener = std::os::unix::net::UnixListener::bind(addr).unwrap();
+            match listener.accept() {
+                Ok((mut socket, _addr)) => {
+                    // set short timeout
+                    socket
+                        .set_read_timeout(Some(std::time::Duration::new(3, 0)))
+                        .expect("Couldn't set read timeout");
+
+                    let mut nb_received = 0;
+
+                    // loop to receive data
+                    loop {
+                        let json = JSONStream::get_json_from_stream(&mut socket);
+                        if json.is_err() {
+                            break;
+                        }
+
+                        nb_received += 1;
+
+                        let j = json.unwrap();
+
+                        // all asserts here
+                        assert_eq!(j.args, &["arg1", "arg2", "arg3"]);
+
+                        // globals are only sent once
+                        if nb_received == 1 {
+                            assert_eq!(
+                                j.global.as_ref().unwrap().get("CLF_firstname").unwrap(),
+                                "Al"
+                            );
+                            assert_eq!(
+                                j.global.as_ref().unwrap().get("CLF_lastname").unwrap(),
+                                "Pacino"
+                            );
+                            assert_eq!(
+                                j.global.as_ref().unwrap().get("CLF_profession").unwrap(),
+                                "actor"
+                            );
+                            assert_eq!(
+                                j.global.as_ref().unwrap().get("CLF_city").unwrap(),
+                                "Los Angeles"
+                            );
+                        }
+
+                        assert_eq!(j.vars.get("CLF_NB_CG").unwrap(), "3");
+                        assert!(j
+                            .vars
+                            .get("CLF_LINE")
+                            .unwrap()
+                            .as_str()
+                            .contains("generated for tests"));
+
+                        let line_number: usize =
+                            j.vars.get("CLF_LINE_NUMBER").unwrap().parse().unwrap();
+                        assert!(line_number <= 201);
+
+                        let cg1: usize = j.vars.get("CLF_CG_1").unwrap().parse().unwrap();
+                        assert!(cg1 <= 201);
+
+                        let cg2: usize = j.vars.get("CLF_CG_2").unwrap().parse().unwrap();
+                        assert!(cg2 <= 99999);
+                        assert!(cg2 >= 10000);
+
+                        //println!("json={:#?}", j);
+                    }
+                }
+                Err(e) => panic!("couldn't get client: {:?}", e),
+            }
+        });
+
+        // wait a little before calling
+        let ten_millis = std::time::Duration::from_millis(10);
+        std::thread::sleep(ten_millis);
+
+        let rc = tc.run(&opts, &["-d"]);
+        assert_eq!(rc.0, 2);
+        jassert!(rc, "CRITICAL");
+
+        let _res = child.join();
+    }
+
+    // callback call
+    {
+        let mut tc = TestCase::new("callback_tcp");
+        Config::default()
+            .set_tag("options", "runcallback")
+            .set_tag("path", &tc.logfile)
+            .save_as(&tc.config_file);
+
+        // create UDS server
+        let addr = "127.0.0.1:8999";
+
+        let child = std::thread::spawn(move || {
+            // create a listener
+            let listener = std::net::TcpListener::bind(addr).unwrap();
             match listener.accept() {
                 Ok((mut socket, _addr)) => {
                     // set short timeout
