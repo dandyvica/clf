@@ -278,7 +278,11 @@ fn wait_children(children_list: Vec<ChildData>) {
     }
 
     // as child can be None in case of Tcp or Domain socket, need to get rid of these
-    for started_child in children_list.iter().filter(|x| x.child.is_some()) {
+    for (i, started_child) in children_list
+        .iter()
+        .filter(|x| x.child.is_some())
+        .enumerate()
+    {
         // get a mutable reference
         let mut child = started_child.child.as_ref().unwrap().borrow_mut();
 
@@ -287,7 +291,8 @@ fn wait_children(children_list: Vec<ChildData>) {
         let path = &started_child.path;
 
         debug!(
-            "managing end of process, pid:{}, path:{}",
+            "managing end of process #{}, pid:{}, path:{}",
+            i,
             pid,
             path.display()
         );

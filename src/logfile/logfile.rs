@@ -345,7 +345,11 @@ mod tests {
     #[test]
     #[cfg(target_os = "windows")]
     fn new() {
-        let mut logfile = LogFile::from_path(r"C:\Windows\System32\cmd.exe").unwrap();
+        let mut def = LogFileDef::default();
+        def.hash_window = 4096;
+
+        let mut logfile =
+            LogFile::from_path(r"C:\Windows\System32\cmd.exe", Some(def.clone())).unwrap();
         //assert_eq!(logfile.path.as_os_str(), std::ffi::OsStr::new(r"C:\Windows\System32\cmd.exe"));
         assert_eq!(logfile.id.extension.unwrap(), "exe");
         assert_eq!(
@@ -355,7 +359,8 @@ mod tests {
         assert_eq!(logfile.id.compression, CompressionScheme::Uncompressed);
         assert_eq!(logfile.run_data.len(), 0);
 
-        logfile = LogFile::from_path(r"c:\windows\system32\drivers\etc\hosts").unwrap();
+        logfile = LogFile::from_path(r"c:\windows\system32\drivers\etc\hosts", Some(def.clone()))
+            .unwrap();
         assert!(logfile.id.extension.is_none());
     }
 

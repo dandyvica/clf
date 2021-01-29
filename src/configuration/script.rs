@@ -170,21 +170,32 @@ exit_on_error: true
     #[test]
     #[cfg(target_family = "windows")]
     fn spawn() {
-        let mut script = Script {
-            command: vec![
-                "cmd.exe".to_string(),
-                "/c".to_string(),
-                r"dir c:\windows\system32 | findstr windows".to_string(),
-            ],
-            timeout: Some(1000),
-            async_flag: false,
-            exit_on_error: false,
-        };
+        // async
+        let yaml = r#"
+command: ["cmd.exe", "/c", "dir c:\\windows\\system32 | findstr windows"]
+async: true   
+"#;
 
-        let _pid = script.spawn();
+        let script: Script = serde_yaml::from_str(yaml).expect("unable to read YAML");
+        let _pid = script.spawn(None);
 
-        script.command = vec!["foo".to_string(), ".".to_string()];
-        let res = script.spawn();
-        assert!(res.is_err());
+        // sync timeout = 5s
+        let yaml = r#"
+command: ["attrib"]
+timeout: 2000   
+"#;
+
+        let script: Script = serde_yaml::from_str(yaml).expect("unable to read YAML");
+        let _pid = script.spawn(None);
+
+        // sync timeout = 5s
+        let yaml = r#"
+command: ["ping", "www.google.com", "-n", "4"]
+timeout: 6000  
+exit_on_error: true 
+"#;
+
+        let script: Script = serde_yaml::from_str(yaml).expect("unable to read YAML");
+        let _pid = script.spawn(None);
     }
 }

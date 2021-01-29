@@ -21,8 +21,7 @@ use crate::misc::nagios::Nagios;
 #[cfg(target_family = "windows")]
 #[link(name = r".\src\windows\signature")]
 extern "C" {
-    //fn get_signature_a(file_name: *const u8, signature: *const Signature) -> u32;
-    fn get_signature_w(file_name: *const u16, signature: *const Signature) -> u32;
+    fn get_signature_w(file_name: *const u16, signature: *const WinSign) -> u32;
 }
 
 #[repr(C)]
@@ -33,6 +32,14 @@ pub struct Signature {
     pub dev: u64,
     pub size: u64,
     pub hash: Option<u64>,
+}
+
+// specific to Windows
+#[repr(C)]
+#[derive(Default)]
+struct WinSign {
+    pub inode: u64,
+    pub dev: u64,
 }
 
 impl Signature {
@@ -151,7 +158,7 @@ impl ReadFs for PathBuf {
         use std::os::windows::fs::MetadataExt;
         use widestring::U16CString;
 
-        let sign = Signature::default();
+        let win_sign = WinSign::default();
 
         // convert path to UTF16 Windows string
         let u16_path = U16CString::from_os_str(self.as_os_str()).unwrap();
@@ -159,7 +166,7 @@ impl ReadFs for PathBuf {
         println!("signature for {}", self.display());
         println!("u16_path for {:?}, length={}", &u16_path, u16_path.len());
 
-        let rc = unsafe { get_signature_w(u16_path.as_ptr(), &sign) };
+        let rc = unsafe { get_signature_w(u16_path.as_ptr(), &win_sign) };
 
         // windows DLL rc should be 0, or rc from GetLastError() API
         if rc != 0 {
@@ -173,7 +180,25 @@ impl ReadFs for PathBuf {
             ));
         }
 
-        Ok(sign)
+        // now get metadata fields for signature
+        let metadata = self
+            .metadata()
+            .map_err(|e| context!(e, "error fetching metadata for file {:?} ", self))?;
+
+        let mut signature = Signature::default();
+        signature.inode = win_sign.inode;
+        signature.dev = win_sign.dev;
+        signature.size = metadata.file_size();
+
+        // only calculate hash if file size is larger than hash buffer size
+        signature.hash = if signature.size < hash_buffer_size as u64 {
+            None
+        } else {
+            let hash = Signature::hash(&self, hash_buffer_size)?;
+            Some(hash)
+        };
+
+        Ok(signature)
     }
 }
 

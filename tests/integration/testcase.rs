@@ -2,7 +2,6 @@
 use std::fmt;
 use std::fs::*;
 use std::io::{BufWriter, Write};
-#[cfg(target_family = "unix")]
 use std::process::Command;
 use std::str::FromStr;
 use std::{collections::HashMap, unimplemented};
@@ -176,7 +175,7 @@ impl TestCase {
             json: HashMap::new(),
             logfile: format!("./tests/integration/tmp/{}.log", tag),
             logfile_gzip: format!("./tests/integration/tmp/{}.log.gz", tag),
-            tmpfile: format!("{}/{}.txt", std::env::temp_dir().display(), tag),
+            tmpfile: format!("./tests/integration/tmp/{}.txt", tag),
         };
 
         // safe to delete logfile if any
