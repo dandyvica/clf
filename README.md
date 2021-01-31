@@ -18,25 +18,25 @@ This reimplementation in Rust aims at solving original *check_logfiles* drawback
 
 * straightforward distribution: a single executable is needed. Using the *musl* static binary, no need for a specific verison of *libc*.
 * enhanced portability: same behaviour between Windows, Linux or BSD-like operating systems.
-* lightning speed: with an execution speed comparable to C or C++, execution time is not a hurdle. Multi-threaded is a future target.
+* lightning speed: with an execution speed comparable to C or C++, execution time is not a hurdle.
 * ability to either call an external script or send JSON data coming from logfile to a TCP stream or a UNIX domain stream.
-* standard configuration file format: opposite to the original *check_logfiles* with uses non-standard files (regular *Perl* files containing *Perl* variables), this implementation uses YAML format for its configuration files. YAML is best suited comparing to JSON or XML because there's no need to escape chars for regexes expressions.
+* standard configuration file format: opposite to the original *check_logfiles* with uses non-standard configuration files (regular *Perl* files containing *Perl* variables), this implementation uses the YAML format for its configuration files. YAML is best suited comparing to JSON or XML because there's no need to escape chars for regexes expressions.
 * versatility: coupled with *Jinja2*-like well-known templates, you can imagine lots of possibilities to manage configuration files in a professionnal environment.
 * power: it will take into account not only regular log files, but also list of files command from a shell command or a script.
-* no need for a decompression binary: logfiles are *gunzipped* out of the box. Supported formats: gzip (extension: .gz), bzip2 (extension: .bz2), xy (extension: .xy)
+* no need for a decompression binary: logfiles are *gunzipped* out of the box. Supported formats: gzip (extension: .gz), bzip2 (extension: .bz2), xz (extension: .xz)
 * search for current or archived log files.
+* manage log rotations
+* UTF-8 ready by default
 
 *Caveat*: Even though the current ```regex``` Rust crate is providing fast regexes checks, it doesn't currently support _lookahead or lookbehind_ patterns.
 
 ## Releases
-Current release is 0.1 and currently in development. It should be considered as bleeding edge or α-stage.
+Current release is 0.8 and currently still in a testing phase.
 
 ## Principle of operation
-The *clf* executable processing is simple. After reading the YAML configuration file passed to the command line, it reads each logfile (or a list of logfiles provided by an external command or script) and tests each line against the defined regexes. If a match is found, it triggers an external script, either by spawning a new process and providing a set of environment variables to this process (and optionnally updating the *PATH* or *Path* variable, depending on the OS). Or by establishing a new socket connection to a remote address and port configured in the configuration file, and sending a JSON data structure with a set of variables coming from the search. Or even to a UNIX domain socket
+The *clf* executable processing is simple. After reading the YAML configuration file passed to the command line, it reads each logfile (or a list of logfiles provided by an external command or script) and tests each line against the defined regexes. If a match is found, it triggers an external script, either by spawning a new process and providing a set of environment variables to this process (and optionnally updating the *PATH* or *Path* variable, depending on the OS). Or by establishing a new socket connection to a remote address and port configured in the configuration file, and sending a JSON data structure with a set of variables coming from the search. Or even to a UNIX domain socket with the same principle.
 
 The plugin output and exit code is depending on what is found in the provided logfiles.
-
-## Command line arguments
 
 ## Format of the YAML configuration file
 The current format of the configuration file defines where and what to search is a standard YAML format. 
@@ -51,7 +51,7 @@ global:
   # searched within those directories.
   # Defaults to '/usr/sbin:/usr/bin:/sbin:/bin' or 'C:\Windows\system32;C:\Windows;C:\Windows\System32\Wbem;' if not provided, depending on the 
   # platform.
-  path: "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+  script_path: "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 
   # a path & file name where clf is keeping its runtime information. This is used to restart the search from the last
   # offset reached from the last clf run.
@@ -60,8 +60,8 @@ global:
   # retention time for tags in seconds
   snapshot_retention: 5
 
-  # a list of user variables, if any
-  global_vars:
+  # a list of user variables, if any. Provided as-is to the callback
+  vars:
     first_name: Al
     last_name: Pacino
     city: 'Los Angeles'
@@ -71,14 +71,22 @@ global:
 # a list of logfiles & tags, to search for patterns. This is either a list of logfiles, or a command giving back a list of 
 # files to search for.
 searches:
-  # name & path of the logfile to search
-  - logfile: tests/logfiles/large_access.log
+  # logfile features
+  - logfile: 
+      # logfile path
+      name: tests/logfiles/large_access.log
+
+      # set it to false to skip logfile processing. Defaults to true
+      process: true
 
     # list of tags to refer to
     tags: 
 
       # tag name
       - name: http_access_get_or_post
+
+      # set it to false to skip logfile processing. Defaults to true
+      process: true
 
         # a list of comma-separated options to manage the search. Current supported options are:
         # runscript: if present, means the provided script will be called
@@ -196,12 +204,47 @@ The way *clf* searches in logfiles is controlled, for each tag, by a list of com
 
 option | description
 --- | ---
-runscript                | if set, the defined script will be call for each line where a *critical* or *warning* pattern matches
+runcallback              | if set, the defined callback will be call for each line where a *critical* or *warning* pattern matches
 rewind                   | if set, *clf* will read the considered logfile from the beginning, bypassing any offset recorded in the *snapshot* file
-criticalthreshold=<u16>  | when set to a 2-byte positive integer value, it means that critical errors will not be triggered unless this threshold is reached
-warningthreshold=<u16>   | when set to a 2-byte positive integer value, it means that warning errors will not be triggered unless this threshold is reached
-savethresholds       | when set, either critical or warning threshold will be save in the *snapshot* file
-runlimit=<u16>           | when set, for each execution of *clf*, the defined script (if any) will only be called at most the value set by this option
+fastforward              | move to the end of the file, don't call any callback, if no snapshot data is found for the logfile
+criticalthreshold=<u64>  | when set to a 8-byte positive integer value, it means that critical errors will not be triggered unless this threshold is reached
+warningthreshold=<u64>   | when set to a 8-byte positive integer value, it means that warning errors will not be triggered unless this threshold is reached
+savethresholds           | when set, either critical or warning threshold will be save in the *snapshot* file
+runlimit=<u64>           | when set, for each execution of *clf*, the defined script (if any) will only be called at most the value set by this option
+truncate=<u16>          | before matching any regex on a line, truncate the line to the specified number
+runifok                 | if set, any defined callback is called even in case of an OK pattern found
+stopat=<u64>            | stop searching patterns when line number reaches the specified value
+
+If a boolean option is not defined, it defaults to *false*. For integer options, they default to the maximum integer possible.
+
+## Callback definition
+A callback is either 
+* a script which is called with environement variables depending on what is found during the search
+* a TCP ip address to which data found are sent through a JSON string
+* a UNIX domain socket (UNIX only) to which data found are sent through a JSON string
+
+Examples of callbacks:
+
+A script callback:
+```yaml
+callback: 
+  script: ./tests/integration/scripts/echovars.py
+  args: ['/tmp/echovars.txt', 'arg2', 'arg3']
+```
+A TCP callback:
+```yaml
+callback: 
+  address: 127.0.0.1:8999
+  args: ['arg1', 'arg2', 'arg3']
+```
+A UNIX domain socket callback:
+```yaml
+callback: 
+  domain: /tmp/clfdomain.sock
+  args: ['arg1', 'arg2', 'arg3']
+```
+
+It's better to use the TCP or UDS callbacks because there's no overhead spawning an executable when matching lots of lines in a logfile. In case of a TCP or UDS callback, the receiving address or domain must be started before handling data from *clf*.
 
 ## Patterns definition
 When *clf* fetches a line from a logfile, it compares this string with a list of *critical* regexes defined in the configuration file first, if any. Then it moves to comparing with a list of *warning* regexes if any. Ultimately, it compares with a list of *ok* patterns. This latter comparison makes *clf* to reset ongoing threshold to 0.
@@ -237,14 +280,22 @@ Whenever a match is found when searching a logfile, if provided, a script is cal
 variable name | description
 ---                                | --- 
 CLF_LOGFILE                        | logfile name
+CLF_CONFIG_FILE                    | configuration file name
+CLF_HOSTNAME                       | machine hostname
+CLF_PLATFORM                       | platform name
+CLF_USER                           | user running *clf*
 CLF_TAG                            | tag name
 CLF_LINE                           | full line from the logfile, which triggered the match
 CLF_LINE_NUMBER                    | the line number in the logfile, which triggered the match
 CLF_MATCHED_RE                     | the regex (as a string) which triggered the match
 CLF_MATCHED_RE_TYPE                | the type of regex which riggered the match (critical or warning)
-CLF_CAPTUREn                       | the value of the capture group involved in the match (n >= 0). Only in case of unnamed capture groups
+CLF_CG_n                           | the value of the capture group involved in the match (n >= 0). Only in case of unnamed capture groups
+CLF_NB_CG                          | number of capture groups
 CLF_cgname                         | the value of the name capture group involved in the match
 CLF_uservar1                       | the value of a user-defined variables defines in the *global:* YAML tag
+CLF_OK_COUNT                       | current number of OK patterns found
+CLF_WARNING_COUNT                  | current number of WARNING patterns found
+CLF_CRITICAL_COUNT                 | current number of CRITICAL patterns found
 
 You could easily gain access to those variables in scripting languages:
 
@@ -252,7 +303,7 @@ You could easily gain access to those variables in scripting languages:
 
 ```python
 import os
-{ v:os.environ.get(v) for v in os.environ if v.startswith("P") }
+{ v:os.environ.get(v) for v in os.environ if v.startswith("CLF_") }
 
 ```
 
@@ -291,41 +342,65 @@ USAGE:
     clf [FLAGS] [OPTIONS] --config <config>
 
 FLAGS:
-    -e, --checkconf    
-            Check configuration file correctness, print it out and exit.
+    -d, --delete-snapshot
+            Delete snapshot file before searching
 
-    -d, --delsnap      
-            Delete snapshot file before searching.
-
-    -h, --help         
+    -h, --help
             Prints help information
 
-    -s, --showopt      
-            Just show the command line options passed and exit.
+    -a, --no-callback
+            Don't run any callback, just read all logfiles in the configuration file and print out
+            matching line. Used to check whether regexes are correct
 
-    -V, --version      
+    -r, --overwrite-log
+            Overwrite clf log if specified
+
+    -o, --show-options
+            Just show the command line options passed and exit
+
+    -w, --show-rendered
+            Render the configuration file through Jinja2/Tera and exit. This is meant to check Tera
+            substitutions
+
+    -s, --syntax-check
+            Check configuration file correctness, print it out and exit
+
+    -V, --version
             Prints version information
 
 
 OPTIONS:
-    -l, --clflog <clflog>        
-            Name of the logger file for logging information of this process.
+    -c, --config <config>
+            Name of the YAML configuration file
 
-    -c, --config <config>        
-            Mandatory argument. The name and path of the YAML configuration file, containing logfiles to search for and
-            patterns to match.
-    -g, --loglevel <loglevel>    
-            When logger is enabled, set the minimum logger level. Defaults to 'Info'. [possible values: Off, Error,
-            Warn, Info, Debug, Trace]
-    -m, --logsize <logsize>      
-            When logger is enabled, set the maximum logger size (in Mb). If specified, logger file will be deleted if
-            current size is over this value. Defaults to 50 MB.
-    -n, --nagver <nagver>        
-            Set the Nagios NRPE protocol version used for plugin output. Defaults to version 3. [possible values: 2, 3]
+    -x, --context <context>
+            A JSON string used to set the Tera context. Only valid if tera feature is enabled
 
-    -p, --snapdir <snapdir>      
-            Name of the snapshot file directory. If not provided, will default to the platform-dependent temporary
-            directory.
+    -l, --log <log>
+            Name of the log file for logging information of this executable. Not to be confused with
+            the logfile to search into
+
+    -g, --log-level <log-level>
+            When log is enabled, set the minimum log level. Defaults to 'Info'[possible values: Off,
+            Error, Warn, Info, Debug, Trace]
+
+    -m, --max-logsize <max-logsize>
+            When log is enabled, set the maximum log size (in Mb). If specified, log file will be
+            deleted first if current size is over this value. Defaults to 50 MB
+
+    -n, --nagios-version <nagios-version>
+            Set the Nagios NRPE protocol version used for plugin output. Default to version
+            3.[possible values: 2, 3]
+
+    -p, --snapshot <snapshot>
+            Override the snapshot file specified in the configuration file. It will default to the
+            platform-dependent name using the temporary directory if not provided in configuration
+            file or by using this flag
+
+    -v, --var <var>...
+            An optional variable to send to the defined callback. Multiple values are possible
+
+
 ```
 
 ## Plugin output
@@ -355,15 +430,8 @@ To compile with the *musl* library as a standalone static executable:
 $ cargo build --target x86_64-unknown-linux-musl --release   
 ```
 
-## TODO
-Still missing in the short run:
-
-* write dev()/inode() Linux-equivalent for Windows
-* manage log rotations
-
-Missing in the long run:
-
-* use an OS thread pool to parallelize logfile search. This, due to the way Rust handles threads, should incur lots of changes in the current code base.
+## Windows specifics
+In order to emulate UNIX inode/dev features, a specific DLL has been developed (*signature.dll*) You need to put this DLL in one of the paths specified by the Windows *Path* environment variable.
 
 
 

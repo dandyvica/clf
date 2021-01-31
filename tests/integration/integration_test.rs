@@ -135,7 +135,7 @@ fn main() {
             .set_tag("options", "rewind")
             .set_tag("path", &tc.logfile)
             .save_as(&tc.config_file);
-        let rc = tc.run(&opts, &["-d"]);
+        let rc = tc.run(&opts, &["-d", "-r"]);
 
         jassert!(tc, "compression", "uncompressed");
         jassert!(tc, "extension", "log");
@@ -351,6 +351,44 @@ fn main() {
         // assert_eq!(rc.0, 2);
     }
 
+
+    // exclude
+    {
+        let mut tc = TestCase::new("exclude");
+
+        Config::from_file("./tests/integration/config/exclude.yml")
+            .set_tag("options", "protocol")
+            .set_tag("path", &tc.logfile)
+            .save_as(&tc.config_file);
+        let rc = tc.run(&opts, &["-d"]);
+
+        jassert!(tc, "last_offset", "20100");
+        jassert!(tc, "last_line", "201");
+        jassert!(tc, "critical_count", "0");
+        jassert!(tc, "warning_count", "98");
+        jassert!(tc, "ok_count", "0");
+        jassert!(tc, "exec_count", "0");
+        assert_eq!(rc.0, 1);
+    }
+
+    // truncate
+    {
+        let mut tc = TestCase::new("truncate");
+        Config::default()
+            .set_tag("options", "truncate=10")
+            .set_tag("path", &tc.logfile)
+            .save_as(&tc.config_file);
+        let rc = tc.run(&opts, &["-d"]);
+
+        jassert!(tc, "last_offset", "20100");
+        jassert!(tc, "last_line", "201");
+        jassert!(tc, "critical_count", "0");
+        jassert!(tc, "warning_count", "0");
+        jassert!(tc, "ok_count", "0");
+        jassert!(tc, "exec_count", "0");
+        assert_eq!(rc.0, 0);
+    }    
+
     //------------------------------------------------------------------------------------------------
     // list files Linux
     //------------------------------------------------------------------------------------------------
@@ -413,7 +451,7 @@ fn main() {
                 "script",
                 "./tests/integration/scripts/echovars.py",
             )
-            .set_tag("args", "['/tmp/runifok.txt', 'arg2']")
+            .set_tag("args", "['./tests/integration/tmp/runifok.txt', 'arg2']")
             .save_as(&tc.config_file);
         #[cfg(target_family = "windows")]
         Config::from_file("./tests/integration/config/ok_pattern.yml")
@@ -425,7 +463,7 @@ fn main() {
                 r"['.\tests\integration\scripts\echovars.py', '.\tests\integration\tmp\runifok.txt']",
             )
             .save_as(&tc.config_file);
-        let rc = tc.run(&opts, &["-d", "-r"]);
+        let rc = tc.run(&opts, &["-d"]);
 
         jassert!(tc, "last_offset", "20100");
         jassert!(tc, "last_line", "201");
@@ -498,7 +536,7 @@ fn main() {
                 "script",
                 "./tests/integration/scripts/echovars.py",
             )
-            .set_tag("args", "['/tmp/start_script.txt', 'arg2']")
+            .set_tag("args", "['./tests/integration/tmp/start_script.txt', 'arg2']")
             .save_as(&tc.config_file);
         #[cfg(target_family = "windows")]
         Config::default()
@@ -542,7 +580,7 @@ fn main() {
                 "script",
                 "./tests/integration/scripts/echovars.py",
             )
-            .set_tag("args", "['/tmp/script_threshold.txt', 'arg2']")
+            .set_tag("args", "['./tests/integration/tmp/script_threshold.txt', 'arg2']")
             .save_as(&tc.config_file);
         #[cfg(target_family = "windows")]
         Config::default()

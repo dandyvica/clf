@@ -102,6 +102,12 @@ impl Lookup<FullReader> for LogFile {
         // sometimes, early return due to callback errors or I/O errors
         let mut early_ret: Option<AppError> = None;
 
+        // before having a mutable borrow, save optional exclude regex
+        let mut exclude_re: Option<regex::Regex> = None;
+        if self.definition.exclude.is_some() {
+            exclude_re = Some(self.definition.exclude.clone().unwrap());
+        }
+
         //------------------------------------------------------------------------------------
         // 2. reset `RunData` fields depending on local options
         //------------------------------------------------------------------------------------
@@ -185,6 +191,14 @@ impl Lookup<FullReader> for LogFile {
                         line_number -= 1;
                         bytes_count -= bytes_read as u64;
                         break;
+                    }
+
+                    // check for excluded lines
+                    if let Some(ref re) = exclude_re {
+                        if re.is_match(&line) {
+                            buffer.clear();
+                            continue;
+                        }
                     }
 
                     trace!("====> line#={}, line={}", line_number, &line);
