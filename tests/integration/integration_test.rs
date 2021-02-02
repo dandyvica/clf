@@ -441,7 +441,7 @@ fn main() {
         tc.multiple_logs();
 
         #[cfg(target_os = "linux")]
-        Config::from_file("./tests/integration/config/list_linux.yml")
+        Config::from_file("./tests/integration/config/list_files.yml")
             .set_tag("options", "protocol")
             .set_tag(
                 "list",
@@ -449,14 +449,14 @@ fn main() {
             )
             .save_as(&tc.config_file);
         #[cfg(target_os = "windows")]
-        Config::from_file("./tests/integration/config/list_linux.yml")
+        Config::from_file("./tests/integration/config/list_files.yml")
             .set_tag("options", "protocol")
             .set_tag(
                 "list",
-                r#"["cmd.exe", "/c", "dir .\\tests\\integration\\tmp\\list_files.log.*"]"#,
+                r#"['cmd.exe', '/c', 'dir /B /S .\tests\integration\tmp\list_files.log.*']"#,
             )
             .save_as(&tc.config_file);
-        let rc = tc.run(&opts, &["-d"]);
+        let rc = tc.run(&opts, &["-d", "-r"]);
 
         assert_eq!(rc.0, 2);
         jassert!(rc, "list_files.log");
@@ -491,6 +491,7 @@ fn main() {
     //------------------------------------------------------------------------------------------------
     // extra variables
     //------------------------------------------------------------------------------------------------
+    #[cfg(target_os = "linux")]
     if testcases.is_empty() || testcases.contains(&"extra_vars") {
         let mut tc = TestCase::new("extra_vars", &mut nb_testcases);
         Config::default()

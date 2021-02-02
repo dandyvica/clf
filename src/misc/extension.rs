@@ -163,8 +163,8 @@ impl ReadFs for PathBuf {
         // convert path to UTF16 Windows string
         let u16_path = U16CString::from_os_str(self.as_os_str()).unwrap();
 
-        println!("signature for {}", self.display());
-        println!("u16_path for {:?}, length={}", &u16_path, u16_path.len());
+        // println!("signature for {}", self.display());
+        // println!("u16_path for {:?}, length={}", &u16_path, u16_path.len());
 
         let rc = unsafe { get_signature_w(u16_path.as_ptr(), &win_sign) };
 
@@ -231,7 +231,13 @@ impl ListFiles for Vec<String> {
             })
             .unwrap();
 
-        debug!("cmd={}, args={:?}: returned files={:?}", cmd, args, output);
+        debug!(
+            "cmd={}, args={:?}: stdout={:?}, stderr={:?}",
+            cmd,
+            args,
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
         let output_as_str = std::str::from_utf8(&output.stdout)
             .map_err(|e| context!(e, "unable to convert '{:?}' to utf8", &output.stdout))?;
 
