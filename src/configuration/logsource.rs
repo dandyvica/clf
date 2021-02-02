@@ -9,6 +9,7 @@ use serde::Deserialize;
 /// the standard output the list of files to check. One of the enum variant is loaded from
 /// the YAML configuration file.
 #[derive(Debug, Deserialize, Clone)]
+#[serde(deny_unknown_fields)]
 pub enum LogSource {
     #[serde(rename = "path")]
     LogFile(PathBuf),

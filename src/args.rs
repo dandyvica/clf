@@ -162,7 +162,7 @@ impl CliOptions {
                     .short('x')
                     .long("context")
                     .required(false)
-                    .long_about("A JSON string used to set the Tera context. Only valid if tera feature is enabled")
+                    .long_about("A JSON string used to set the Tera context. Only valid if the tera feature is enabled")
                     .takes_value(true),
             )
             .arg(
@@ -170,7 +170,7 @@ impl CliOptions {
                     .short('v')
                     .long("var")
                     .required(false)
-                    .long_about("An optional variable to send to the defined callback. Multiple values are possible")
+                    .long_about("An optional variable to send to the defined callback, with syntax: 'var:value'. Multiple values are possible")
                     .multiple(true)
                     .takes_value(true),
             )
@@ -189,14 +189,7 @@ impl CliOptions {
 
         // config file is mandatory. Try to canonicalize() at the same time.
         let config_file = PathBuf::from(matches.value_of("config").unwrap());
-        // let canonicalized_config_file = config_file.canonicalize();
-        // if let Err(ref e) = canonicalized_config_file {
-        //     Nagios::exit_critical(&format!(
-        //         "error trying to canonicalize config file: {}, error: {}",
-        //         config_file.display(),
-        //         e
-        //     ));
-        // }
+
         options.config_file = config_file.canonicalize().expect_critical(&format!(
             "error trying to canonicalize config file: {}",
             config_file.display()

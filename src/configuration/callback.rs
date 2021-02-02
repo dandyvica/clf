@@ -27,6 +27,7 @@ use crate::{context, fromstr};
 
 /// A callback is either a script, or a TCP socket or a UNIX domain socket
 #[derive(Debug, Deserialize, PartialEq, Hash, Eq, Clone)]
+#[serde(deny_unknown_fields)]
 pub enum CallbackType {
     #[serde(rename = "script")]
     Script(Option<PathBuf>),

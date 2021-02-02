@@ -1,6 +1,5 @@
 //! A repository for all runtime logfile searches. These values are kept as a JSON file and reused each time the process is run.
 use std::collections::HashMap;
-use std::ffi::OsStr;
 use std::fmt::Debug;
 use std::fs::File;
 use std::io::{BufReader, ErrorKind};
@@ -40,17 +39,32 @@ impl Default for Snapshot {
 
 impl Snapshot {
     /// Builds a new snapshot file name from `path`.
-    pub fn build_name(path: &PathBuf) -> PathBuf {
-        // get file name from path variable
-        let name = path
-            .file_stem()
-            .unwrap_or_else(|| OsStr::new("clf_snapshot"));
-
-        // builds new name
+    pub fn build_name<P: AsRef<Path> + Debug>(config_file: P, dir: Option<P>) -> PathBuf {
         let mut snapshot_file = PathBuf::new();
+        let parent = config_file
+            .as_ref()
+            .parent()
+            .unwrap_or_else(|| Path::new("."));
+        let file_name_without_ext = config_file
+            .as_ref()
+            .file_stem()
+            .expect("fatal error: file_stem() is None");
 
-        snapshot_file.push(name);
-        snapshot_file.set_extension("json");
+        // if dir is specified, use this dir to build the final snapshot file name
+        // if not, use the same directory as path, and add .json as extension
+        match dir {
+            Some(dir) => {
+                debug_assert!(dir.as_ref().is_dir());
+                snapshot_file.push(dir);
+                snapshot_file.push(file_name_without_ext);
+                snapshot_file.set_extension("json");
+            }
+            None => {
+                snapshot_file.push(parent);
+                snapshot_file.push(file_name_without_ext);
+                snapshot_file.set_extension("json");
+            }
+        };
 
         snapshot_file
     }
@@ -136,11 +150,13 @@ impl Snapshot {
 
     /// Builds the final output message displayed by the plugin
     pub fn exit_message(&self, access_errors: &LogFileAccessErrorList) -> NagiosError {
+        let current_pid = std::process::id();
+
         // calculate the summation of all pattern counts for all logfiles
         let pattern_sum = self
             .snapshot
             .values() // Vec<LogFile>
-            .map(|x| x.sum_counters()) // Vec<PatternCounters>
+            .map(|x| x.sum_counters(current_pid)) // Vec<PatternCounters>
             .fold(PatternCounters::default(), |acc, x| acc + x); // PatternCounters
 
         // build the nagios exit counters
@@ -201,170 +217,170 @@ mod tests {
     use super::*;
 
     const SNAPSHOT_SAMPLE: &'static str = r#"
-{
-    "snapshot": {
-        "/var/log/apt/term.log": {
-        "id": {
-            "declared_path": "/var/log/apt/term.log",
-            "canon_path": "/var/log/apt/term.log",
-            "directory": "/var/log/apt",
-            "extension": "log",
-            "compression": "uncompressed",
-            "signature": {
-                "inode": 1275587,
-                "dev": 28,
-                "size": 4000
-            }
-        },
-        "run_data": {
-            "apt": {
-            "pid": 40468,
-            "start_offset": 197326,
-            "start_line": 999,
-            "last_offset": 98607,
-            "last_line": 1100,
-            "last_run": "2020-12-22 16:10:55.286912679",
-            "last_run_secs": 1611857382,
-            "counters": {
-                "critical_count": 0,
-                "warning_count": 5,
-                "ok_count": 0,
-                "exec_count": 5
+    {
+        "snapshot": {
+            "/var/log/apt/term.log": {
+                "id": {
+                    "declared_path": "/var/log/apt/term.log",
+                    "canon_path": "/var/log/apt/term.log",
+                    "directory": "/var/log/apt",
+                    "extension": "log",
+                    "compression": "uncompressed",
+                    "signature": {
+                        "inode": 1275587,
+                        "dev": 28,
+                        "size": 4000
+                    }
+                },
+                "run_data": {
+                    "apt": {
+                        "pid": 40468,
+                        "start_offset": 197326,
+                        "start_line": 999,
+                        "last_offset": 98607,
+                        "last_line": 1100,
+                        "last_run": "2020-12-22 16:10:55.286912679",
+                        "last_run_secs": 1611857382,
+                        "counters": {
+                            "critical_count": 0,
+                            "warning_count": 5,
+                            "ok_count": 0,
+                            "exec_count": 5
+                        },
+                        "last_error": "None"
+                    }
+                }
             },
-            "last_error": "None"
-            }
-        }
-        },
-        "/var/log/apt/history.log": {
-        "id": {
-            "declared_path": "/var/log/apt/history.log",
-            "canon_path": "/var/log/apt/history.log",
-            "directory": "/var/log/apt",
-            "extension": "log",
-            "compression": "uncompressed",
-            "signature": {
-                "inode": 1275587,
-                "dev": 28,
-                "size": 4000
-            }
-        },
-        "run_data": {
-            "apt": {
-            "pid": 40468,
-            "start_offset": 197326,
-            "start_line": 999,
-            "last_offset": 13996,
-            "last_line": 68,
-            "last_run": "2020-12-22 16:10:55.287475585",
-            "last_run_secs": 1611857382,
-            "counters": {
-                "critical_count": 0,
-                "warning_count": 0,
-                "ok_count": 0,
-                "exec_count": 0
+            "/var/log/apt/history.log": {
+                "id": {
+                    "declared_path": "/var/log/apt/history.log",
+                    "canon_path": "/var/log/apt/history.log",
+                    "directory": "/var/log/apt",
+                    "extension": "log",
+                    "compression": "uncompressed",
+                    "signature": {
+                        "inode": 1275587,
+                        "dev": 28,
+                        "size": 4000
+                    }
+                },
+                "run_data": {
+                    "apt": {
+                        "pid": 40468,
+                        "start_offset": 197326,
+                        "start_line": 999,
+                        "last_offset": 13996,
+                        "last_line": 68,
+                        "last_run": "2020-12-22 16:10:55.287475585",
+                        "last_run_secs": 1611857382,
+                        "counters": {
+                            "critical_count": 0,
+                            "warning_count": 0,
+                            "ok_count": 0,
+                            "exec_count": 0
+                        },
+                        "last_error": "None"
+                    }
+                }
             },
-            "last_error": "None"
+            "/var/log/kern.log": {
+                "id": {
+                    "declared_path": "/var/log/kern.log",
+                    "canon_path": "/var/log/kern.log",
+                    "directory": "/var/log",
+                    "extension": "log",
+                    "compression": "uncompressed",
+                    "signature": {
+                        "inode": 1275587,
+                        "dev": 28,
+                        "size": 4000
+                    }
+                },
+                "run_data": {
+                    "kern_kernel": {
+                        "pid": 40468,
+                        "start_offset": 197326,
+                        "start_line": 999,
+                        "last_offset": 392201,
+                        "last_line": 3885,
+                        "last_run": "2020-12-22 16:10:55.280019283",
+                        "last_run_secs": 1611857382,
+                        "counters": {
+                            "critical_count": 0,
+                            "warning_count": 3885,
+                            "ok_count": 0,
+                            "exec_count": 10
+                        },
+                        "last_error": "None"
+                    },
+                    "kern_nokernel": {
+                        "pid": 40468,
+                        "start_offset": 197326,
+                        "start_line": 999,
+                        "last_offset": 392201,
+                        "last_line": 3885,
+                        "last_run": "2020-12-22 16:10:54.102239131",
+                        "last_run_secs": 1611857382,
+                        "counters": {
+                            "critical_count": 0,
+                            "warning_count": 3867,
+                            "ok_count": 0,
+                            "exec_count": 3867
+                        },
+                        "last_error": "None"
+                    }
+                }
+            },
+            "/var/log/syslog": {
+                "id": {
+                    "declared_path": "/var/log/syslog",
+                    "canon_path": "/var/log/syslog",
+                    "directory": "/var/log",
+                    "extension": null,
+                    "compression": "uncompressed",
+                    "signature": {
+                        "inode": 1275587,
+                        "dev": 28,
+                        "size": 4000
+                    }
+                },
+                "run_data": {
+                    "syslog_nokernel": {
+                        "pid": 40468,
+                        "start_offset": 197326,
+                        "start_line": 999,
+                        "last_offset": 334147,
+                        "last_line": 3152,
+                        "last_run": "2020-12-22 16:10:48.877119302",
+                        "last_run_secs": 1611857382,
+                        "counters": {
+                            "critical_count": 0,
+                            "warning_count": 0,
+                            "ok_count": 0,
+                            "exec_count": 0
+                        },
+                        "last_error": "None"
+                    },
+                    "syslog_kernel": {
+                        "pid": 40468,
+                        "start_offset": 197326,
+                        "start_line": 999,
+                        "last_offset": 334147,
+                        "last_line": 3152,
+                        "last_run": "2020-12-22 16:10:51.412855148",
+                        "last_run_secs": 1611857382,
+                        "counters": {
+                            "critical_count": 0,
+                            "warning_count": 1400,
+                            "ok_count": 0,
+                            "exec_count": 1400
+                        },
+                        "last_error": "None"
+                    }
+                }
             }
-        }
-        },
-        "/var/log/kern.log": {
-        "id": {
-            "declared_path": "/var/log/kern.log",
-            "canon_path": "/var/log/kern.log",
-            "directory": "/var/log",
-            "extension": "log",
-            "compression": "uncompressed",
-            "signature": {
-                "inode": 1275587,
-                "dev": 28,
-                "size": 4000
-            }
-        },
-        "run_data": {
-            "kern_kernel": {
-            "pid": 40468,
-            "start_offset": 197326,
-            "start_line": 999,
-            "last_offset": 392201,
-            "last_line": 3885,
-            "last_run": "2020-12-22 16:10:55.280019283",
-            "last_run_secs": 1611857382,
-            "counters": {
-                "critical_count": 0,
-                "warning_count": 3885,
-                "ok_count": 0,
-                "exec_count": 10
-            },
-            "last_error": "None"
-            },
-            "kern_nokernel": {
-            "pid": 40468,
-            "start_offset": 197326,
-            "start_line": 999,
-            "last_offset": 392201,
-            "last_line": 3885,
-            "last_run": "2020-12-22 16:10:54.102239131",
-            "last_run_secs": 1611857382,
-            "counters": {
-                "critical_count": 0,
-                "warning_count": 3867,
-                "ok_count": 0,
-                "exec_count": 3867
-            },
-            "last_error": "None"
-            }
-        }
-        },
-        "/var/log/syslog": {
-        "id": {
-            "declared_path": "/var/log/syslog",
-            "canon_path": "/var/log/syslog",
-            "directory": "/var/log",
-            "extension": null,
-            "compression": "uncompressed",
-            "signature": {
-                "inode": 1275587,
-                "dev": 28,
-                "size": 4000
-            }
-        },
-        "run_data": {
-            "syslog_nokernel": {
-            "pid": 40468,
-            "start_offset": 197326,
-            "start_line": 999,
-            "last_offset": 334147,
-            "last_line": 3152,
-            "last_run": "2020-12-22 16:10:48.877119302",
-            "last_run_secs": 1611857382,
-            "counters": {
-                "critical_count": 0,
-                "warning_count": 0,
-                "ok_count": 0,
-                "exec_count": 0
-            },
-            "last_error": "None"
-            },
-            "syslog_kernel": {
-            "pid": 40468,
-            "start_offset": 197326,
-            "start_line": 999,
-            "last_offset": 334147,
-            "last_line": 3152,
-            "last_run": "2020-12-22 16:10:51.412855148",
-            "last_run_secs": 1611857382,
-            "counters": {
-                "critical_count": 0,
-                "warning_count": 1400,
-                "ok_count": 0,
-                "exec_count": 1400
-            },
-            "last_error": "None"
-            }
-        }
         }
     }
-}    
  "#;
 
     #[test]
@@ -397,5 +413,21 @@ mod tests {
 
         let _ = data.logfile_mut(&PathBuf::from("/usr/bin/zip"), &def);
         assert_eq!(data.snapshot.len(), 6);
+    }
+
+    #[test]
+    #[cfg(target_os = "linux")]
+    fn build_name() {
+        let config_file = PathBuf::from("/home/johndoe/clf/config/config.yml");
+        let dir = PathBuf::from("/var");
+
+        assert_eq!(
+            &Snapshot::build_name(&config_file, None),
+            Path::new("/home/johndoe/clf/config/config.json")
+        );
+        assert_eq!(
+            &Snapshot::build_name(&config_file, Some(&dir)),
+            Path::new("/var/config.json")
+        );
     }
 }

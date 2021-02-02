@@ -9,6 +9,7 @@ use serde::Deserialize;
 
 /// This structure keeps everything related to log rotations
 #[derive(Debug, Deserialize, Clone)]
+#[serde(deny_unknown_fields)]
 pub struct LogArchive {
     /// the logfile name to check
     pub dir: Option<PathBuf>,

@@ -11,6 +11,7 @@ use crate::{fromstr, prefix_var};
 #[derive(Debug, Deserialize, Clone)]
 /// A list of global options, which apply globally for all searches.
 #[serde(default)]
+#[serde(deny_unknown_fields)]
 pub struct GlobalOptions {
     /// A list of paths, separated by either ':' for unix, or ';' for Windows. This is
     /// where the script, if any, will be searched for. Default to PATH or Path depending on the platform.
@@ -38,7 +39,7 @@ pub struct GlobalOptions {
 
 impl GlobalOptions {
     /// Add variables like user, platform etc not dependant from a logfile
-    pub fn insert_process_env<P: AsRef<Path>>(&mut self, path: P) {
+    pub fn insert_process_vars<P: AsRef<Path>>(&mut self, path: P) {
         // add config file name
         self.global_vars.insert_var(
             prefix_var!("CONFIG_FILE"),
@@ -59,7 +60,7 @@ impl GlobalOptions {
         if vars.is_some() {
             let vars = vars.as_ref().unwrap();
 
-            // each var should have this form: var=value
+            // each var should have this form: 'var:value'
             for var in vars {
                 // split at char ':'
                 let splitted: Vec<&str> = var.split(':').collect();
@@ -71,7 +72,7 @@ impl GlobalOptions {
 
                 // now it's safe to insert
                 self.global_vars
-                    .insert_var(prefix_var!(splitted[0]), splitted[1].to_string());
+                    .insert_var(Cow::from(splitted[0]), splitted[1].to_string());
             }
         }
     }

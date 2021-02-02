@@ -26,6 +26,7 @@ impl Default for LogFileFormat {
 }
 
 #[derive(Debug, Deserialize, Clone, Default)]
+#[serde(deny_unknown_fields)]
 /// Logfile attributes not dependant from a runtime search.
 pub struct LogFileDef {
     // full path of the logfile

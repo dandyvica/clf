@@ -3,6 +3,7 @@
 global:
   script_path: "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
   snapshot_retention: 1
+  snapshot_file: ./tests/integration/tmp/snapshot_foo.json
   vars:
     CLF_firstname: Al
     CLF_lastname: Pacino

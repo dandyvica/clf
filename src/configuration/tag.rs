@@ -15,6 +15,7 @@ use crate::fromstr;
 /// This is the core structure which handles data used to search into the logfile. These are
 /// gathered and refered to as a tag name.
 #[derive(Debug, Deserialize, Clone)]
+#[serde(deny_unknown_fields)]
 pub struct Tag {
     /// A name to identify the tag.
     pub name: String,

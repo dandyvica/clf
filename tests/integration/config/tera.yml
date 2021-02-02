@@ -15,7 +15,7 @@ global:
 searches:
   - logfile: 
       path: {{ path }}
-      format: plain
+      format: {{ format }}
       logfilemissing: critical
       archive:
         extension: gz

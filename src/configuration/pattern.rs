@@ -64,6 +64,7 @@ impl TryFrom<Vec<String>> for RegexBundle {
 /// will be returned. But if a match is found also in the `exceptions` list, nothing
 /// is returned.
 #[derive(Debug, Deserialize, Clone)]
+#[serde(deny_unknown_fields)]
 pub struct Pattern {
     /// A vector of compiled `Regex` structs which are hence all valid.
     regexes: RegexVec,

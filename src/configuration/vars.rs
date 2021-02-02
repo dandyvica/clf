@@ -30,6 +30,7 @@ macro_rules! prefix_var {
     };
 }
 #[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(deny_unknown_fields)]
 /// A generic variable structure.
 pub struct Vars<K: Hash + Eq, V>(HashMap<K, V>);
 

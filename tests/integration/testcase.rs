@@ -161,8 +161,9 @@ pub struct TestCase {
 
 impl TestCase {
     // a new testcase with the default config
-    pub fn new(tag: &str) -> Self {
-        println!("running test case: {}", tag);
+    pub fn new(tag: &str, i: &mut u16) -> Self {
+        println!("running test case {:02?}: {}", i, tag);
+        *i += 1;
         info!(
             "==============================================> running test case: {}",
             tag

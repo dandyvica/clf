@@ -30,11 +30,10 @@ pub fn init_config(options: &CliOptions) -> Config {
         ));
     }
 
-    //let mut config = Config::from(_config.unwrap());
     let mut config = _config.unwrap();
 
     // add process environment variables and optional extra variables
-    config.global.insert_process_env(&options.config_file);
+    config.global.insert_process_vars(&options.config_file);
     config.global.insert_extra_vars(&options.extra_vars);
 
     config
@@ -104,14 +103,27 @@ pub fn init_log(options: &CliOptions) {
 }
 
 /// Load the snapshot file: if option "-p" is present, use it, or use the config tag or build a new name from config file
-pub fn load_snapshot(options: &CliOptions, config_snap: &Option<PathBuf>) -> (Snapshot, PathBuf) {
+pub fn load_snapshot(
+    options: &CliOptions,
+    config_snapshot_file: &Option<PathBuf>,
+) -> (Snapshot, PathBuf) {
     // if option "-p" is present, use it, or use the config tag or build a new name from config file
     let snapfile = if options.snapshot_file.is_some() {
         options.snapshot_file.as_ref().unwrap().clone()
-    } else if config_snap.is_some() {
-        config_snap.as_ref().unwrap().clone()
+    // it's given as a command line argument as '--snapshot'
+    } else if config_snapshot_file.is_some() {
+        // or it's using what's defined in the configuration file
+        let conf_file_or_dir = config_snapshot_file.as_ref().unwrap();
+
+        // if what is specified is a directory, use this to build the final snapshot file
+        if conf_file_or_dir.is_dir() {
+            Snapshot::build_name(&options.config_file, Some(conf_file_or_dir))
+        } else {
+            conf_file_or_dir.clone()
+        }
     } else {
-        Snapshot::build_name(&options.config_file)
+        // otherwise, the snapshot file is build from the config file, adding .json extension
+        Snapshot::build_name(&options.config_file, None)
     };
 
     // delete snapshot file if requested
@@ -133,14 +145,6 @@ pub fn load_snapshot(options: &CliOptions, config_snap: &Option<PathBuf>) -> (Sn
     // read snapshot data from file
     let snapshot = Snapshot::load(&snapfile)
         .expect_critical(&format!("unable to load snapshot file: {:?},", &snapfile));
-    // let snapshot = Snapshot::load(&snapfile);
-    // if let Err(e) = &snapshot {
-    //     Nagios::exit_critical(&format!(
-    //         "unable to load snapshot file: {:?}, error: {}",
-    //         &snapfile, e
-    //     ));
-    // }
-
     info!(
         "loaded snapshot file {:?}, data = {:#?}",
         &snapfile, &snapshot

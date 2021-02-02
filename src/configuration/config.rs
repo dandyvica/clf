@@ -26,6 +26,7 @@ use crate::{context, fromstr};
 /// the YAML file found in the command line argument (or from stdin). This configuration can include a list
 /// of logfiles (given either by name or by starting an external command) to lookup and for each logfile, a list of regexes to match.
 #[derive(Debug, Deserialize, Default)]
+#[serde(deny_unknown_fields)]
 pub struct Config {
     /// List of global options, which apply for all searches.
     #[serde(default = "GlobalOptions::default")]

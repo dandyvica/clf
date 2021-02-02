@@ -8,6 +8,7 @@ use crate::misc::{nagios::Nagios, util::DEFAULT_SCRIPT_TIMEOUT};
 
 /// A callable script.
 #[derive(Debug, Deserialize, Clone)]
+#[serde(deny_unknown_fields)]
 pub struct Script {
     /// command with its arguments
     pub command: Vec<String>,

@@ -1,4 +1,5 @@
 use clap::{App, Arg};
+use std::path::PathBuf;
 
 mod testcase;
 use testcase::*;
@@ -34,6 +35,15 @@ fn main() {
                 .long_about("Path of the clf executable. Defaults to ./target/debug/clf or ./target/release/clf")
                 .takes_value(true),
         )
+        .arg(
+            Arg::new("testcase")
+                .short('t')
+                .long("testcase")
+                .required(false)
+                .long_about("A list of testcases to execute. If not specified, all testcases are run")
+                .multiple(true)
+                .takes_value(true),
+        )
         .get_matches();
 
     let mut opts = Options::default();
@@ -44,7 +54,13 @@ fn main() {
         .value_of_t("clf")
         .unwrap_or(opts.mode.path().to_string());
 
+    let mut testcases: Vec<&str> = Vec::new();
+    if matches.is_present("testcase") {
+        testcases = matches.values_of("testcase").unwrap().collect();
+    }
+
     //println!("options={:?}", opts);
+    let mut nb_testcases: u16 = 1;
 
     //------------------------------------------------------------------------------------------------
     // prepare run by creating necessary directories if necessary
@@ -64,24 +80,24 @@ fn main() {
     //------------------------------------------------------------------------------------------------
 
     // call help
-    {
-        let tc = TestCase::new("help");
+    if testcases.is_empty() || testcases.contains(&"help") {
+        let tc = TestCase::new("help", &mut nb_testcases);
         let rc = tc.exec(&opts, &["--help"]);
 
         assert_eq!(rc, 0);
     }
 
     // missing argument
-    {
-        let tc = TestCase::new("missing_argument");
+    if testcases.is_empty() || testcases.contains(&"missing_argument") {
+        let tc = TestCase::new("missing_argument", &mut nb_testcases);
         let rc = tc.exec(&opts, &["--syntax-check"]);
 
         assert_eq!(rc, 2);
     }
 
     // good YAML syntax
-    {
-        let tc = TestCase::new("good_syntax");
+    if testcases.is_empty() || testcases.contains(&"good_syntax") {
+        let tc = TestCase::new("good_syntax", &mut nb_testcases);
         let rc = tc.exec(
             &opts,
             &[
@@ -95,8 +111,8 @@ fn main() {
     }
 
     // bad YAML syntax
-    {
-        let tc = TestCase::new("bad_syntax");
+    if testcases.is_empty() || testcases.contains(&"bad_syntax") {
+        let tc = TestCase::new("bad_syntax", &mut nb_testcases);
         let rc = tc.exec(
             &opts,
             &[
@@ -110,8 +126,8 @@ fn main() {
     }
 
     // show options
-    {
-        let tc = TestCase::new("show_options");
+    if testcases.is_empty() || testcases.contains(&"show_options") {
+        let tc = TestCase::new("show_options", &mut nb_testcases);
         let rc = tc.exec(
             &opts,
             &[
@@ -129,8 +145,8 @@ fn main() {
     // genuine search with fastforward
     //------------------------------------------------------------------------------------------------
     // rewind
-    {
-        let mut tc = TestCase::new("rewind");
+    if testcases.is_empty() || testcases.contains(&"rewind") {
+        let mut tc = TestCase::new("rewind", &mut nb_testcases);
         Config::default()
             .set_tag("options", "rewind")
             .set_tag("path", &tc.logfile)
@@ -162,8 +178,8 @@ fn main() {
     }
 
     // fastforward
-    {
-        let mut tc = TestCase::new("fastforward");
+    if testcases.is_empty() || testcases.contains(&"fastforward") {
+        let mut tc = TestCase::new("fastforward", &mut nb_testcases);
         Config::default()
             .set_tag("options", "fastforward")
             .set_tag("path", &tc.logfile)
@@ -196,8 +212,8 @@ fn main() {
     }
 
     // fastforward gzipped
-    {
-        let mut tc = TestCase::new("fastforward_gzipped");
+    if testcases.is_empty() || testcases.contains(&"fastforward_gzipped") {
+        let mut tc = TestCase::new("fastforward_gzipped", &mut nb_testcases);
         // gzip log
         tc.gzip();
 
@@ -220,8 +236,8 @@ fn main() {
     }
 
     // logfile missing
-    {
-        let mut tc = TestCase::new("logfilemissing");
+    if testcases.is_empty() || testcases.contains(&"logfilemissing") {
+        let mut tc = TestCase::new("logfilemissing", &mut nb_testcases);
 
         Config::default()
             .set_tag("options", "protocol")
@@ -255,8 +271,8 @@ fn main() {
     // dummy search
     //------------------------------------------------------------------------------------------------
     // ascii
-    {
-        let mut tc = TestCase::new("dummy");
+    if testcases.is_empty() || testcases.contains(&"dummy") {
+        let mut tc = TestCase::new("dummy", &mut nb_testcases);
         Config::default()
             .set_tag("options", "protocol")
             .set_tag("path", &tc.logfile)
@@ -273,8 +289,8 @@ fn main() {
     }
 
     // utf8
-    {
-        let mut tc = TestCase::new("utf8");
+    if testcases.is_empty() || testcases.contains(&"utf8") {
+        let mut tc = TestCase::new("utf8", &mut nb_testcases);
         tc.create_log_utf8();
 
         Config::from_file("./tests/integration/config/utf8.yml")
@@ -293,13 +309,13 @@ fn main() {
     }
 
     // tera
-    {
-        let mut tc = TestCase::new("tera");
+    if testcases.is_empty() || testcases.contains(&"tera") {
+        let mut tc = TestCase::new("tera", &mut nb_testcases);
         Config::from_file("./tests/integration/config/tera.yml")
             .set_tag("options", "protocol")
             .set_tag("path", &tc.logfile)
             .save_as(&tc.config_file);
-        let context = "{\"path\":\"./tests/integration/tmp/generated.log\"}";
+        let context = r#"{"path":"./tests/integration/tmp/generated.log", "format":"plain"}"#;
         let rc = tc.run(&opts, &["-d", "-x", context]);
 
         jassert!(tc, "last_offset", "20100");
@@ -312,8 +328,8 @@ fn main() {
     }
 
     // check retention deletion
-    {
-        let mut tc = TestCase::new("retention");
+    if testcases.is_empty() || testcases.contains(&"retention") {
+        let mut tc = TestCase::new("retention", &mut nb_testcases);
 
         // run once
         Config::default()
@@ -351,10 +367,9 @@ fn main() {
         // assert_eq!(rc.0, 2);
     }
 
-
     // exclude
-    {
-        let mut tc = TestCase::new("exclude");
+    if testcases.is_empty() || testcases.contains(&"exclude") {
+        let mut tc = TestCase::new("exclude", &mut nb_testcases);
 
         Config::from_file("./tests/integration/config/exclude.yml")
             .set_tag("options", "protocol")
@@ -372,8 +387,8 @@ fn main() {
     }
 
     // truncate
-    {
-        let mut tc = TestCase::new("truncate");
+    if testcases.is_empty() || testcases.contains(&"truncate") {
+        let mut tc = TestCase::new("truncate", &mut nb_testcases);
         Config::default()
             .set_tag("options", "truncate=10")
             .set_tag("path", &tc.logfile)
@@ -387,13 +402,42 @@ fn main() {
         jassert!(tc, "ok_count", "0");
         jassert!(tc, "exec_count", "0");
         assert_eq!(rc.0, 0);
-    }    
+    }
 
     //------------------------------------------------------------------------------------------------
-    // list files Linux
+    // test snapshot file creation options
     //------------------------------------------------------------------------------------------------
-    {
-        let mut tc = TestCase::new("list_files");
+    if testcases.is_empty() || testcases.contains(&"snapshot_creation") {
+        let mut tc = TestCase::new("snapshot_creation", &mut nb_testcases);
+        Config::default()
+            .set_tag("options", "protocol")
+            .set_tag("path", &tc.logfile)
+            .save_as(&tc.config_file);
+
+        // run with command line argument
+        let _ = tc.run(&opts, &["-d"]);
+        assert!(PathBuf::from(&tc.snap_file).is_file());
+
+        // run without specifying a snapshot on the command line
+        let _ = tc.exec(&opts, &["--config", &tc.config_file]);
+        assert!(PathBuf::from("./tests/integration/tmp/snapshot_foo.json").is_file());
+
+        // run without specifying a snapshot on the command line but tag snapshot_file is a directory
+        Config::default()
+            .set_tag("options", "protocol")
+            .set_tag("path", &tc.logfile)
+            .set_tag("snapshot_file", "./tests/integration/tmp")
+            .save_as(&tc.config_file);
+
+        let _ = tc.exec(&opts, &["--config", &tc.config_file]);
+        assert!(PathBuf::from("./tests/integration/tmp/snapshot_creation.json").is_file());
+    }
+
+    //------------------------------------------------------------------------------------------------
+    // list files Linux & Windows
+    //------------------------------------------------------------------------------------------------
+    if testcases.is_empty() || testcases.contains(&"list_files") {
+        let mut tc = TestCase::new("list_files", &mut nb_testcases);
         tc.multiple_logs();
 
         #[cfg(target_os = "linux")]
@@ -419,11 +463,71 @@ fn main() {
     }
 
     //------------------------------------------------------------------------------------------------
+    // exit_msg
+    //------------------------------------------------------------------------------------------------
+    if testcases.is_empty() || testcases.contains(&"exit_msg") {
+        let mut tc = TestCase::new("exit_msg", &mut nb_testcases);
+        Config::default()
+            .set_tag("options", "protocol")
+            .set_tag("path", &tc.logfile)
+            .save_as(&tc.config_file);
+        let _ = tc.run(&opts, &["-d"]);
+
+        // run a second time by changing the logfile
+        Config::default()
+            .set_tag("options", "protocol")
+            .set_tag("path", "./tests/integration/tmp/exit_msg_2.log")
+            .set_tag("snapshot_retention", "3600")
+            .save_as(&tc.config_file);
+        tc.create_log(Some("./tests/integration/tmp/exit_msg_2.log"), false);
+        let rc = tc.run(&opts, &[]);
+
+        assert_eq!(rc.0, 2);
+        assert!(rc
+            .1
+            .contains("CRITICAL: (errors:99, warnings:98, unknowns:0)"));
+    }
+
+    //------------------------------------------------------------------------------------------------
+    // extra variables
+    //------------------------------------------------------------------------------------------------
+    if testcases.is_empty() || testcases.contains(&"extra_vars") {
+        let mut tc = TestCase::new("extra_vars", &mut nb_testcases);
+        Config::default()
+            .set_tag("options", "runcallback,stopat=5")
+            .set_tag("path", &tc.logfile)
+            .replace_tag(
+                "address",
+                "script",
+                "./tests/integration/scripts/echovars.py",
+            )
+            .set_tag("args", "['./tests/integration/tmp/extra_vars.txt', 'arg2']")
+            .save_as(&tc.config_file);
+        let _ = tc.run(
+            &opts,
+            &[
+                "-d",
+                "--var",
+                "CLF_EXTRA_VAR1:value1",
+                "CLF_EXTRA_VAR2:value2",
+            ],
+        );
+
+        // check reuslting file created from running script
+        let data: String = std::fs::read_to_string(&tc.tmpfile)
+            .expect(&format!("unable to open file {}", &tc.tmpfile));
+        assert!(data.contains(&"CLF_EXTRA_VAR1"));
+        assert!(data.contains(&"CLF_EXTRA_VAR2"));
+        assert!(data.contains(&"value1"));
+        assert!(data.contains(&"value2"));
+    }
+
+    //------------------------------------------------------------------------------------------------
     // ok pattern
     //------------------------------------------------------------------------------------------------
     // ok pattern but runifok = false
-    {
-        let mut tc = TestCase::new("ok_pattern");
+    if testcases.is_empty() || testcases.contains(&"ok_pattern") {
+        let mut tc = TestCase::new("ok_pattern", &mut nb_testcases);
         Config::from_file("./tests/integration/config/ok_pattern.yml")
             .set_tag("options", "protocol")
             .set_tag("path", &tc.logfile)
@@ -440,8 +544,8 @@ fn main() {
     }
 
     // ok pattern but runifok = true
-    {
-        let mut tc = TestCase::new("runifok");
+    if testcases.is_empty() || testcases.contains(&"runifok") {
+        let mut tc = TestCase::new("runifok", &mut nb_testcases);
         #[cfg(target_family = "unix")]
         Config::from_file("./tests/integration/config/ok_pattern.yml")
             .set_tag("options", "runcallback,runifok")
@@ -484,8 +588,8 @@ fn main() {
     // thresholds
     //------------------------------------------------------------------------------------------------
     // criticalthreshold
-    {
-        let mut tc = TestCase::new("thresholds");
+    if testcases.is_empty() || testcases.contains(&"thresholds") {
+        let mut tc = TestCase::new("thresholds", &mut nb_testcases);
         Config::default()
             .set_tag("options", "criticalthreshold=50,warningthreshold=60")
             .set_tag("path", &tc.logfile)
@@ -503,8 +607,8 @@ fn main() {
     }
 
     // warningthreshold
-    {
-        let mut tc = TestCase::new("huge_thresholds");
+    if testcases.is_empty() || testcases.contains(&"huge_thresholds") {
+        let mut tc = TestCase::new("huge_thresholds", &mut nb_testcases);
         Config::default()
             .set_tag("options", "criticalthreshold=1500,warningthreshold=1500")
             .set_tag("path", &tc.logfile)
@@ -525,8 +629,8 @@ fn main() {
     // run scripts
     //------------------------------------------------------------------------------------------------
     // run a script
-    {
-        let mut tc = TestCase::new("start_script");
+    if testcases.is_empty() || testcases.contains(&"start_script") {
+        let mut tc = TestCase::new("start_script", &mut nb_testcases);
         #[cfg(target_family = "unix")]
         Config::default()
             .set_tag("options", "runcallback")
@@ -536,7 +640,10 @@ fn main() {
                 "script",
                 "./tests/integration/scripts/echovars.py",
             )
-            .set_tag("args", "['./tests/integration/tmp/start_script.txt', 'arg2']")
+            .set_tag(
+                "args",
+                "['./tests/integration/tmp/start_script.txt', 'arg2']",
+            )
             .save_as(&tc.config_file);
         #[cfg(target_family = "windows")]
         Config::default()
@@ -566,8 +673,8 @@ fn main() {
     }
 
     // run a script with a threshold
-    {
-        let mut tc = TestCase::new("script_threshold");
+    if testcases.is_empty() || testcases.contains(&"script_threshold") {
+        let mut tc = TestCase::new("script_threshold", &mut nb_testcases);
         #[cfg(target_family = "unix")]
         Config::default()
             .set_tag(
@@ -580,7 +687,10 @@ fn main() {
                 "script",
                 "./tests/integration/scripts/echovars.py",
             )
-            .set_tag("args", "['./tests/integration/tmp/script_threshold.txt', 'arg2']")
+            .set_tag(
+                "args",
+                "['./tests/integration/tmp/script_threshold.txt', 'arg2']",
+            )
             .save_as(&tc.config_file);
         #[cfg(target_family = "windows")]
         Config::default()
@@ -605,8 +715,8 @@ fn main() {
     }
 
     // stop at, no savethresholds
-    {
-        let mut tc = TestCase::new("stopat");
+    if testcases.is_empty() || testcases.contains(&"stopat") {
+        let mut tc = TestCase::new("stopat", &mut nb_testcases);
         Config::default()
             .set_tag("options", "stopat=70")
             .set_tag("path", &tc.logfile)
@@ -642,8 +752,8 @@ fn main() {
     }
 
     // successive runs simulation with no save threshold
-    {
-        let mut tc = TestCase::new("successive_runs_nosave_thresholds");
+    if testcases.is_empty() || testcases.contains(&"successive_runs_nosave_thresholds") {
+        let mut tc = TestCase::new("successive_runs_nosave_thresholds", &mut nb_testcases);
 
         // first run
         Config::default()
@@ -679,8 +789,8 @@ fn main() {
     }
 
     // successive runs simulation with save threshold
-    {
-        let mut tc = TestCase::new("successive_runs_save_thresholds");
+    if testcases.is_empty() || testcases.contains(&"successive_runs_save_thresholds") {
+        let mut tc = TestCase::new("successive_runs_save_thresholds", &mut nb_testcases);
 
         // first run
         Config::default()
@@ -714,8 +824,8 @@ fn main() {
     }
 
     // successive runs rotation with no save threshold
-    {
-        let mut tc = TestCase::new("rotate_nosave_thresholds");
+    if testcases.is_empty() || testcases.contains(&"rotate_nosave_thresholds") {
+        let mut tc = TestCase::new("rotate_nosave_thresholds", &mut nb_testcases);
 
         // first run
         Config::default()
@@ -753,8 +863,8 @@ fn main() {
     }
 
     // successive runs rotation with save threshold
-    {
-        let mut tc = TestCase::new("rotate_save_thresholds");
+    if testcases.is_empty() || testcases.contains(&"rotate_save_thresholds") {
+        let mut tc = TestCase::new("rotate_save_thresholds", &mut nb_testcases);
 
         // first run
         Config::default()
@@ -793,8 +903,8 @@ fn main() {
 
     // prescript
     #[cfg(target_family = "unix")]
-    {
-        let mut tc = TestCase::new("prescript");
+    if testcases.is_empty() || testcases.contains(&"prescript") {
+        let mut tc = TestCase::new("prescript", &mut nb_testcases);
 
         // first run
         Config::from_file("./tests/integration/config/prescript.yml")
@@ -808,8 +918,8 @@ fn main() {
 
     // callback call
     #[cfg(target_family = "unix")]
-    {
-        let mut tc = TestCase::new("callback_domain");
+    if testcases.is_empty() || testcases.contains(&"callback_domain") {
+        let mut tc = TestCase::new("callback_domain", &mut nb_testcases);
         Config::default()
             .set_tag("options", "runcallback")
             .set_tag("path", &tc.logfile)
@@ -909,8 +1019,8 @@ fn main() {
     }
 
     // callback call
-    {
-        let mut tc = TestCase::new("callback_tcp");
+    if testcases.is_empty() || testcases.contains(&"callback_tcp") {
+        let mut tc = TestCase::new("callback_tcp", &mut nb_testcases);
         Config::default()
             .set_tag("options", "runcallback")
             .set_tag("path", &tc.logfile)
@@ -1001,4 +1111,6 @@ fn main() {
 
         let _res = child.join();
     }
+
+    println!("Number of test cases executed: {}", nb_testcases-1);
 }

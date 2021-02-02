@@ -140,9 +140,13 @@ impl LogFile {
         }
     }
 
-    /// Sum all counters from `rundata` for all tags
-    pub fn sum_counters(&self) -> PatternCounters {
-        self.run_data.values().map(|x| &x.counters).sum()
+    /// Sum all counters from `rundata` for all tags, but excluding the value of id
+    pub fn sum_counters(&self, id: u32) -> PatternCounters {
+        self.run_data
+            .values()
+            .filter(|x| x.pid == id)
+            .map(|x| &x.counters)
+            .sum()
     }
 
     /// Last error occuring when reading this logfile
@@ -367,7 +371,7 @@ mod tests {
     #[test]
     #[cfg(target_family = "unix")]
     fn from_reader() {
-        let global = GlobalOptions::from_str("path: /usr/bin").expect("unable to read YAML");
+        let global = GlobalOptions::from_str("script_path: /usr/bin").expect("unable to read YAML");
 
         let yaml = r#"
             name: test

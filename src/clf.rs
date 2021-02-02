@@ -1,8 +1,5 @@
 // TODO:
 // - create a reader for JSON files
-// - implement a unique ID iso pid. FIXME: check exit message from snapshot
-// - add error msg if rewind & fastforward ?
-// - add script unit tests
 
 // DONE:
 // - serialize/deserialize date correctly
@@ -15,10 +12,11 @@
 // - FIXME: if error calling any callback, don't update counters etc (line_number, offset)
 // - add Tera/Jinja2 templating => add context argument
 // - use Config::from_path iso Config::from_file: done FIXME: return code when cmd not working
-// - add log rotation facility: FIXME: test it !
+// - add log rotation facility
 // - manage errors when logfile is not found
 // - output message: put canon_path iso declared_path
 // - add missing variables: CLF_HOSTNAME, CLF_IPADDRESS, CLF_TIMESTAMP, CLF_USER. FIXME: missing CLF_IPADDRESS
+// - TODO: implement a unique ID iso pid.
 // - implement logfilemissing
 
 use log::{debug, info};
