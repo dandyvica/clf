@@ -105,7 +105,7 @@ impl Callback {
 
                 // user vars don't change so we can add them right now
                 if global_vars.len() != 0 {
-                    cmd.envs(global_vars.inner());
+                    cmd.envs(global_vars);
                 }
 
                 // add arguments if any
@@ -119,8 +119,8 @@ impl Callback {
                 // runtime variables are always there.
                 for (var, value) in runtime_vars.inner() {
                     match var {
-                        Cow::Borrowed(s) => cmd.env(s, &value),
-                        Cow::Owned(s) => cmd.env(s, &value),
+                        Cow::Borrowed(s) => cmd.env(s, value.to_string()),
+                        Cow::Owned(s) => cmd.env(s, value.to_string()),
                     };
                 }
 
@@ -236,7 +236,6 @@ impl Callback {
                 let mut stream = handle.domain_socket.as_ref().unwrap();
 
                 // create a dedicated JSON structure
-                // create a dedicated JSON structure
                 let mut json = match &self.args {
                     Some(args) => {
                         if first_time {
@@ -334,16 +333,15 @@ impl ChildData {
 pub mod tests {
     use super::*;
     use regex::Regex;
-    use std::borrow::Cow;
     use std::io::{Error, ErrorKind, Result};
     use std::str::FromStr;
 
-    use crate::configuration::vars::Vars;
+    use crate::configuration::vars::VarType;
 
     #[derive(Debug, Deserialize)]
     struct JSONStream {
         pub args: Vec<String>,
-        pub vars: Vars<String, String>,
+        pub vars: std::collections::HashMap<String, VarType<String>>,
     }
 
     // utility fn to receive JSON from a stream
@@ -364,6 +362,7 @@ pub mod tests {
 
         // get JSON
         let s = std::str::from_utf8(&json_buffer).unwrap();
+        //println!("s={}", s);
 
         let json: JSONStream = serde_json::from_str(&s).unwrap();
         Ok(json)
@@ -386,7 +385,7 @@ pub mod tests {
         let re = Regex::new(r"^([a-z\s]+) (\w+) (\w+) (?P<LASTNAME>\w+)").unwrap();
         let text = "my name is john fitzgerald kennedy, president of the USA";
 
-        let mut vars = Vars::<Cow<str>, &str>::default();
+        let mut vars = RuntimeVars::default();
         vars.insert_captures(&re, text);
 
         // call script
@@ -417,24 +416,36 @@ pub mod tests {
         assert!(matches!(&cb.callback, CallbackType::Tcp(Some(x)) if x == &addr));
 
         // create a very simple TCP server: wait for data and test them
-        let child = std::thread::spawn(move || {
-            // create a listener
-            let listener = std::net::TcpListener::bind(&addr).unwrap();
-            match listener.accept() {
-                Ok((mut socket, _addr)) => {
-                    let json = get_json_from_stream(&mut socket)
-                        .expect("unable to get JSON data from stream");
+        let builder = std::thread::Builder::new().name("callback_tcp".into());
+        let child = builder
+            .spawn(move || {
+                // create a listener
+                let listener = std::net::TcpListener::bind(&addr).unwrap();
+                match listener.accept() {
+                    Ok((mut socket, _addr)) => {
+                        let json = get_json_from_stream(&mut socket)
+                            .expect("unable to get JSON data from stream");
 
-                    assert_eq!(json.args, vec!["one", "two", "three"]);
+                        assert_eq!(json.args, vec!["one", "two", "three"]);
 
-                    assert_eq!(json.vars.get("CLF_CG_1").unwrap(), "my name is");
-                    assert_eq!(json.vars.get("CLF_CG_2").unwrap(), "john");
-                    assert_eq!(json.vars.get("CLF_CG_3").unwrap(), "fitzgerald");
-                    assert_eq!(json.vars.get("CLF_CG_LASTNAME").unwrap(), "kennedy");
+                        assert_eq!(
+                            json.vars.get("CLF_CG_1").unwrap(),
+                            &VarType::from("my name is")
+                        );
+                        assert_eq!(json.vars.get("CLF_CG_2").unwrap(), &VarType::from("john"));
+                        assert_eq!(
+                            json.vars.get("CLF_CG_3").unwrap(),
+                            &VarType::from("fitzgerald")
+                        );
+                        assert_eq!(
+                            json.vars.get("CLF_CG_LASTNAME").unwrap(),
+                            &VarType::from("kennedy")
+                        );
+                    }
+                    Err(e) => panic!("couldn't get client: {:?}", e),
                 }
-                Err(e) => panic!("couldn't get client: {:?}", e),
-            }
-        });
+            })
+            .unwrap();
 
         // wait a little
         let ten_millis = std::time::Duration::from_millis(10);
@@ -444,7 +455,7 @@ pub mod tests {
         let re = Regex::new(r"^([a-z\s]+) (\w+) (\w+) (?P<LASTNAME>\w+)").unwrap();
         let text = "my name is john fitzgerald kennedy, president of the USA";
 
-        let mut vars = Vars::<Cow<str>, &str>::default();
+        let mut vars = RuntimeVars::default();
         vars.insert_captures(&re, text);
 
         // some work here
@@ -473,24 +484,36 @@ pub mod tests {
         assert!(matches!(&cb.callback, CallbackType::Domain(Some(x)) if x == &addr));
 
         // create a very simple UNIX socket server: wait for data and test them
-        let child = std::thread::spawn(move || {
-            // create a listener
-            let listener = std::os::unix::net::UnixListener::bind(addr).unwrap();
-            match listener.accept() {
-                Ok((mut socket, _addr)) => {
-                    let json = get_json_from_stream(&mut socket)
-                        .expect("unable to get JSON data from stream");
+        let builder = std::thread::Builder::new().name("callback_tcp".into());
+        let child = builder
+            .spawn(move || {
+                // create a listener
+                let listener = std::os::unix::net::UnixListener::bind(addr).unwrap();
+                match listener.accept() {
+                    Ok((mut socket, _addr)) => {
+                        let json = get_json_from_stream(&mut socket)
+                            .expect("unable to get JSON data from stream");
 
-                    assert_eq!(json.args, vec!["one", "two", "three"]);
+                        assert_eq!(json.args, vec!["one", "two", "three"]);
 
-                    assert_eq!(json.vars.get("CLF_CG_1").unwrap(), "my name is");
-                    assert_eq!(json.vars.get("CLF_CG_2").unwrap(), "john");
-                    assert_eq!(json.vars.get("CLF_CG_3").unwrap(), "fitzgerald");
-                    assert_eq!(json.vars.get("CLF_CG_LASTNAME").unwrap(), "kennedy");
+                        assert_eq!(
+                            json.vars.get("CLF_CG_1").unwrap(),
+                            &VarType::from("my name is")
+                        );
+                        assert_eq!(json.vars.get("CLF_CG_2").unwrap(), &VarType::from("john"));
+                        assert_eq!(
+                            json.vars.get("CLF_CG_3").unwrap(),
+                            &VarType::from("fitzgerald")
+                        );
+                        assert_eq!(
+                            json.vars.get("CLF_CG_LASTNAME").unwrap(),
+                            &VarType::from("kennedy")
+                        );
+                    }
+                    Err(e) => panic!("couldn't get client: {:?}", e),
                 }
-                Err(e) => panic!("couldn't get client: {:?}", e),
-            }
-        });
+            })
+            .unwrap();
 
         // wait a little
         let ten_millis = std::time::Duration::from_millis(10);
@@ -500,7 +523,7 @@ pub mod tests {
         let re = Regex::new(r"^([a-z\s]+) (\w+) (\w+) (?P<LASTNAME>\w+)").unwrap();
         let text = "my name is john fitzgerald kennedy, president of the USA";
 
-        let mut vars = Vars::<Cow<str>, &str>::default();
+        let mut vars = RuntimeVars::default();
         vars.insert_captures(&re, text);
 
         // some work here

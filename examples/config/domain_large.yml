@@ -1,10 +1,26 @@
 ---
+# global settings
+global:
+  script_path: "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+  snapshot_file: ./tmp/domain.json
+  snapshot_retention: 60
+  vars:
+    CLF_firstname: Al
+    CLF_lastname: Pacino
+    CLF_city: "Los Angeles"
+    CLF_profession: actor
+  # prescript:
+  #   - command: ['./scripts/echodomain.py', './tmp/domain.sock']
+  #     timeout: 1000
+  # postcript:
+  #   command: ['./scripts/kill.py']
+
 # a list of logfiles & tags, to search for patterns. This is either a list of logfiles, or a command giving back a list of 
 # files to search for.
 searches:
   # name & path of the logfile to search
-  - logfile: tests/logfiles/small_access.log
-
+  - logfile: 
+      path: logfiles/large_access.log
     # list of tags to refer to
     tags: 
 
@@ -17,11 +33,11 @@ searches:
         # a list of comma-separated options to manage the search. Current supported options are:
         # runcallback: if present, means the provided script will be called
         # rewind: restart the search from the beginning of the file
-        options: "runcallback,runlimit=2"
+        options: "runcallback"
 
         # a script or command to be called, every time a hit is found.
         callback: { 
-          script: "tests/scripts/echovars.py",
+          domain: "./tmp/domain.sock",
           args: ['arg1', 'arg2', 'arg3']
         }
 

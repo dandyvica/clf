@@ -1,20 +1,15 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python
 import socket
 import sys
 import json
-import struct
 import os
 
 # file name to save input data
-saved = sys.argv[1]
-f = open(saved, "w")
+server_address = sys.argv[1]
+output_file = sys.argv[2]
 
-
-# UDS name might be passed as an argument
-if len(sys.argv) == 2:
-    server_address = '/tmp/clf.sock'
-else:
-    server_address = sys.argv[2]
+# open file for writing
+f = open(output_file, "w")
 
 # Make sure the socket does not already exist
 try:
@@ -27,7 +22,7 @@ except OSError:
 sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
 
 # bind
-print('starting up for domain address %s ' % server_address)
+f.write("starting up for domain address %s \n" % server_address)
 sock.bind(server_address)
 
 # Listen for incoming connections
@@ -35,14 +30,14 @@ sock.listen(1)
 
 while True:
     # Wait for a connection
-    print('waiting for a connection')
+    f.write('waiting for a connection\n')
     connection, client_address = sock.accept()
 
     # number of JSON data received so far
     nb_json = 0
 
     try:
-        print('connection from', client_address)
+        f.write('connection from %s\n' % client_address)
 
         # Receive the data in small chunks and retransmit it
         while True:
@@ -53,8 +48,8 @@ while True:
                 break
             
             # first receive JSON data size
-            json_size = int.from_bytes(data, byteorder='big')
-            f.write(f"received size = {json_size}\n")
+            json_size = int(data.encode('hex'), 16)
+            f.write("received size = %d\n" % json_size)
 
             # receive JSON payload
             json_data = connection.recv(json_size)
@@ -66,8 +61,16 @@ while True:
             nb_json += 1
             decode = json_data.decode("ascii", errors="ignore")
             parsed = json.loads(decode)
+
+            # test if we were told to end
+            if "terminate" in parsed and parsed["terminate"] is True:
+                f.write("terminating...\n")
+                connection.close()
+                sys.exit(0)
+
+            # otherwise write data into output file
             pretty = json.dumps(parsed, indent=4, sort_keys=False)
-            f.write(f"JSON#: {nb_json}, received data: {pretty}\n")
+            f.write("JSON#: %d, received data: %s\n" % (nb_json, pretty))
             
     finally:
         # Clean up the connection

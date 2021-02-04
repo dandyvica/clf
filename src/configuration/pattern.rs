@@ -126,14 +126,23 @@ impl TryFrom<&str> for PatternType {
 }
 
 /// Converts a `PatternType` to a `String`.
-impl From<PatternType> for String {
-    fn from(pattern_type: PatternType) -> Self {
-        let s = match pattern_type {
+// impl From<&PatternType> for String {
+//     fn from(pattern_type: &PatternType) -> Self {
+//         let s = match pattern_type {
+//             PatternType::critical => "critical",
+//             PatternType::warning => "warning",
+//             PatternType::ok => "ok",
+//         };
+//         s.to_string()
+//     }
+// }
+impl From<&PatternType> for &'static str {
+    fn from(pattern_type: &PatternType) -> Self {
+        match pattern_type {
             PatternType::critical => "critical",
             PatternType::warning => "warning",
             PatternType::ok => "ok",
-        };
-        s.to_string()
+        }
     }
 }
 /// A structure combining patterns into 3 categories: *critical*, *warning* and *ok*.

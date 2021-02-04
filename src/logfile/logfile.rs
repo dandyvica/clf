@@ -270,11 +270,12 @@ mod tests {
 
     use super::*;
 
-    use crate::configuration::vars::Vars;
+    use crate::configuration::vars::VarType;
+
     #[derive(Debug, Deserialize)]
     struct JSONStream {
         pub args: Vec<String>,
-        pub vars: Vars<String, String>,
+        pub vars: std::collections::HashMap<String, VarType<String>>,
     }
 
     // utility fn to receive JSON from a stream
@@ -422,38 +423,42 @@ mod tests {
                     let json_data = json.unwrap();
                     //dbg!(&json_data);
 
-                    match json_data.vars.get("CLF_MATCHED_RE_TYPE").unwrap().as_str() {
+                    match json_data
+                        .vars
+                        .get("CLF_MATCHED_RE_TYPE")
+                        .unwrap()
+                        .as_t()
+                        .as_str()
+                    {
                         "critical" => {
                             assert_eq!(json_data.args, vec!["arg1", "arg2", "arg3"]);
                             assert_eq!(
-                                json_data.vars.get("CLF_CG_1").unwrap(),
-                                &format!(
-                                    "{}{}",
-                                    "/var/log/messages",
-                                    json_data.vars.get("CLF_LINE_NUMBER").unwrap()
-                                )
-                            );
-                            assert_eq!(
                                 json_data.vars.get("CLF_CG_2").unwrap(),
-                                "server01.domain.com"
+                                &VarType::from("server01.domain.com")
                             );
-                            assert_ne!(json_data.vars.get("CLF_CG_3").unwrap(), "5");
+                            assert_ne!(
+                                json_data.vars.get("CLF_CG_3").unwrap(),
+                                &VarType::from("5")
+                            );
                         }
                         "warning" => {
                             assert_eq!(json_data.args, vec!["arg1", "arg2", "arg3"]);
-                            assert_eq!(
-                                json_data.vars.get("CLF_CG_1").unwrap(),
-                                &format!(
-                                    "{}{}",
-                                    "/var/log/syslog",
-                                    json_data.vars.get("CLF_LINE_NUMBER").unwrap()
-                                )
-                            );
+                            // assert_eq!(
+                            //     json_data.vars.get("CLF_CG_1").unwrap(),
+                            //     &format!(
+                            //         "{}{}",
+                            //         "/var/log/syslog",
+                            //         json_data.vars.get("CLF_LINE_NUMBER").unwrap()
+                            //     )
+                            // );
                             assert_eq!(
                                 json_data.vars.get("CLF_CG_2").unwrap(),
-                                "server01.domain.com"
+                                &VarType::from("server01.domain.com")
                             );
-                            assert_ne!(json_data.vars.get("CLF_CG_3").unwrap(), "5");
+                            assert_ne!(
+                                json_data.vars.get("CLF_CG_3").unwrap(),
+                                &VarType::from("5")
+                            );
                         }
                         "ok" => (),
                         &_ => panic!("unexpected case"),

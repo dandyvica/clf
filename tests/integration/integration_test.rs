@@ -582,7 +582,7 @@ fn main() {
         // check reuslting file created from running script
         let data: String = std::fs::read_to_string(&tc.tmpfile)
             .expect(&format!("unable to open file {}", &tc.tmpfile));
-        //assert_eq!(data.chars().filter(|c| *c == '\n').count(), 198);
+        assert_eq!(data.chars().filter(|c| *c == '\n').count(), 198);
     }
 
     //------------------------------------------------------------------------------------------------
@@ -670,7 +670,7 @@ fn main() {
         // check reuslting file created from running script
         let data: String = std::fs::read_to_string(&tc.tmpfile)
             .expect(&format!("unable to open file {}", &tc.tmpfile));
-        //assert_eq!(data.chars().filter(|c| *c == '\n').count(), 197);
+        assert_eq!(data.chars().filter(|c| *c == '\n').count(), 197);
     }
 
     // run a script with a threshold
@@ -982,7 +982,7 @@ fn main() {
                             );
                         }
 
-                        assert_eq!(j.vars.get("CLF_NB_CG").unwrap(), "3");
+                        assert_eq!(j.vars.get("CLF_NB_CG").unwrap().as_u64(), 3);
                         assert!(j
                             .vars
                             .get("CLF_LINE")
@@ -990,14 +990,13 @@ fn main() {
                             .as_str()
                             .contains("generated for tests"));
 
-                        let line_number: usize =
-                            j.vars.get("CLF_LINE_NUMBER").unwrap().parse().unwrap();
+                        let line_number: u64 = j.vars.get("CLF_LINE_NUMBER").unwrap().as_u64();
                         assert!(line_number <= 201);
 
-                        let cg1: usize = j.vars.get("CLF_CG_1").unwrap().parse().unwrap();
+                        let cg1: usize = j.vars.get("CLF_CG_1").unwrap().as_str().parse().unwrap();
                         assert!(cg1 <= 201);
 
-                        let cg2: usize = j.vars.get("CLF_CG_2").unwrap().parse().unwrap();
+                        let cg2: usize = j.vars.get("CLF_CG_2").unwrap().as_str().parse().unwrap();
                         assert!(cg2 <= 99999);
                         assert!(cg2 >= 10000);
 
@@ -1076,7 +1075,7 @@ fn main() {
                             );
                         }
 
-                        assert_eq!(j.vars.get("CLF_NB_CG").unwrap(), "3");
+                        assert_eq!(j.vars.get("CLF_NB_CG").unwrap().as_u64(), 3);
                         assert!(j
                             .vars
                             .get("CLF_LINE")
@@ -1084,14 +1083,13 @@ fn main() {
                             .as_str()
                             .contains("generated for tests"));
 
-                        let line_number: usize =
-                            j.vars.get("CLF_LINE_NUMBER").unwrap().parse().unwrap();
+                        let line_number: u64 = j.vars.get("CLF_LINE_NUMBER").unwrap().as_u64();
                         assert!(line_number <= 201);
 
-                        let cg1: usize = j.vars.get("CLF_CG_1").unwrap().parse().unwrap();
+                        let cg1: usize = j.vars.get("CLF_CG_1").unwrap().as_str().parse().unwrap();
                         assert!(cg1 <= 201);
 
-                        let cg2: usize = j.vars.get("CLF_CG_2").unwrap().parse().unwrap();
+                        let cg2: usize = j.vars.get("CLF_CG_2").unwrap().as_str().parse().unwrap();
                         assert!(cg2 <= 99999);
                         assert!(cg2 >= 10000);
 
@@ -1113,5 +1111,93 @@ fn main() {
         let _res = child.join();
     }
 
-    println!("Number of test cases executed: {}", nb_testcases-1);
+    // error during callback exec
+    if testcases.is_empty() || testcases.contains(&"callback_error") {
+        let mut tc = TestCase::new("callback_error", &mut nb_testcases);
+        Config::default()
+            .set_tag("options", "runcallback")
+            .set_tag("path", &tc.logfile)
+            .save_as(&tc.config_file);
+
+        // create UDS server
+        let addr = "127.0.0.1:8999";
+
+        let child = std::thread::spawn(move || {
+            // create a listener and stop to simulate a listener
+            let listener = std::net::TcpListener::bind(addr).unwrap();
+            match listener.accept() {
+                Ok((mut socket, _addr)) => {
+                    // set short timeout
+                    socket
+                        .set_read_timeout(Some(std::time::Duration::new(3, 0)))
+                        .expect("Couldn't set read timeout");
+
+                    // loop to receive data
+                    loop {
+                        let json = JSONStream::get_json_from_stream(&mut socket);
+                        if json.is_err() {
+                            break;
+                        }
+                        let j = json.unwrap();
+
+                        let line_number: u64 = j.vars.get("CLF_LINE_NUMBER").unwrap().as_u64();
+                        if line_number == 7 {
+                            break;
+                        };
+                    }
+                }
+                Err(e) => panic!("couldn't get client: {:?}", e),
+            }
+        });
+
+        // wait a little before calling
+        let timeout = std::time::Duration::from_millis(100);
+        std::thread::sleep(timeout);
+
+        let rc = tc.run(&opts, &["-d"]);
+        jassert!(tc, "last_offset", "700");
+        jassert!(tc, "last_line", "7");
+        jassert!(tc, "critical_count", "4");
+        jassert!(tc, "warning_count", "3");
+        jassert!(tc, "ok_count", "0");
+        jassert!(tc, "exec_count", "7");
+        assert_eq!(rc.0, 2);
+        jassert!(rc, "CRITICAL");
+
+        let _res = child.join();
+    }
+
+    // call presecript echo domain and send JSON data
+    #[cfg(target_family = "unix")]
+    if testcases.is_empty() || testcases.contains(&"echodomain") {
+        let mut tc = TestCase::new("echodomain", &mut nb_testcases);
+        Config::from_file("./tests/integration/config/echodomain.yml")
+            .set_tag("options", "runcallback")
+            .set_tag("path", &tc.logfile)
+            .save_as(&tc.config_file);
+        let _ = tc.run(&opts, &["-d"]);
+
+        // check resulting file created from running script
+        let data: String = std::fs::read_to_string(&tc.tmpfile)
+            .expect(&format!("unable to open file {}", &tc.tmpfile));
+        assert!(data.contains(&"tests/integration/tmp/echodomain.log"));
+    }
+
+    // call presecript echo domain and send JSON data
+    #[cfg(target_family = "unix")]
+    if testcases.is_empty() || testcases.contains(&"echotcp") {
+        let mut tc = TestCase::new("echotcp", &mut nb_testcases);
+        Config::from_file("./tests/integration/config/echotcp.yml")
+            .set_tag("options", "runcallback")
+            .set_tag("path", &tc.logfile)
+            .save_as(&tc.config_file);
+        let _ = tc.run(&opts, &["-d"]);
+
+        // check resulting file created from running script
+        let data: String = std::fs::read_to_string(&tc.tmpfile)
+            .expect(&format!("unable to open file {}", &tc.tmpfile));
+        assert!(data.contains(&"tests/integration/tmp/echotcp.log"));
+    }
+
+    println!("Number of test cases executed: {}", nb_testcases - 1);
 }

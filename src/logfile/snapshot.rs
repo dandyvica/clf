@@ -189,7 +189,7 @@ impl Snapshot {
         // loop through all run data
         for (path, logfile) in &self.snapshot {
             for (tag_name, run_data) in &logfile.run_data {
-                if run_data.pid == std::process::id() {
+                if run_data.pid == current_pid {
                     let nagios_exit = NagiosExit::from(run_data);
                     println!("{}(tag={}) - {}", path.display(), tag_name, nagios_exit);
                 }

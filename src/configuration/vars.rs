@@ -11,12 +11,14 @@ use serde::{Deserialize, Serialize};
 
 use crate::misc::util::DEFAULT_CONTAINER_CAPACITY;
 
+use super::pattern::PatternType;
+
 /// Macro to build a variable name prepended with its prefix
 #[macro_export]
 macro_rules! prefix_var {
     // prefix_var!("LOGFILE") => "CLF_LOGFILE" as &str
     ($v:literal) => {
-        Cow::from(concat!("CLF_", $v))
+        concat!("CLF_", $v)
     };
 
     // prefix_var!(name) => "CLF_LOGFILE" as a String
@@ -29,20 +31,99 @@ macro_rules! prefix_var {
         Cow::from(format!("CLF_{}{}", $n, $i))
     };
 }
+
+// A variable sent through a JSON string could be either a string or an integer
+#[derive(Debug, Serialize, Deserialize, PartialEq)]
+#[serde(untagged)]
+pub enum VarType<T> {
+    Str(T),
+    Int(u64),
+}
+
+impl<T> VarType<T> {
+    #[cfg(test)]
+    pub fn as_t(&self) -> &T {
+        match self {
+            VarType::Str(s) => s,
+            VarType::Int(_) => unimplemented!("VarType is not an int here!"),
+        }
+    }
+}
+impl<'a> VarType<&'a str> {
+    pub fn to_string(&self) -> String {
+        match self {
+            VarType::Str(s) => s.to_string(),
+            VarType::Int(i) => i.to_string(),
+        }
+    }
+}
+
+// these are all convertion helpers
+impl<T> From<u64> for VarType<T> {
+    fn from(i: u64) -> Self {
+        VarType::Int(i)
+    }
+}
+
+impl<T> From<usize> for VarType<T> {
+    fn from(i: usize) -> Self {
+        VarType::Int(i as u64)
+    }
+}
+
+impl<'a> From<&'a str> for VarType<&'a str> {
+    fn from(s: &'a str) -> Self {
+        VarType::Str(s)
+    }
+}
+
+impl<'a> From<&'a str> for VarType<String> {
+    fn from(s: &'a str) -> Self {
+        VarType::Str(s.to_string())
+    }
+}
+
+impl<'a> From<&PatternType> for VarType<&'a str> {
+    fn from(s: &PatternType) -> Self {
+        VarType::Str(<&str>::from(s))
+    }
+}
+
+impl<'a> From<&'a Cow<'_, str>> for VarType<&'a str> {
+    fn from(s: &'a Cow<'_, str>) -> Self {
+        VarType::Str(s)
+    }
+}
+
+// Display is used for displaying variables for bypass reader
+impl<T: Display> Display for VarType<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            VarType::Str(s) => write!(f, "{}", s),
+            VarType::Int(i) => write!(f, "{}", i),
+        }
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(deny_unknown_fields)]
 /// A generic variable structure.
-pub struct Vars<K: Hash + Eq, V>(HashMap<K, V>);
+pub struct Vars<K: Hash + Eq, V> {
+    #[serde(flatten)]
+    inner: HashMap<K, V>,
+}
 
 /// Runtime vars are created for each matched line. Using `Cow` minimizes string allocations.
-pub type RuntimeVars<'a> = Vars<Cow<'a, str>, &'a str>;
+pub type RuntimeVars<'a> = Vars<Cow<'a, str>, VarType<&'a str>>;
 
 /// user vars are optionally defined in the global configuration tag.
-pub type GlobalVars = Vars<String, String>;
+pub type GlobalVars = HashMap<String, String>;
 
 impl<K: Hash + Eq, V> Default for Vars<K, V> {
     fn default() -> Self {
-        Vars(HashMap::with_capacity(DEFAULT_CONTAINER_CAPACITY))
+        Vars {
+            inner: HashMap::with_capacity(DEFAULT_CONTAINER_CAPACITY),
+        }
     }
 }
 
@@ -51,7 +132,7 @@ impl<K: Hash + Eq + Display, V: Display> Display for Vars<K, V> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut output = String::with_capacity(80);
 
-        for (k, v) in &self.0 {
+        for (k, v) in &self.inner {
             output += &format!("{}:{}", k, v);
         }
 
@@ -65,13 +146,13 @@ impl<K: Hash + Eq, V> Deref for Vars<K, V> {
     type Target = HashMap<K, V>;
 
     fn deref(&self) -> &Self::Target {
-        &self.0
+        &self.inner
     }
 }
 
 impl<K: Hash + Eq, V> DerefMut for Vars<K, V> {
     fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
+        &mut self.inner
     }
 }
 
@@ -81,19 +162,24 @@ where
     K: std::hash::Hash,
     K: std::fmt::Display,
 {
-    /// generic insertion of a variable
-    pub fn insert_var<S: Into<K>>(&mut self, var_name: S, value: V) {
-        self.insert(var_name.into(), value);
-    }
+    // /// generic insertion of a variable
+    // pub fn insert_var<S: Into<K>>(&mut self, var_name: S, value: V) {
+    //     self.insert(var_name.into(), value);
+    // }
 
     pub fn inner(&self) -> &HashMap<K, V> {
-        &self.0
+        &self.inner
     }
 }
 
 /// This implementation is made for lowering the number of memory allocations due to adding
 /// new strings at each line of a logfile.
-impl<'a> Vars<Cow<'a, str>, &'a str> {
+impl<'a> Vars<Cow<'a, str>, VarType<&'a str>> {
+    /// This function could be either used with strings or integers
+    pub fn insert_runtime_var<T: Into<VarType<&'a str>>>(&mut self, name: &'a str, value: T) {
+        self.inner.insert(Cow::from(name), value.into());
+    }
+
     /// Add variables taken from the capture group names or ids.
     pub fn insert_captures(&mut self, re: &Regex, text: &'a str) -> usize {
         // get the captures
@@ -108,13 +194,15 @@ impl<'a> Vars<Cow<'a, str>, &'a str> {
                 None => {
                     if let Some(m) = caps.get(i) {
                         // variable will be: CLF_CAPTURE2 (example)
-                        self.0.insert(prefix_var!("CG_", i), m.as_str());
+                        self.inner
+                            .insert(prefix_var!("CG_", i), VarType::from(m.as_str()));
                     }
                 }
                 Some(cap_name) => {
                     if let Some(m) = caps.name(cap_name) {
                         // variable will be: CLF_FOO (example)
-                        self.0.insert(prefix_var!("CG_", cap_name), m.as_str());
+                        self.inner
+                            .insert(prefix_var!("CG_", cap_name), VarType::from(m.as_str()));
                     }
                 }
             }
@@ -163,20 +251,19 @@ mod tests {
         let re = Regex::new(r"^([a-z\s]+) (\w+) (\w+) (?P<LASTNAME>\w+)").unwrap();
         let text = "my name is john fitzgerald kennedy, president of the USA";
 
-        let mut vars = Vars::<Cow<str>, &str>::default();
+        let mut vars = RuntimeVars::default();
         vars.insert_captures(&re, text);
 
-        assert_eq!(
-            vars.get("CLF_CG_0").unwrap(),
-            &"my name is john fitzgerald kennedy"
+        assert!(
+            matches!(vars.get("CLF_CG_0").unwrap(), VarType::Str(x) if x == &"my name is john fitzgerald kennedy")
         );
-        assert_eq!(vars.get("CLF_CG_1").unwrap(), &"my name is");
-        assert_eq!(vars.get("CLF_CG_2").unwrap(), &"john");
-        assert_eq!(vars.get("CLF_CG_3").unwrap(), &"fitzgerald");
-        assert_eq!(vars.get("CLF_CG_LASTNAME").unwrap(), &"kennedy");
+        assert!(matches!(vars.get("CLF_CG_1").unwrap(), VarType::Str(x) if x == &"my name is"));
+        assert!(matches!(vars.get("CLF_CG_2").unwrap(), VarType::Str(x) if x == &"john"));
+        assert!(matches!(vars.get("CLF_CG_3").unwrap(), VarType::Str(x) if x == &"fitzgerald"));
+        assert!(matches!(vars.get("CLF_CG_LASTNAME").unwrap(), VarType::Str(x) if x == &"kennedy"));
 
-        vars.insert_var("CLF_LOGFILE", "/var/log/foo");
-        vars.insert_var(String::from("CLF_TAG"), "tag1");
+        vars.insert_runtime_var("CLF_LOGFILE", "/var/log/foo");
+        vars.insert_runtime_var("CLF_TAG", "tag1");
 
         assert!(vars.contains_key("CLF_LOGFILE"));
         assert!(vars.contains_key("CLF_TAG"));

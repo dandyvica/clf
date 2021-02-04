@@ -1,5 +1,5 @@
 //! Contains the global configuration when processing logfiles. These values are independant from the ones solely related to a logfile when searching.
-use std::borrow::Cow;
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 use serde::Deserialize;
@@ -41,18 +41,20 @@ impl GlobalOptions {
     /// Add variables like user, platform etc not dependant from a logfile
     pub fn insert_process_vars<P: AsRef<Path>>(&mut self, path: P) {
         // add config file name
-        self.global_vars.insert_var(
-            prefix_var!("CONFIG_FILE"),
+        self.global_vars.insert(
+            prefix_var!("CONFIG_FILE").to_string(),
             path.as_ref().to_string_lossy().to_string(),
         );
 
         // now just add variables
         self.global_vars
-            .insert_var(prefix_var!("USER"), whoami::username());
+            .insert(prefix_var!("USER").to_string(), whoami::username());
         self.global_vars
-            .insert_var(prefix_var!("HOSTNAME"), whoami::hostname());
-        self.global_vars
-            .insert_var(prefix_var!("PLATFORM"), whoami::platform().to_string());
+            .insert(prefix_var!("HOSTNAME").to_string(), whoami::hostname());
+        self.global_vars.insert(
+            prefix_var!("PLATFORM").to_string(),
+            whoami::platform().to_string(),
+        );
     }
 
     /// Add optional extra global variables coming from the command line
@@ -72,7 +74,7 @@ impl GlobalOptions {
 
                 // now it's safe to insert
                 self.global_vars
-                    .insert_var(Cow::from(splitted[0]), splitted[1].to_string());
+                    .insert(splitted[0].to_string(), splitted[1].to_string());
             }
         }
     }
@@ -104,7 +106,7 @@ impl Default for GlobalOptions {
             output_dir: std::env::temp_dir(),
             snapshot_file: None,
             snapshot_retention: DEFAULT_RETENTION,
-            global_vars: GlobalVars::default(),
+            global_vars: HashMap::new(),
             prescript: None,
             postscript: None,
         }

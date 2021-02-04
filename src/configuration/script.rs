@@ -37,6 +37,7 @@ impl Script {
     pub fn spawn(&self, vars: Option<&GlobalVars>) -> std::io::Result<u32> {
         let cmd = &self.command[0];
         let args = &self.command[1..];
+        trace!("script is called with arguments: {:?}", &self.command);
 
         // optionally use args to start the script
         let mut child = match vars {
@@ -46,9 +47,9 @@ impl Script {
                 .stderr(Stdio::piped())
                 .spawn()?,
             Some(vars) => {
-                trace!("script is called with arguments: {:?}", vars);
+                trace!("script is called with extra vars: {:?}", vars);
                 Command::new(cmd)
-                    .envs(vars.inner())
+                    .envs(vars)
                     .args(args)
                     .stdout(Stdio::piped())
                     .stderr(Stdio::piped())
@@ -124,7 +125,6 @@ impl Script {
     fn sleep(&self) {
         let timeout = self.timeout;
         if timeout != 0 {
-            trace!("sleeping {} ms", timeout);
             let wait_timeout = std::time::Duration::from_millis(timeout);
             info!("script timeout specified, waiting {} ms", timeout);
             std::thread::sleep(wait_timeout);
@@ -164,8 +164,8 @@ timeout: 100
 exit_on_error: true 
 "#;
 
-        //let script: Script = serde_yaml::from_str(yaml).expect("unable to read YAML");
-        //let _pid = script.spawn(None);
+        let script: Script = serde_yaml::from_str(yaml).expect("unable to read YAML");
+        let _pid = script.spawn(None);
     }
 
     #[test]

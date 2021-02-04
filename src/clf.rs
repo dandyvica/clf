@@ -9,7 +9,7 @@
 // - implement prescript/postscript
 // - delete unnecessary getters
 // - implement fastword option
-// - FIXME: if error calling any callback, don't update counters etc (line_number, offset)
+// - if error calling any callback, don't update counters etc (line_number, offset): done
 // - add Tera/Jinja2 templating => add context argument
 // - use Config::from_path iso Config::from_file: done FIXME: return code when cmd not working
 // - add log rotation facility

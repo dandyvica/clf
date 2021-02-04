@@ -1,5 +1,4 @@
 //! This is where the main function used to loop and call callback is defined.
-use std::borrow::Cow;
 use std::io::BufRead;
 use std::time::SystemTime;
 
@@ -94,7 +93,7 @@ impl Lookup<FullReader> for LogFile {
 
         // initialize line & byte counters
         let mut bytes_count = 0;
-        let mut line_number = 0;
+        let mut current_line_number = 0;
 
         // to keep handles: stream etc
         let mut handle = CallbackHandle::default();
@@ -127,7 +126,7 @@ impl Lookup<FullReader> for LogFile {
             run_data.start_offset = run_data.last_offset;
             run_data.start_line = run_data.last_line;
             bytes_count = run_data.last_offset;
-            line_number = run_data.last_line;
+            current_line_number = run_data.last_line;
 
             // move to previous offset
             reader.set_offset(run_data.last_offset)?;
@@ -135,7 +134,7 @@ impl Lookup<FullReader> for LogFile {
 
         info!(
             "starting read from last offset={}, last line={}",
-            bytes_count, line_number
+            bytes_count, current_line_number
         );
 
         // reset exec count
@@ -176,8 +175,13 @@ impl Lookup<FullReader> for LogFile {
                     }
 
                     // we've been reading a new line successfully
-                    line_number += 1;
+                    current_line_number += 1;
                     bytes_count += bytes_read as u64;
+                    trace!(
+                        "read one line: current_line_number={}, bytes_count={}",
+                        current_line_number,
+                        bytes_count
+                    );
 
                     // do we just need to go to EOF ? Only in case of first run
                     if tag.options.fastforward && run_data.start_offset == 0 {
@@ -187,8 +191,8 @@ impl Lookup<FullReader> for LogFile {
 
                     // if stopat is reached, stop here. We stop before processing the line, so we need to decrement the bytes read
                     // because it was already incremented before
-                    if tag.options.stopat == line_number {
-                        line_number -= 1;
+                    if tag.options.stopat == current_line_number {
+                        current_line_number -= 1;
                         bytes_count -= bytes_read as u64;
                         break;
                     }
@@ -201,7 +205,7 @@ impl Lookup<FullReader> for LogFile {
                         }
                     }
 
-                    trace!("====> line#={}, line={}", line_number, &line);
+                    trace!("====> line#={}, line={}", current_line_number, &line);
 
                     // is there a match, regarding also exceptions?
                     if let Some(pattern_match) = tag.is_match(&line) {
@@ -209,13 +213,16 @@ impl Lookup<FullReader> for LogFile {
                             "found a match tag={}, line={}, line#={}, re=({:?},{}), critical_count={}, warning_count={}, ok_count={}",
                             tag.name,
                             &line,
-                            line_number,
+                            current_line_number,
                             pattern_match.pattern_type,
                             pattern_match.regex.as_str(),
                             run_data.counters.critical_count,
                             run_data.counters.warning_count,
                             run_data.counters.ok_count,
                         );
+
+                        // increment counters depending on found pattern
+                        run_data.increment_counters(&pattern_match.pattern_type);
 
                         // when a threshold is reached, give up
                         if !run_data.is_threshold_reached(&pattern_match.pattern_type, &tag.options)
@@ -234,34 +241,42 @@ impl Lookup<FullReader> for LogFile {
                             let mut vars = RuntimeVars::default();
 
                             // create variables which will be set as environment variables when script is called
-                            vars.insert_var(
+                            vars.insert_runtime_var(
                                 prefix_var!("LOGFILE"),
                                 path.to_str().unwrap_or("error converting PathBuf"),
                             );
-                            vars.insert_var(prefix_var!("TAG"), &tag.name);
-                            let ln = format!("{}", line_number);
-                            vars.insert_var(prefix_var!("LINE_NUMBER"), &ln);
-                            vars.insert_var(prefix_var!("LINE"), &line);
-                            vars.insert_var(
+                            vars.insert_runtime_var(prefix_var!("TAG"), tag.name.as_str());
+                            vars.insert_runtime_var(
+                                prefix_var!("LINE_NUMBER"),
+                                current_line_number,
+                            );
+                            vars.insert_runtime_var(prefix_var!("LINE"), &line);
+                            vars.insert_runtime_var(
                                 prefix_var!("MATCHED_RE"),
                                 pattern_match.regex.as_str(),
                             );
-                            let pattern_type = String::from(pattern_match.pattern_type);
-                            vars.insert_var(prefix_var!("MATCHED_RE_TYPE"), &pattern_type);
+                            vars.insert_runtime_var(
+                                prefix_var!("MATCHED_RE_TYPE"),
+                                &pattern_match.pattern_type,
+                            );
 
                             // insert number of captures and capture groups
                             let nb_caps = vars.insert_captures(pattern_match.regex, &line);
-                            let nb_caps_s = nb_caps.to_string();
-                            vars.insert_var(prefix_var!("NB_CG"), &nb_caps_s);
+                            vars.insert_runtime_var(prefix_var!("NB_CG"), nb_caps);
 
                             // add counters
-                            let critical_count = format!("{}", run_data.counters.critical_count);
-                            let warning_count = format!("{}", run_data.counters.warning_count);
-                            let ok_count = format!("{}", run_data.counters.ok_count);
-
-                            vars.insert_var(prefix_var!("CRITICAL_COUNT"), &critical_count);
-                            vars.insert_var(prefix_var!("WARNING_COUNT"), &warning_count);
-                            vars.insert_var(prefix_var!("OK_COUNT"), &ok_count);
+                            vars.insert_runtime_var(
+                                prefix_var!("CRITICAL_COUNT"),
+                                run_data.counters.critical_count,
+                            );
+                            vars.insert_runtime_var(
+                                prefix_var!("WARNING_COUNT"),
+                                run_data.counters.warning_count,
+                            );
+                            vars.insert_runtime_var(
+                                prefix_var!("OK_COUNT"),
+                                run_data.counters.ok_count,
+                            );
 
                             debug!("added variables: {:?}", vars);
 
@@ -282,12 +297,21 @@ impl Lookup<FullReader> for LogFile {
 
                                         // increment number of script executions or number of JSON data sent
                                         run_data.counters.exec_count += 1;
+                                        trace!("callback successfully called");
                                     }
                                     Err(e) => {
                                         error!(
                                             "error <{}> when calling callback <{:#?}>",
                                             e, tag.callback
                                         );
+
+                                        // reset counters
+                                        current_line_number -= 1;
+                                        bytes_count -= bytes_read as u64;
+
+                                        // same for run data
+                                        run_data.decrement_counters(&pattern_match.pattern_type);
+
                                         early_ret = Some(e);
                                         break;
                                     }
@@ -304,7 +328,10 @@ impl Lookup<FullReader> for LogFile {
                     error!("read_line() error kind: {:?}, line: {}", e.kind(), line);
                     early_ret = Some(AppError::from_error(
                         e,
-                        &format!("error reading logfile {:?} at line {}", &path, line_number),
+                        &format!(
+                            "error reading logfile {:?} at line {}",
+                            &path, current_line_number
+                        ),
                     ));
                     break;
                 }
@@ -313,12 +340,12 @@ impl Lookup<FullReader> for LogFile {
 
         // save current offset and line number
         run_data.last_offset = bytes_count;
-        run_data.last_line = line_number;
+        run_data.last_line = current_line_number;
 
         trace!(
             "bytes_count={}, line_number={}, critical={}, warning={}",
             bytes_count,
-            line_number,
+            current_line_number,
             run_data.counters.critical_count,
             run_data.counters.warning_count
         );
@@ -339,7 +366,7 @@ impl Lookup<FullReader> for LogFile {
             //self.id.canon_path.display(),
             tag.name,
             bytes_count,
-            line_number,
+            current_line_number,
             run_data.counters.exec_count,
             run_data.counters.critical_count,
             run_data.counters.warning_count,
@@ -443,7 +470,7 @@ impl Lookup<BypassReader> for LogFile {
                     "{}:{}:{}:{}:[{}]:{}",
                     &self.id.canon_path.display(),
                     &tag.name,
-                    String::from(pattern_match.pattern_type),
+                    <&str>::from(&pattern_match.pattern_type),
                     line_number,
                     vars,
                     text

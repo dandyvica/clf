@@ -8,13 +8,14 @@ global:
   script_path: "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 
   # a path & file name where clf is keeping its runtime information. This is used to restart the search from the last
-  # offset reached from the last clf run.
+  # offset reached from the last clf run. If not provided, the file is the config file path with .json extension
+  # could be overriden by the -d command line argument
   snapshot_file: /tmp/snapshot.json
 
   # retention time for tags in seconds. Defaults to 7 days
   snapshot_retention: 3600
 
-  # a list of user variables, if any. Provided as-is to the callback
+  # a list of user variables, if any. Provided as-is to the callback (no CLF_ prefix)
   vars:
     first_name: Al
     last_name: Pacino
@@ -23,7 +24,7 @@ global:
 
   # a list of executables or scripts started before searching into logfiles
   prescript:
-    # command to run
+    # command to run with its arguments
     - command: 
         - ./tests/integration/scripts/echodomain.py
         - /tmp/echodomain.txt
@@ -71,7 +72,7 @@ searches:
       logfilemissing: critical
 
       # to determine whether a logfile has been rotated, inode & dev numbers might not be faithful. This is 
-      # a buffer size which is used to calculate a CRC64 hash in case of inodes & devs are equal. DEfaults to 4096
+      # a buffer size which is used to calculate a CRC64 hash in case of inodes & devs are equal. Defaults to 4096
       hash_window: 2048
 
 
@@ -84,9 +85,7 @@ searches:
         # set it to false to skip logfile processing. Defaults to true
         process: true
 
-        # a list of comma-separated options to manage the search. Current supported options are:
-        # runscript: if present, means the provided script will be called
-        # rewind: restart the search from the beginning of the file
+        # a list of comma-separated options to manage the search. See below for a list of options
         options: "runcallback"
 
         # a script or command to be called, every time a hit is found.
@@ -100,12 +99,17 @@ searches:
         # list of patterns to match
         patterns:
           warning:
+            # a list of regexes whic are considered as an error
             regexes:
               - 'GET\s+([/\w]+_logo\.jpg)'
+              - 'POST\s+([/\w\.]+)\s+HTTP/1\.1"\s+(?P<code>\d+)\s+(?P<length>\d+)'
+            # if one of the exception regexes match, this is not considered as an error
             exceptions:
               - 'Firefox/63.0'
+              - 'AppleWebKit/537\.36'
 
 
+      # another tag for the same logfile
       - name: http_access_images
         options: "runcallback"
         callback: 

@@ -149,6 +149,7 @@ impl Config {
 }
 
 // a struct for holding test case details
+#[derive(Debug)]
 pub struct TestCase {
     pub tag: String,
     pub snap_file: String,
@@ -187,6 +188,8 @@ impl TestCase {
 
         // create dummy log file from the tc name
         tc.create_log(None, false);
+
+        info!("tc={:#?}", tc);
 
         tc
     }
@@ -431,11 +434,33 @@ impl FakeLogfile {
 
 // This is made for testing using a UDS
 use serde::Deserialize;
+
+#[derive(Debug, Deserialize, PartialEq)]
+#[serde(untagged)]
+pub enum VarType {
+    Str(String),
+    Int(u64),
+}
+
+impl VarType {
+    pub fn as_str(&self) -> &str {
+        match self {
+            VarType::Str(s) => s.as_str(),
+            VarType::Int(_) => unimplemented!("VarType is not an int here!"),
+        }
+    }
+    pub fn as_u64(&self) -> u64 {
+        match self {
+            VarType::Str(_) => unimplemented!("VarType is not an str here!"),
+            VarType::Int(i) => *i,
+        }
+    }
+}
 #[derive(Debug, Deserialize)]
 pub struct JSONStream {
     pub args: Vec<String>,
     pub global: Option<HashMap<String, String>>,
-    pub vars: HashMap<String, String>,
+    pub vars: HashMap<String, VarType>,
 }
 
 // utility fn to receive JSON from a stream
@@ -460,6 +485,7 @@ impl JSONStream {
 
         // get JSON
         let s = std::str::from_utf8(&json_buffer).unwrap();
+        //println!("s={}", s);
         let json: JSONStream = serde_json::from_str(&s).unwrap();
         Ok(json)
     }

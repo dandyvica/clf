@@ -140,7 +140,6 @@ impl TryFrom<String> for SearchOptions {
         // need to test whether we found 'key=value' options
         if !kv_options.is_empty() {
             // this hash will hold key values options
-            //let kvh_options: HashMap<String, String> = HashMap::new();
 
             // now we can safely split
             for kv in &kv_options {

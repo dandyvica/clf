@@ -1,0 +1,42 @@
+# a generic configuration file: test with ok pattern
+---
+global:
+  script_path: "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+  snapshot_retention: 1
+  vars:
+    CLF_firstname: Al
+    CLF_lastname: Pacino
+    CLF_city: "Los Angeles"
+    CLF_profession: actor
+  prescript:
+    - command: 
+      - ./tests/integration/scripts/echotcp.py
+      - 127.0.0.1:8999
+      - ./tests/integration/tmp/echotcp.txt
+      timeout: 100
+      async: true
+  postscript:
+    command: [ './tests/integration/scripts/terminate.py', '127.0.0.1:8999', 'tcp' ]
+    timeout: 2000
+
+searches:
+  - logfile: 
+      path: ./tests/integration/tmp/echodomain.log
+      format: plain
+      logfilemissing: critical
+      archive:
+        extension: gz
+    tags: 
+      - name: tag1
+        process: true
+        options: runcallback
+        callback: 
+          address: 127.0.0.1:8999
+          args: ["arg1", "arg2", "arg3"]
+        patterns:
+          critical:
+            regexes: ['number = (\d+), error id = (\d+)$']
+            exceptions: ['line number = 192']
+          warning:
+            regexes: ['number = (\d+), warning id = (\d+)$']
+            exceptions: ['line number = (193|195)']
