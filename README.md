@@ -444,22 +444,36 @@ tests/logfiles/small_access.log: CRITICAL - (errors:501, warnings:28, unknowns:0
 ```
 
 ## Compiling *clf*
-Using the standard *cargo* command:
+First, clone the repository: 
 
-```console
+```bash
+$ git clone https://github.com/dandyvica/clf
+```
+
+Then, compile the package using the standard *cargo* command:
+
+```bash
+# the executable is:  ./target/release/clf or .\target\release\clf.exe
 $ cargo build --release
 ```
-
 To compile with the *musl* library as a standalone static executable:
 
-```
+```bash
+# the executable is:  ./target/x86_64-unknown-linux-musl/release/clf
+# or .\target\x86_64-unknown-linux-musl\release\clf.exe
 $ cargo build --target x86_64-unknown-linux-musl --release   
+```
+
+Depending on your Linux distribution, you might need to install the *musl_tools*:
+```bash
+# install for Debian based distributions
+$ sudo apt-get install musl-tools
 ```
 
 ## Windows specifics
 In order to emulate UNIX inode/dev features, a specific DLL has been developed (*signature.dll*) You need to put this DLL in one of the paths specified by the Windows *Path* environment variable.
 
-## Comand line examples
+## Command line examples
 
 ```zsh
 # mandatory argument: configuration file

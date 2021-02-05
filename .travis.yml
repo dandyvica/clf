@@ -1,0 +1,12 @@
+language: rust
+sudo: false
+rust:
+  - stable
+  - 1.47.0
+
+matrix:
+  fast_finish: true
+
+script:
+  - cargo build --verbose --all
+
