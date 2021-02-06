@@ -1,3 +1,5 @@
+[![Build Status](https://www.travis-ci.com/dandyvica/clf.svg?branch=master)](https://www.travis-ci.com/dandyvica/clf)
+
 # Reimplementation of the *check_logfiles* Nagios plugin
 
 ## Nagios check_logfiles
