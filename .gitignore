@@ -15,3 +15,4 @@ clf_snapshot.json
 clippy.err
 generated.log
 /package
+integration_test.log
