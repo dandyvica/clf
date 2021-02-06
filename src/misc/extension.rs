@@ -335,7 +335,8 @@ mod tests {
     #[test]
     #[cfg(target_family = "unix")]
     fn list_files() {
-        let entries = PathBuf::from("/var/log").list_files("\\.log$");
+        let entries = PathBuf::from("./tests/unittest").list_files("\\.log.\\d+$");
+        println!("entries={:?}", entries);
 
         assert!(entries.is_ok());
         assert!(entries.unwrap().len() > 1);
@@ -343,7 +344,7 @@ mod tests {
     #[test]
     #[cfg(target_family = "unix")]
     fn signature() {
-        let s = PathBuf::from("/var/log").signature(4096);
+        let s = PathBuf::from("./tests/unittest/list_files.log").signature(4096);
 
         assert!(s.is_ok());
     }

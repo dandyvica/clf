@@ -2,9 +2,9 @@ language: rust
 sudo: false
 rust:
   - stable
-  - 1.47.0
-  - beta
-  - nightly
+  # - 1.47.0
+  # - beta
+  # - nightly
 
 matrix:
   fast_finish: true

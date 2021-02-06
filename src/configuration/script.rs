@@ -136,7 +136,7 @@ impl Script {
 mod tests {
     use super::*;
 
-    //#[test]
+    #[test]
     #[cfg(target_family = "unix")]
     fn spawn() {
         // async
