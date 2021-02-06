@@ -351,26 +351,28 @@ mod tests {
 
     #[test]
     #[cfg(target_os = "linux")]
-    fn listfiles() {
+    fn list_files_shell() {
         let mut cmd = vec![
             "find".to_string(),
-            "/var/log".to_string(),
-            "-ctime".to_string(),
-            "+1".to_string(),
+            "./tests/unittest".to_string(),
+            "-name".to_string(),
+            "list_files*.?".to_string(),
         ];
         let mut files = cmd.get_file_list().unwrap();
-        assert!(files.len() > 10);
-        assert!(files.iter().all(|f| f.starts_with("/var/log")));
+        println!("files={:?}", files);
+        assert!(files.len() == 9);
+        assert!(files.iter().all(|f| f.to_str().unwrap().contains("tests/unittest")));
 
         cmd = vec![
             "bash".to_string(),
             "-c".to_string(),
-            "ls /var/log/*.log".to_string(),
+            "ls ./tests/unittest/list_files*".to_string(),
         ];
         files = cmd.get_file_list().unwrap();
+        println!("files2={:?}", files);
 
-        assert!(files.len() > 10);
-        assert!(files.iter().all(|f| f.starts_with("/var/log")));
+        assert!(files.len() == 11);
+        assert!(files.iter().all(|f| f.to_str().unwrap().contains("tests/unittest")));
     }
 
     #[test]
