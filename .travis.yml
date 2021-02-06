@@ -3,10 +3,17 @@ sudo: false
 rust:
   - stable
   - 1.47.0
+  - beta
+  - nightly
 
 matrix:
   fast_finish: true
 
 script:
   - cargo build --verbose --all
+  - cargo test --verbose --all
+
+notifications:
+  email:
+    on_success: never  
 
