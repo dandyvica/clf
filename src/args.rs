@@ -132,15 +132,15 @@ impl CliOptions {
                     .long_about("Render the configuration file through Jinja2/Tera and exit. This is meant to check Tera substitutions")
                     .takes_value(false),
             )
-            .arg(
-                Arg::new("nagios-version")
-                    .short('n')
-                    .long("nagios-version")
-                    .required(false)
-                    .long_about("Set the Nagios NRPE protocol version used for plugin output. Default to version 3.")
-                    .possible_values(&["2", "3"])
-                    .takes_value(true),
-            )
+            // .arg(
+            //     Arg::new("nagios-version")
+            //         .short('n')
+            //         .long("nagios-version")
+            //         .required(false)
+            //         .long_about("Set the Nagios NRPE protocol version used for plugin output. Default to version 3.")
+            //         .possible_values(&["2", "3"])
+            //         .takes_value(true),
+            // )
             .arg(
                 Arg::new("no-callback")
                     .short('a')

@@ -413,11 +413,7 @@ OPTIONS:
     -m, --max-logsize <max-logsize>
             When log is enabled, set the maximum log size (in Mb). If specified, log file will be
             deleted first if current size is over this value. Defaults to 50 MB
-
-    -n, --nagios-version <nagios-version>
-            Set the Nagios NRPE protocol version used for plugin output. Default to version
-            3.[possible values: 2, 3]
-
+            
     -p, --snapshot <snapshot>
             Override the snapshot file specified in the configuration file. It will default to the
             platform-dependent name using the temporary directory if not provided in configuration
