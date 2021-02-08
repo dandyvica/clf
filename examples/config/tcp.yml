@@ -10,10 +10,10 @@ global:
     CLF_city: "Los Angeles"
     CLF_profession: actor
   # prescript:
-  #   command: ['./scripts/echotcp.py', '8999']
+  #   command: ['./callbacks/echotcp.py', '8999']
   #   timeout: 1000
   # postcript:
-  #   command: ['./scripts/kill.py']
+  #   command: ['./callbacks/kill.py']
 
 # a list of logfiles & tags, to search for patterns. This is either a list of logfiles, or a command giving back a list of 
 # files to search for.

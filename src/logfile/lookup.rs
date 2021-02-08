@@ -1,4 +1,4 @@
-//! This is where the main function used to loop and call callback is defined.
+//! This is where the main function used to loop and where callback call is defined.
 use std::io::BufRead;
 use std::time::SystemTime;
 

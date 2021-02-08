@@ -1,4 +1,4 @@
-//! Contains the configuration of the archiving process of a logfile. WWe can define here how, where and the naming convention
+//! Contains the configuration of the archiving process of a logfile. We can define here how, where and the naming convention
 //! of an archived file that has been rotated, usually using `logrotate` UNIX process.
 use std::{
     fmt::Debug,

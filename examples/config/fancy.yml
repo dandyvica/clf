@@ -27,18 +27,18 @@ global:
   # an array of commands or scripts being started before searching into logfiles
   prescript:
     # command and its arguments
-    - command: ['./tests/integration/scripts/echodomain.py', '/tmp/echodomain.txt']
+    - command: ['./tests/integration/callbacks/echodomain.py', '/tmp/echodomain.txt']
       timeout: 1000
       async: true
       exit_on_error: false
 
-    - command: ['./tests/integration/scripts/create_file.pl']
+    - command: ['./tests/integration/callbacks/create_file.pl']
       timeout: 1000
       exit_on_error: true
 
   # a command run at the end of the searches
   postcript:
-    command: ['./tests/integration/scripts/kill.py']
+    command: ['./tests/integration/callbacks/kill.py']
     async: true
 
 # an array of searches. Each search defines a logfile or command which gives a list of logfiles
@@ -66,7 +66,7 @@ searches:
         # callback which will be called
         callback:
           # script path
-          script: ./tests/integration/scripts/echovars.py
+          script: ./tests/integration/callbacks/echovars.py
           # and optional arguments          
           args:
             - /tmp/syslog_nokernel.txt
@@ -81,7 +81,7 @@ searches:
         process: true
         options: "runcallback"
         callback:
-          script: ./tests/integration/scripts/echovars.py
+          script: ./tests/integration/callbacks/echovars.py
           args:
             - /tmp/syslog_kernel.txt
         patterns:

@@ -500,7 +500,7 @@ fn main() {
             .replace_tag(
                 "address",
                 "script",
-                "./tests/integration/scripts/echovars.py",
+                "./tests/integration/callbacks/echovars.py",
             )
             .set_tag("args", "['./tests/integration/tmp/extra_vars.txt', 'arg2']")
             .save_as(&tc.config_file);
@@ -554,7 +554,7 @@ fn main() {
             .replace_tag(
                 "address",
                 "script",
-                "./tests/integration/scripts/echovars.py",
+                "./tests/integration/callbacks/echovars.py",
             )
             .set_tag("args", "['./tests/integration/tmp/runifok.txt', 'arg2']")
             .save_as(&tc.config_file);
@@ -639,7 +639,7 @@ fn main() {
             .replace_tag(
                 "address",
                 "script",
-                "./tests/integration/scripts/echovars.py",
+                "./tests/integration/callbacks/echovars.py",
             )
             .set_tag(
                 "args",
@@ -686,7 +686,7 @@ fn main() {
             .replace_tag(
                 "address",
                 "script",
-                "./tests/integration/scripts/echovars.py",
+                "./tests/integration/callbacks/echovars.py",
             )
             .set_tag(
                 "args",

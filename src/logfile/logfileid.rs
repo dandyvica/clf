@@ -1,5 +1,4 @@
-//! A structure representing a logfile, with all its related attributes. Those attributes are
-//! coming from the processing of the log file, every time it's read to look for patterns.
+//! A structure representing a logfile identification, with all its usual attributes (path, extension, ...).
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};

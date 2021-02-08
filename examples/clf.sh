@@ -2,7 +2,7 @@
 #set -x
 if [ -z $1 ]
 then
-  echo "clf.sh (script|tcp|domain)"
+  echo "clf.sh config_name"
   exit
 fi
 
@@ -12,4 +12,4 @@ config=~/projects/clf/examples/config
 log=~/projects/clf/examples/tmp/clf.log
 
 # launch clf
-$clf --config $config/$1.yml --log $log --delete-snapshot
+$clf --config $config/$1.yml --log $log --delete-snapshot --overwrite-log

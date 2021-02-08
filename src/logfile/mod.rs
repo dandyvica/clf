@@ -1,5 +1,4 @@
-//! The main crate containing all necessary structures and traits for reading and searching
-//! a logfile for patterns.
+//! All structure for reading, looking for a regex match and calling a callback.
 #[macro_use]
 #[warn(clippy::module_inception)]
 pub mod logfile;

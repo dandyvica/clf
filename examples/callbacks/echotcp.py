@@ -1,25 +1,18 @@
-#!/usr/bin/python3
+#!/usr/bin/env python3
 import socket
 import sys
 import json
 import struct
-import os
 
-# UDS name
-server_address = sys.argv[1]
+# Create a TCP/IP socket
+sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
-# Make sure the socket does not already exist
-try:
-    os.unlink(server_address)
-except OSError:
-    if os.path.exists(server_address):
-        raise
+# use this to made the socket immediatly available
+#sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 
-# Create a UDS socket
-sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-
-# bind
-print('starting up for domain address %s ' % server_address)
+# Bind the socket to the port
+server_address = ('localhost', int(sys.argv[1]))
+print('starting up on %s port %s' % server_address)
 sock.bind(server_address)
 
 # Listen for incoming connections
@@ -29,9 +22,6 @@ while True:
     # Wait for a connection
     print('waiting for a connection')
     connection, client_address = sock.accept()
-
-    # number of JSON data received so far
-    nb_json = 0
 
     try:
         print('connection from', client_address)
@@ -43,7 +33,7 @@ while True:
             if not data:
                 break
             size = int.from_bytes(data, byteorder='big')
-            #print("size==", size)
+            print("size==", size)
 
             # receive JSON payload
             data = connection.recv(size)
@@ -51,11 +41,10 @@ while True:
                 break
 
             # decode and display JSON
-            nb_json += 1
             decode = data.decode("ascii", errors="ignore")
             parsed = json.loads(decode)
             pretty = json.dumps(parsed, indent=4, sort_keys=False)
-            print('JSON# %s, received "%s"' % (nb_json, pretty))
+            print('received "%s"' % pretty)
             
     finally:
         # Clean up the connection

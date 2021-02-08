@@ -33,7 +33,7 @@ searches:
 
         # a script or command to be called, every time a hit is found.
         callback: { 
-          script: "./scripts/echovars.py",
+          script: "./callbacks/echovars.py",
           args: ['./tmp/echovars.txt', 'arg2', 'arg3']
         }
 

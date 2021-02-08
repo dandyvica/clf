@@ -26,7 +26,7 @@ global:
   prescript:
     # command to run with its arguments
     - command: 
-        - ./tests/integration/scripts/echodomain.py
+        - ./tests/integration/callbacks/echodomain.py
         - /tmp/echodomain.txt
         - /tmp/echodomain.sock
 
@@ -42,7 +42,7 @@ global:
   # a command run at the end of logfiles processing. The list of pids from prescripts
   # is sent as arguments to this command
   postscript:
-    command: ['./tests/integration/scripts/kill.py']    
+    command: ['./tests/integration/callbacks/kill.py']    
     timeout: 1000
 
 
@@ -90,7 +90,7 @@ searches:
 
         # a script or command to be called, every time a hit is found.
         callback: 
-          script: ./tests/integration/scripts/echovars.py
+          script: ./tests/integration/callbacks/echovars.py
           args: 
             - /tmp/echovars.txt
             - arg2

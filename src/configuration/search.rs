@@ -1,4 +1,4 @@
-//! Contains the configuration each search.
+//! Contains the configuration for a search.
 use serde::Deserialize;
 
 use super::{logfiledef::LogFileDef, tag::Tag};
@@ -39,7 +39,7 @@ tags:
     options: "runcallback"
     process: false
     callback: { 
-        script: "tests/scripts/echovars.py",
+        script: "tests/callbacks/echovars.py",
         args: ['arg1', 'arg2', 'arg3']
     }
     patterns:
@@ -65,7 +65,7 @@ tags:
         assert!(tag.options.runcallback);
         assert!(!tag.options.keepoutput);
         assert!(!tag.process);
-        let script = std::path::PathBuf::from("tests/scripts/echovars.py");
+        let script = std::path::PathBuf::from("tests/callbacks/echovars.py");
         assert!(
             matches!(&tag.callback.as_ref().unwrap().callback, crate::configuration::callback::CallbackType::Script(Some(x)) if x == &script)
         );

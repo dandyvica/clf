@@ -1,4 +1,4 @@
-//! Holds the main configuration data, loaded from a YAML file.
+//! Holds the whole configuration data, loaded from a YAML file.
 //!
 //! This YAML file is divided into 2 parts:
 //!
@@ -188,7 +188,7 @@ mod tests {
               - name: http_access_get_or_post
                 process: true
                 options: "warningthreshold=0"
-                callback: { script: "tests/scripts/echovars.py", args: ['arg1', 'arg2', 'arg3'] }
+                callback: { script: "tests/callbacks/echovars.py", args: ['arg1', 'arg2', 'arg3'] }
                 patterns:
                   critical: {
                     regexes: [
@@ -215,7 +215,7 @@ mod tests {
               - name: http_access_get_or_post
                 process: true
                 options: "warningthreshold=0"
-                callback: { script: "tests/scripts/echovars.py", args: ['arg1', 'arg2', 'arg3'] }
+                callback: { script: "tests/callbacks/echovars.py", args: ['arg1', 'arg2', 'arg3'] }
                 patterns:
                   critical: {
                     regexes: [
@@ -270,7 +270,7 @@ mod tests {
         assert!(tag.process);
         assert_eq!(tag.options.warningthreshold, 0);
         assert!(tag.callback.is_some());
-        let script = PathBuf::from("tests/scripts/echovars.py");
+        let script = PathBuf::from("tests/callbacks/echovars.py");
         assert!(
             matches!(&tag.callback.as_ref().unwrap().callback, crate::configuration::callback::CallbackType::Script(Some(x)) if x == &script)
         );

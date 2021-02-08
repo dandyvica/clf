@@ -1,5 +1,6 @@
 #!/usr/bin/env python
-""" this scripts is gracefully terminating socket connexion """
+""" this script is gracefully terminating socket connexion """
+
 import socket
 import sys
 import json

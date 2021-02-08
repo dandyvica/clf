@@ -72,7 +72,7 @@ global:
   prescript:
     # command to run with its arguments
     - command: 
-        - ./tests/integration/scripts/echodomain.py
+        - ./tests/integration/callbacks/echodomain.py
         - /tmp/echodomain.txt
         - /tmp/echodomain.sock
 
@@ -88,7 +88,7 @@ global:
   # a command run at the end of logfiles processing. The list of pids from prescripts
   # is sent as arguments to this command
   postscript:
-    command: ['./tests/integration/scripts/kill.py']    
+    command: ['./tests/integration/callbacks/kill.py']    
     timeout: 1000
 
 
@@ -136,7 +136,7 @@ searches:
 
         # a script or command to be called, every time a hit is found.
         callback: 
-          script: ./tests/integration/scripts/echovars.py
+          script: ./tests/integration/callbacks/echovars.py
           args: 
             - /tmp/echovars.txt
             - arg2
@@ -213,7 +213,7 @@ Examples of callbacks:
 A script callback:
 ```yaml
 callback: 
-  script: ./tests/integration/scripts/echovars.py
+  script: ./tests/integration/callbacks/echovars.py
   args: ['/tmp/echovars.txt', 'arg2', 'arg3']
 ```
 A TCP callback:
@@ -253,11 +253,12 @@ Using the *list* YAML tag, it's possible to get a list of files. Following is an
 # example of a Windows command, which returns a list of files
   - logfile:
       list: ['cmd.exe', '/c', 'dir /B /S .\tests\integration\tmp\list_files.log.*']
-  }
 ```
 
-## Environment provided to the called scripts or commands
-Whenever a match is found when searching a logfile, if provided, a script is called, with optional arguments. A list of environment variables is created and passed to the created process, to be used by the called script. Following is the list of created variables:
+## Data provided to the callback
+Whenever a match is found when searching a logfile, if provided, a callback is called, with optional arguments. If the callback is a script, a list of environment variables is created and passed to the created process. If the callback is a TCP or UDS callback, all data are provided as a JSON string, with the JSON string length provided first. In case of a set of global variables, those are only provided during the first payload sent to the callback in case of a TCP or UDS callback, or each time in case of a script callback.
+
+Following is the list of created variables:
 
 variable name | description
 ---                                | --- 
@@ -280,7 +281,7 @@ CLF_WARNING_COUNT                  | current number of WARNING patterns found
 CLF_CRITICAL_COUNT                 | current number of CRITICAL patterns found
 
 <br>
-You could easily gain access to those variables in scripting languages:
+You could easily gain access to those environment variables in scripting languages:
 
 * Python: using the ```os.environ``` object, like this:
 
@@ -305,6 +306,9 @@ do
     echo $v
 done
 ```
+
+## Domain socket callback example
+You can an example for both a TCP or domain socket callback in the *examples* directory.
 
 ## Snapshot file
 This is a JSON file where all state data are kept between different runs. Example:

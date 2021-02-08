@@ -9,11 +9,13 @@ global:
     CLF_lastname: Pacino
     CLF_city: "Los Angeles"
     CLF_profession: actor
-  # prescript:
-  #   - command: ['./scripts/echodomain.py', './tmp/domain.sock']
-  #     timeout: 1000
-  # postcript:
-  #   command: ['./scripts/kill.py']
+  prescript:
+    - command: ['./callbacks/echodomain.py', './tmp/domain.sock', './tmp/echodomain.txt']
+      timeout: 1000
+      async: true
+  postscript:
+    command: ['./callbacks/kill.py']
+    timeout: 1000
 
 # a list of logfiles & tags, to search for patterns. This is either a list of logfiles, or a command giving back a list of 
 # files to search for.

@@ -8,10 +8,10 @@ global:
     CLF_city: "Los Angeles"
     CLF_profession: actor
   prescript:
-    command: ['../scripts/echodomain.py']
+    command: ['../callbacks/echodomain.py']
     timeout: 1000
   postcript:
-    command: ['../scripts/kill.py']
+    command: ['../callbacks/kill.py']
 
 searches:
   - logfile:

@@ -1,4 +1,6 @@
 #!/usr/bin/env python
+""" save all received data from clf into a file """
+
 import socket
 import sys
 import json
