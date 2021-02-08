@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python2.7
 """ save all received data from clf into a file """
 
 import socket

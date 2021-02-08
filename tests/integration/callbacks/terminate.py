@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python2.7
 """ this script is gracefully terminating socket connexion """
 
 import socket
