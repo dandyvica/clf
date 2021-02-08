@@ -434,13 +434,13 @@ fn main() {
     }
 
     //------------------------------------------------------------------------------------------------
-    // list files Linux & Windows
+    // list files Unix & Windows
     //------------------------------------------------------------------------------------------------
     if testcases.is_empty() || testcases.contains(&"list_files") {
         let mut tc = TestCase::new("list_files", &mut nb_testcases);
         tc.multiple_logs();
 
-        #[cfg(target_os = "linux")]
+        #[cfg(target_family = "unix")]
         Config::from_file("./tests/integration/config/list_files.yml")
             .set_tag("options", "protocol")
             .set_tag(
@@ -491,7 +491,7 @@ fn main() {
     //------------------------------------------------------------------------------------------------
     // extra variables
     //------------------------------------------------------------------------------------------------
-    #[cfg(target_os = "linux")]
+    #[cfg(target_family = "unix")]
     if testcases.is_empty() || testcases.contains(&"extra_vars") {
         let mut tc = TestCase::new("extra_vars", &mut nb_testcases);
         Config::default()
