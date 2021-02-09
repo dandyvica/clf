@@ -1,11 +1,11 @@
 //! Contains the configuration of what is executed each time a pattern is found in the logfile. It could be either a spawned script, a TCP socket to which send
 //! relevant data, or a Unix Datagram Socket. For the 2 latter cases, found data are sent as a JSON string. Otherwise, when a script is called, data are sent
 //! through environment variables.
-use std::borrow::Cow;
 use std::cell::RefCell;
 use std::convert::TryFrom;
 use std::io::Write;
 use std::net::TcpStream;
+use std::{borrow::Cow, time::Duration};
 
 #[cfg(target_family = "unix")]
 use std::os::unix::net::UnixStream;
@@ -153,6 +153,14 @@ impl Callback {
                 if handle.tcp_socket.is_none() {
                     let stream = TcpStream::connect(addr)
                         .map_err(|e| context!(e, "unable to connect to TCP address: {}", addr))?;
+
+                    // set timeout for write operations
+                    let write_timeout = Duration::new(DEFAULT_WRITE_TIMEOUT, 0);
+                    stream
+                        .set_write_timeout(Some(write_timeout))
+                        .map_err(|e| context!(e, "unable to set socket timeout: {}", addr))?;
+
+                    // save socket
                     handle.tcp_socket = Some(stream);
                     debug!("creating TCP socket for: {}", address.as_ref().unwrap());
 
@@ -226,6 +234,13 @@ impl Callback {
                     let stream = UnixStream::connect(address.as_ref().unwrap()).map_err(|e| {
                         context!(e, "unable to connect to UNIX socket address: {:?}", addr)
                     })?;
+
+                    // set timeout for write operations
+                    let write_timeout = Duration::new(DEFAULT_WRITE_TIMEOUT, 0);
+                    stream
+                        .set_write_timeout(Some(write_timeout))
+                        .map_err(|e| context!(e, "unable to set socket timeout: {:?}", addr))?;
+
                     handle.domain_socket = Some(stream);
                     debug!("creating UNIX socket for: {:?}", address.as_ref().unwrap());
 

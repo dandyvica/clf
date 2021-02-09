@@ -32,6 +32,9 @@ pub const DEFAULT_HASH_BUFFER_SIZE: usize = 4096;
 // default time for waiting to spawned scripts
 pub const DEFAULT_SCRIPT_TIMEOUT: u64 = 10;
 
+// default write socket timeout
+pub const DEFAULT_WRITE_TIMEOUT: u64 = 5;
+
 fn from_epoch() -> AppResult<Duration> {
     SystemTime::now()
         .duration_since(SystemTime::UNIX_EPOCH)

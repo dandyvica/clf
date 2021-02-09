@@ -361,7 +361,9 @@ mod tests {
         let mut files = cmd.get_file_list().unwrap();
         println!("files={:?}", files);
         assert!(files.len() == 9);
-        assert!(files.iter().all(|f| f.to_str().unwrap().contains("tests/unittest")));
+        assert!(files
+            .iter()
+            .all(|f| f.to_str().unwrap().contains("tests/unittest")));
 
         cmd = vec![
             "bash".to_string(),
@@ -372,7 +374,9 @@ mod tests {
         println!("files2={:?}", files);
 
         assert!(files.len() == 11);
-        assert!(files.iter().all(|f| f.to_str().unwrap().contains("tests/unittest")));
+        assert!(files
+            .iter()
+            .all(|f| f.to_str().unwrap().contains("tests/unittest")));
     }
 
     #[test]
