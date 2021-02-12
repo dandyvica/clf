@@ -72,11 +72,17 @@ pub struct Callback {
     pub args: Option<Vec<String>>,
 
     /// A timeout in seconds to for wait command completion.
-    #[serde(default = "default_timeout")]
+    #[serde(default = "Callback::default_timeout")]
     timeout: u64,
 }
 
 impl Callback {
+    /// Default timeout in seconds when calling a callback
+    fn default_timeout() -> u64 {
+        DEFAULT_WRITE_TIMEOUT
+    }
+
+
     /// Calls the relevant callback with arguments
     pub fn call(
         &self,
@@ -155,7 +161,7 @@ impl Callback {
                         .map_err(|e| context!(e, "unable to connect to TCP address: {}", addr))?;
 
                     // set timeout for write operations
-                    let write_timeout = Duration::new(DEFAULT_WRITE_TIMEOUT, 0);
+                    let write_timeout = Duration::new(self.timeout, 0);
                     stream
                         .set_write_timeout(Some(write_timeout))
                         .map_err(|e| context!(e, "unable to set socket timeout: {}", addr))?;
@@ -236,7 +242,7 @@ impl Callback {
                     })?;
 
                     // set timeout for write operations
-                    let write_timeout = Duration::new(DEFAULT_WRITE_TIMEOUT, 0);
+                    let write_timeout = Duration::new(self.timeout, 0);
                     stream
                         .set_write_timeout(Some(write_timeout))
                         .map_err(|e| context!(e, "unable to set socket timeout: {:?}", addr))?;

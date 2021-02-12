@@ -10,7 +10,7 @@ global:
     CLF_city: "Los Angeles"
     CLF_profession: actor
   prescript:
-    - command: ['./callbacks/echodomain.py', './tmp/domain.sock', './tmp/echodomain.txt']
+    - command: ['./callbacks/echodomain.py', '--domain', './tmp/domain.sock', '--output', ./tmp/echodomain.txt']
       timeout: 1000
       async: true
   postscript:

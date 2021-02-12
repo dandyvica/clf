@@ -1,8 +1,18 @@
 [package]
 name = "clf"
 version = "0.8.0"
-authors = ["dandyvica <dandyvica@gmail.com>"]
+authors = ["Alain Viguier <dandyvica@gmail.com>"]
 edition = "2018"
+description = """
+clf is a reimplementation of the check_logfiles NAgios plugin
+"""
+license = "MIT"
+documentation = "https://github.com/dandyvica/clf"
+homepage = "https://github.com/dandyvica/clf"
+readme = "README.md"
+keywords = ["nagios", "logfiles" ]
+categories = ["command-line-utilities", "text-processing"]
+
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 

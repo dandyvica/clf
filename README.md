@@ -1,4 +1,4 @@
-[![Build Status](https://www.travis-ci.com/dandyvica/clf.svg?branch=master)](https://www.travis-ci.com/dandyvica/clf)
+[![Build Status](https://www.travis-ci.com/dandyvica/clf.svg?branch=master)](https://www.travis-ci.com/dandyvica/clf) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 # Reimplementation of the *check_logfiles* Nagios plugin
 
@@ -141,6 +141,8 @@ searches:
             - /tmp/echovars.txt
             - arg2
             - arg3
+          # a timeout specific for each callback kind (default: 5s)
+          timeout: 10
 
         # list of patterns to match
         patterns:
@@ -464,11 +466,28 @@ To compile with the *musl* library as a standalone static executable:
 $ cargo build --target x86_64-unknown-linux-musl --release   
 ```
 
-Depending on your Linux distribution, you might need to install the *musl_tools*:
+Depending on your Linux distribution, you might need to install the *musl_tools*. This will run on old kernels, provided they're supported by Rust:
 ```bash
 # install for Debian based distributions
 $ sudo apt-get install musl-tools
 ```
+
+To install *clf* in a directory (e.g.: */usr/local/bin*), provided you have write access:
+```bash
+# install clf musl executable into /usr/local/bin
+$ cargo install --root /usr/local --bin clf --target x86_64-unknown-linux-musl --path .
+
+# install clf libc executable into /usr/local/bin
+$ cargo install --root /usr/local --bin clf --target x86_64-unknown-linux-musl --path .
+```
+
+## Running intergation tests
+You can run integration tests by issuing:
+```bash
+# run integration tests on Linux
+$ target/release/integration_test
+```
+
 
 ## Windows specifics
 In order to emulate UNIX inode/dev features, a specific DLL has been developed (*signature.dll*) You need to put this DLL in one of the paths specified by the Windows *Path* environment variable.
