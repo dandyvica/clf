@@ -274,10 +274,10 @@ CLF_LINE                           | full line from the logfile, which triggered
 CLF_LINE_NUMBER                    | the line number in the logfile, which triggered the match
 CLF_MATCHED_RE                     | the regex (as a string) which triggered the match
 CLF_MATCHED_RE_TYPE                | the type of regex which riggered the match (critical or warning)
-CLF_CG_n                           | the value of the capture group involved in the match (n >= 0). Only in case of unnamed capture groups
+CLF_CG_n                           | the value of the capture group involved in the match (0 ≤ n ≤ 30). Only in case of unnamed capture groups
 CLF_NB_CG                          | number of capture groups
 CLF_cgname                         | the value of the name capture group involved in the match
-CLF_uservar1                       | the value of a user-defined variables defines in the *global:* YAML tag
+uservar1                           | the value of a user-defined variables defines in the *global:* YAML tag
 CLF_OK_COUNT                       | current number of OK patterns found
 CLF_WARNING_COUNT                  | current number of WARNING patterns found
 CLF_CRITICAL_COUNT                 | current number of CRITICAL patterns found

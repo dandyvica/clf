@@ -26,6 +26,42 @@ pub const DEFAULT_SCRIPT_TIMEOUT: u64 = 10;
 // default write socket timeout
 pub const DEFAULT_WRITE_TIMEOUT: u64 = 5;
 
+// to save some string allocation, we can define a list of capture groups variables upfront
+pub const CAPTURE_GROUPS: &'static [&'static str] = &[
+    "CLF_CG_0",
+    "CLF_CG_1",
+    "CLF_CG_2",
+    "CLF_CG_3",
+    "CLF_CG_4",
+    "CLF_CG_5",
+    "CLF_CG_6",
+    "CLF_CG_7",
+    "CLF_CG_8",
+    "CLF_CG_9",
+    "CLF_CG_10",
+    "CLF_CG_11",
+    "CLF_CG_12",
+    "CLF_CG_13",
+    "CLF_CG_14",
+    "CLF_CG_15",
+    "CLF_CG_16",
+    "CLF_CG_17",
+    "CLF_CG_18",
+    "CLF_CG_19",
+    "CLF_CG_20",
+    "CLF_CG_21",
+    "CLF_CG_22",
+    "CLF_CG_23",
+    "CLF_CG_24",
+    "CLF_CG_25",
+    "CLF_CG_26",
+    "CLF_CG_27",
+    "CLF_CG_28",
+    "CLF_CG_29",
+    "CLF_CG_30",
+];
+
+// utility functions to get the number of seconds from 1/1/1970
 fn from_epoch() -> AppResult<Duration> {
     SystemTime::now()
         .duration_since(SystemTime::UNIX_EPOCH)

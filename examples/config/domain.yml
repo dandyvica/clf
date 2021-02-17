@@ -5,12 +5,12 @@ global:
   snapshot_file: ./tmp/domain.json
   snapshot_retention: 60
   vars:
-    CLF_firstname: Al
+    firstname: Al
     CLF_lastname: Pacino
     CLF_city: "Los Angeles"
     CLF_profession: actor
   prescript:
-    - command: ['./callbacks/echodomain.py', '--domain', './tmp/domain.sock', '--output', ./tmp/echodomain.txt']
+    - command: ['./callbacks/echodomain.py', '--domain', './tmp/domain.sock', '--output', './tmp/echodomain.txt']
       timeout: 1000
       async: true
   postscript:
