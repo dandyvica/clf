@@ -16,6 +16,9 @@ pub enum LogSource {
 
     #[serde(rename = "list")]
     LogList(Vec<String>),
+
+    #[serde(rename = "cmd")]
+    LogCommand(String),
 }
 
 impl LogSource {
@@ -28,7 +31,7 @@ impl Display for LogSource {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             LogSource::LogFile(logfile) => write!(f, "{}", logfile.display()),
-            LogSource::LogList(_) => unimplemented!("LogSource::LogList not permitted !"),
+            _ => unimplemented!("LogSource::LogList not permitted !"),
         }
     }
 }

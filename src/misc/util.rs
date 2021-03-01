@@ -61,6 +61,8 @@ pub const CAPTURE_GROUPS: &'static [&'static str] = &[
     "CLF_CG_30",
 ];
 
+pub const CAPTURE_GROUPS_LENGTH: usize = CAPTURE_GROUPS.len();
+
 // utility functions to get the number of seconds from 1/1/1970
 fn from_epoch() -> AppResult<Duration> {
     SystemTime::now()

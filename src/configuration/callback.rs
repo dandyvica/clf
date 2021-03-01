@@ -82,7 +82,6 @@ impl Callback {
         DEFAULT_WRITE_TIMEOUT
     }
 
-
     /// Calls the relevant callback with arguments
     pub fn call(
         &self,
@@ -223,7 +222,7 @@ impl Callback {
                 })?;
                 stream
                     .write(&json.as_bytes())
-                    .map_err(|e| context!(e, "error writing JSON data to address: {:?}", addr))?;
+                    .map_err(|e| context!(e, "error writing JSON data to TCP address: {:?}", addr))?;
 
                 Ok(None)
             }
@@ -303,7 +302,7 @@ impl Callback {
                 })?;
                 stream
                     .write(&json.as_bytes())
-                    .map_err(|e| context!(e, "error writing JSON data to address: {:?}", addr))?;
+                    .map_err(|e| context!(e, "error writing JSON data to Domain socket: {:?}", addr))?;
 
                 Ok(None)
             }

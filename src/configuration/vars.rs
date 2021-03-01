@@ -9,7 +9,7 @@ use std::ops::{Deref, DerefMut};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 
-use crate::misc::util::{CAPTURE_GROUPS, DEFAULT_CONTAINER_CAPACITY};
+use crate::misc::util::{CAPTURE_GROUPS, CAPTURE_GROUPS_LENGTH, DEFAULT_CONTAINER_CAPACITY};
 
 use super::pattern::PatternType;
 
@@ -194,7 +194,7 @@ impl<'a> Vars<Cow<'a, str>, VarType<&'a str>> {
                 None => {
                     if let Some(m) = caps.get(i) {
                         // variable will be: CLF_CG_2 (example)
-                        if i > 30 {
+                        if i > CAPTURE_GROUPS_LENGTH - 1 {
                             panic!("your're only limited to 30 capture groups !")
                         }
                         self.inner

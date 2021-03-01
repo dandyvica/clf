@@ -143,6 +143,24 @@ where
                     vec_loglist.push(cloned_search);
                 }
             }
+
+            // we found a logcommand tag: get the list of files using bash -c or cmd.exe /B, and for each one, copy everything
+            LogSource::LogCommand(cmd) => {
+                // get list of files from command or script
+                let files = cmd.get_file_list().map_err(de::Error::custom)?;
+
+                // create Search structure with the files we found, and a clone of all tags
+                for file in &files {
+                    // clone search structure
+                    let mut cloned_search = search.clone();
+
+                    // assign file instead of list
+                    cloned_search.logfile.path = LogSource::LogFile(file.to_path_buf());
+
+                    // now use this structure and add it to config_pathbuf
+                    vec_loglist.push(cloned_search);
+                }
+            }
         }
     }
 

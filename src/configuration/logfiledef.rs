@@ -59,7 +59,7 @@ impl LogFileDef {
     pub fn path(&self) -> &PathBuf {
         match &self.path {
             LogSource::LogFile(path) => path,
-            LogSource::LogList(_) => unimplemented!(
+            _ => unimplemented!(
                 "LogSource::LogList not permitted here in {} !",
                 module_path!()
             ),
@@ -78,11 +78,11 @@ impl LogFileDef {
     #[cfg(test)]
     pub fn list(&self) -> &Vec<String> {
         match &self.path {
-            LogSource::LogFile(_) => unimplemented!(
+            LogSource::LogList(list) => list,
+            _ => unimplemented!(
                 "LogSource::LogList not permitted here in {} !",
                 module_path!()
             ),
-            LogSource::LogList(list) => list,
         }
     }
 
@@ -90,11 +90,6 @@ impl LogFileDef {
     fn default_hash_window() -> usize {
         DEFAULT_HASH_BUFFER_SIZE
     }
-
-    // /// Return the list variant from LogSource
-    // pub fn set_path(&mut self, path: &PathBuf) {
-    //     self.path = LogSource::LogFile(path.clone());
-    // }
 }
 
 /// A custom deserializer for the `exclude` field.

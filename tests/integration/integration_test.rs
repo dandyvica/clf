@@ -462,6 +462,33 @@ fn main() {
         jassert!(rc, "list_files.log");
     }
 
+    if testcases.is_empty() || testcases.contains(&"list_cmd") {
+        let mut tc = TestCase::new("list_cmd", &mut nb_testcases);
+        tc.multiple_logs();
+
+        #[cfg(target_family = "unix")]
+        Config::from_file("./tests/integration/config/list_cmd.yml")
+            .set_tag("options", "protocol")
+            .set_tag(
+                "cmd",
+                "find ./tests/integration/tmp -type f | grep list_files.log.*",
+            )
+            .save_as(&tc.config_file);
+
+        #[cfg(target_os = "windows")]
+        Config::from_file("./tests/integration/config/list_cmd.yml")
+            .set_tag("options", "protocol")
+            .set_tag(
+                "cmd",
+                r"dir /B /S .\tests\integration\tmp\list_files.log.*]",
+            )
+            .save_as(&tc.config_file);
+        let rc = tc.run(&opts, &["-d", "-r"]);
+
+        assert_eq!(rc.0, 2);
+        jassert!(rc, "list_files.log");
+    }
+
     //------------------------------------------------------------------------------------------------
     // exit_msg
     //------------------------------------------------------------------------------------------------

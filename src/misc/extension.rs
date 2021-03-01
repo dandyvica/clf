@@ -202,9 +202,55 @@ impl ReadFs for PathBuf {
     }
 }
 
-/// Returns the list of files from a spwand command.
+/// Returns the list of files from a spawned command.
 pub trait ListFiles {
     fn get_file_list(&self) -> AppResult<Vec<PathBuf>>;
+}
+
+impl ListFiles for String {
+    // in this case, the command is started with either bash or cmd.exe
+    fn get_file_list(&self) -> AppResult<Vec<PathBuf>> {
+        // build the corresponding command
+        #[cfg(target_family = "unix")]
+        let output = Command::new("bash")
+            .args(&["-c", self])
+            .output()
+            .map_err(|e| {
+                context!(
+                    e,
+                    "unable to read output from command: bash -c '{:?}'",
+                    self,
+                )
+            })
+            .unwrap();
+
+        #[cfg(target_family = "windows")]
+        let output = Command::new("cmd.exe")
+            .args(&["/C", self])
+            .output()
+            .map_err(|e| {
+                context!(
+                    e,
+                    "unable to read output from command: bash -c '{:?}'",
+                    self,
+                )
+            })
+            .unwrap();
+
+        debug!(
+            "args={:?}: stdout={:?}, stderr={:?}",
+            self,
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let output_as_str = std::str::from_utf8(&output.stdout)
+            .map_err(|e| context!(e, "unable to convert '{:?}' to utf8", &output.stdout))?;
+
+        Ok(output_as_str
+            .lines()
+            .map(PathBuf::from)
+            .collect::<Vec<PathBuf>>())
+    }
 }
 
 impl ListFiles for Vec<String> {
@@ -351,7 +397,7 @@ mod tests {
 
     #[test]
     #[cfg(target_os = "linux")]
-    fn list_files_shell() {
+    fn list_files_cmd() {
         let mut cmd = vec![
             "find".to_string(),
             "./tests/unittest".to_string(),
@@ -380,8 +426,20 @@ mod tests {
     }
 
     #[test]
-    #[cfg(target_os = "windows")]
+    #[cfg(target_os = "linux")]
     fn list_files_shell() {
+        let cmd = "ls ./tests/unittest/*.* | grep list_files".to_string();
+        let files = cmd.get_file_list().unwrap();
+        println!("files={:?}", files);
+        assert!(files.len() == 11);
+        assert!(files
+            .iter()
+            .all(|f| f.to_str().unwrap().contains("tests/unittest")));
+    }
+
+    #[test]
+    #[cfg(target_os = "windows")]
+    fn list_files_cmd() {
         let cmd = vec![
             "cmd.exe".to_string(),
             "/c".to_string(),

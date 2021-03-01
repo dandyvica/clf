@@ -1,0 +1,28 @@
+# a generic configuration file: test with ok pattern
+---
+global:
+  script_path: "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+  snapshot_retention: 60
+  vars:
+    CLF_firstname: Al
+    CLF_lastname: Pacino
+    CLF_city: "Los Angeles"
+    CLF_profession: actor
+
+searches:
+  - logfile: 
+      cmd: ls /var/log/*.log | grep -v font
+      format: plain
+      logfilemissing: critical
+      archive:
+        extension: gz
+    tags: 
+      - name: tag1
+        process: true
+        options: protocol
+        callback: 
+          address: 127.0.0.1:8999
+          args: ["arg1", "arg2", "arg3"]
+        patterns:
+          critical:
+            regexes: ['error']
