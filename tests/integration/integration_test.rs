@@ -518,7 +518,7 @@ fn main() {
     //------------------------------------------------------------------------------------------------
     // extra variables
     //------------------------------------------------------------------------------------------------
-    #[cfg(target_family = "unix")]
+    //#[cfg(target_family = "unix")]
     if testcases.is_empty() || testcases.contains(&"extra_vars") {
         let mut tc = TestCase::new("extra_vars", &mut nb_testcases);
         Config::default()
@@ -527,7 +527,7 @@ fn main() {
             .replace_tag(
                 "address",
                 "script",
-                "./tests/integration/callbacks/echovars.py",
+                "./target/debug/echovars",
             )
             .set_tag("args", "['./tests/integration/tmp/extra_vars.txt', 'arg2']")
             .save_as(&tc.config_file);
@@ -581,7 +581,7 @@ fn main() {
             .replace_tag(
                 "address",
                 "script",
-                "./tests/integration/callbacks/echovars.py",
+                "./target/debug/echovars",
             )
             .set_tag("args", "['./tests/integration/tmp/runifok.txt', 'arg2']")
             .save_as(&tc.config_file);
@@ -592,7 +592,7 @@ fn main() {
             .replace_tag("address", "script", "python.exe")
             .set_tag(
                 "args",
-                r"['.\tests\integration\scripts\echovars.py', '.\tests\integration\tmp\runifok.txt']",
+                r"['.\target\debug\echovars', '.\tests\integration\tmp\runifok.txt']",
             )
             .save_as(&tc.config_file);
         let rc = tc.run(&opts, &["-d"]);
@@ -666,7 +666,7 @@ fn main() {
             .replace_tag(
                 "address",
                 "script",
-                "./tests/integration/callbacks/echovars.py",
+                "./target/debug/echovars",
             )
             .set_tag(
                 "args",
@@ -680,7 +680,7 @@ fn main() {
             .replace_tag("address", "script", "python.exe")
             .set_tag(
                 "args",
-                r"['.\tests\integration\scripts\echovars.py', '.\tests\integration\tmp\start_script.txt']",
+                r"['.\target\debug\echovars', '.\tests\integration\tmp\start_script.txt']",
             )
             .save_as(&tc.config_file);
         let rc = tc.run(&opts, &["-d"]);
@@ -713,7 +713,7 @@ fn main() {
             .replace_tag(
                 "address",
                 "script",
-                "./tests/integration/callbacks/echovars.py",
+                "./target/debug/echovars",
             )
             .set_tag(
                 "args",
@@ -728,7 +728,7 @@ fn main() {
             )
             .set_tag("path", &tc.logfile)
             .replace_tag("address", "script", "python.exe")
-            .set_tag("args", r"['.\tests\integration\scripts\echovars.py', '.\tests\integration\tmp\script_threshold.txt']")
+            .set_tag("args", r"['.\target\debug\echovars', '.\tests\integration\tmp\script_threshold.txt']")
             .save_as(&tc.config_file);
         let rc = tc.run(&opts, &["-d"]);
 
@@ -987,7 +987,9 @@ fn main() {
                         let j = json.unwrap();
 
                         // all asserts here
-                        assert_eq!(j.args, &["arg1", "arg2", "arg3"]);
+                        if j.args.is_some() {
+                            assert_eq!(j.args.unwrap(), &["arg1", "arg2", "arg3"]);
+                        }
 
                         // globals are only sent once
                         if nb_received == 1 {
@@ -1080,7 +1082,10 @@ fn main() {
                         let j = json.unwrap();
 
                         // all asserts here
-                        assert_eq!(j.args, &["arg1", "arg2", "arg3"]);
+                        // all asserts here
+                        if j.args.is_some() {
+                            assert_eq!(j.args.unwrap(), &["arg1", "arg2", "arg3"]);
+                        }
 
                         // globals are only sent once
                         if nb_received == 1 {
@@ -1211,7 +1216,6 @@ fn main() {
     }
 
     // call presecript echo domain and send JSON data
-    #[cfg(target_family = "unix")]
     if testcases.is_empty() || testcases.contains(&"echotcp") {
         let mut tc = TestCase::new("echotcp", &mut nb_testcases);
         Config::from_file("./tests/integration/config/echotcp.yml")

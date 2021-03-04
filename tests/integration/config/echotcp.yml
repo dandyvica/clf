@@ -10,14 +10,11 @@ global:
     CLF_profession: actor
   prescript:
     - command: 
-      - ./tests/integration/callbacks/echotcp.py
+      - ./target/debug/echotcp
       - 127.0.0.1:8999
       - ./tests/integration/tmp/echotcp.txt
       timeout: 100
       async: true
-  postscript:
-    command: [ './tests/integration/callbacks/terminate.py', '127.0.0.1:8999', 'tcp' ]
-    timeout: 2000
 
 searches:
   - logfile: 

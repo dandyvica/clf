@@ -10,14 +10,11 @@ global:
     CLF_profession: actor
   prescript:
     - command: 
-      - ./tests/integration/callbacks/echodomain.py
+      - ./target/debug/echodomain
       - ./tests/integration/tmp/echodomain.sock
       - ./tests/integration/tmp/echodomain.txt
       timeout: 100
       async: true
-  postscript:
-    command: [ './tests/integration/callbacks/terminate.py', './tests/integration/tmp/echodomain.sock', 'domain' ]
-    timeout: 2000
 
 searches:
   - logfile: 

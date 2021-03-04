@@ -1,3 +1,4 @@
+#![allow(warnings, unused)]
 #![deny(clippy::all)]
 use std::fmt;
 use std::fs::*;
@@ -433,9 +434,8 @@ impl FakeLogfile {
 }
 
 // This is made for testing using a UDS
-use serde::Deserialize;
-
-#[derive(Debug, Deserialize, PartialEq)]
+use serde::{Deserialize, Serialize};
+#[derive(Debug, Serialize, Deserialize, PartialEq)]
 #[serde(untagged)]
 pub enum VarType {
     Str(String),
@@ -456,9 +456,9 @@ impl VarType {
         }
     }
 }
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct JSONStream {
-    pub args: Vec<String>,
+    pub args: Option<Vec<String>>,
     pub global: Option<HashMap<String, String>>,
     pub vars: HashMap<String, VarType>,
 }

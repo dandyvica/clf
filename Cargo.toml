@@ -55,4 +55,16 @@ default = ["tera"]
 name = "integration_test"
 path = "tests/integration/integration_test.rs"
 
+[[bin]]
+name = "echotcp"
+path = "tests/integration/echotcp.rs"
+
+[[bin]]
+name = "echodomain"
+path = "tests/integration/echodomain.rs"
+
+[[bin]]
+name = "echovars"
+path = "tests/integration/echovars.rs"
+
 

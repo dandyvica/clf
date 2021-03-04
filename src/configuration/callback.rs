@@ -186,8 +186,9 @@ impl Callback {
                             })
                         } else {
                             json!({
-                            "args": &args,
-                            "vars": runtime_vars})
+                                //"args": &args,
+                                "vars": runtime_vars
+                            })
                         }
                     }
                     None => {
@@ -220,9 +221,9 @@ impl Callback {
                         addr
                     )
                 })?;
-                stream
-                    .write(&json.as_bytes())
-                    .map_err(|e| context!(e, "error writing JSON data to TCP address: {:?}", addr))?;
+                stream.write(&json.as_bytes()).map_err(|e| {
+                    context!(e, "error writing JSON data to TCP address: {:?}", addr)
+                })?;
 
                 Ok(None)
             }
@@ -266,8 +267,9 @@ impl Callback {
                             })
                         } else {
                             json!({
-                            "args": &args,
-                            "vars": runtime_vars})
+                                //"args": &args,
+                                "vars": runtime_vars
+                            })
                         }
                     }
                     None => {
@@ -300,9 +302,9 @@ impl Callback {
                         addr
                     )
                 })?;
-                stream
-                    .write(&json.as_bytes())
-                    .map_err(|e| context!(e, "error writing JSON data to Domain socket: {:?}", addr))?;
+                stream.write(&json.as_bytes()).map_err(|e| {
+                    context!(e, "error writing JSON data to Domain socket: {:?}", addr)
+                })?;
 
                 Ok(None)
             }
