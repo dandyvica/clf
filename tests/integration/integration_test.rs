@@ -480,7 +480,7 @@ fn main() {
             .set_tag("options", "protocol")
             .set_tag(
                 "cmd",
-                r"dir /B /S .\tests\integration\tmp\list_files.log.*]",
+                r"dir /B /S .\tests\integration\tmp\list_files.log.*",
             )
             .save_as(&tc.config_file);
         let rc = tc.run(&opts, &["-d", "-r"]);
@@ -589,10 +589,10 @@ fn main() {
         Config::from_file("./tests/integration/config/ok_pattern.yml")
             .set_tag("options", "runcallback,runifok")
             .set_tag("path", &tc.logfile)
-            .replace_tag("address", "script", "python.exe")
+            .replace_tag("address", "script", r".\target\debug\echovars")
             .set_tag(
                 "args",
-                r"['.\target\debug\echovars', '.\tests\integration\tmp\runifok.txt']",
+                r"['.\tests\integration\tmp\runifok.txt', 'arg2']",
             )
             .save_as(&tc.config_file);
         let rc = tc.run(&opts, &["-d"]);
@@ -677,10 +677,10 @@ fn main() {
         Config::default()
             .set_tag("options", "runcallback")
             .set_tag("path", &tc.logfile)
-            .replace_tag("address", "script", "python.exe")
+            .replace_tag("address", "script", r".\target\debug\echovars")
             .set_tag(
                 "args",
-                r"['.\target\debug\echovars', '.\tests\integration\tmp\start_script.txt']",
+                r"['.\tests\integration\tmp\start_script.txt']",
             )
             .save_as(&tc.config_file);
         let rc = tc.run(&opts, &["-d"]);
@@ -1216,8 +1216,10 @@ fn main() {
     }
 
     // call presecript echo domain and send JSON data
+    #[cfg(target_family = "unix")]    
     if testcases.is_empty() || testcases.contains(&"echotcp") {
         let mut tc = TestCase::new("echotcp", &mut nb_testcases);
+        #[cfg(target_family = "unix")]
         Config::from_file("./tests/integration/config/echotcp.yml")
             .set_tag("options", "runcallback")
             .set_tag("path", &tc.logfile)
@@ -1229,6 +1231,20 @@ fn main() {
             .expect(&format!("unable to open file {}", &tc.tmpfile));
         assert!(data.contains(&"tests/integration/tmp/echotcp.log"));
     }
+    #[cfg(target_family = "windows")]    
+    if testcases.is_empty() || testcases.contains(&"echotcp_win") {
+        let mut tc = TestCase::new("echotcp_win", &mut nb_testcases);
+        Config::from_file(r".\tests\integration\config\echotcp_win.yml")
+            .set_tag("options", "runcallback")
+            .set_tag("path", &tc.logfile)
+            .save_as(&tc.config_file);
+        let _ = tc.run(&opts, &["-d"]);
+
+        // check resulting file created from running script
+        let data: String = std::fs::read_to_string(&tc.tmpfile)
+            .expect(&format!("unable to open file {}", &tc.tmpfile));
+        assert!(data.contains(&r"tests\\integration\\tmp\\echotcp_win.log"));
+    }    
 
     println!("Number of test cases executed: {}", nb_testcases - 1);
 }

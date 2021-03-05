@@ -1,0 +1,38 @@
+# a generic configuration file: test with ok pattern
+---
+global:
+  snapshot_retention: 1
+  vars:
+    CLF_firstname: Al
+    CLF_lastname: Pacino
+    CLF_city: "Los Angeles"
+    CLF_profession: actor
+  prescript:
+    - command: 
+      - .\target\debug\echotcp.exe
+      - 127.0.0.1:8999
+      - .\tests\integration\tmp\echotcp_win.txt
+      timeout: 100
+      async: true
+
+searches:
+  - logfile: 
+      path: .\tests\integration\tmp\echodomain.log
+      format: plain
+      logfilemissing: critical
+      archive:
+        extension: gz
+    tags: 
+      - name: tag1
+        process: true
+        options: runcallback
+        callback: 
+          address: 127.0.0.1:8999
+          args: ["arg1", "arg2", "arg3"]
+        patterns:
+          critical:
+            regexes: ['number = (\d+), error id = (\d+)$']
+            exceptions: ['line number = 192']
+          warning:
+            regexes: ['number = (\d+), warning id = (\d+)$']
+            exceptions: ['line number = (193|195)']

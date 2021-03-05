@@ -257,8 +257,18 @@ Using the *list* YAML tag, it's possible to get a list of files. Following is an
       list: ['cmd.exe', '/c', 'dir /B /S .\tests\integration\tmp\list_files.log.*']
 ```
 
+Optionnaly, you can use the *cmd* tag to send a whole command:
+
+```yaml
+# example of a UNIX command, which returns a list of files using the bash shell. In case of Windows, cmd.exe will be used
+  - logfile:
+      cmd: find /var/log -maxdepth 2 -type f -name "[a-d]*.log" | grep foo
+```
+
+
 ## Data provided to the callback
-Whenever a match is found when searching a logfile, if provided, a callback is called, with optional arguments. If the callback is a script, a list of environment variables is created and passed to the created process. If the callback is a TCP or UDS callback, all data are provided as a JSON string, with the JSON string length provided first. In case of a set of global variables, those are only provided during the first payload sent to the callback in case of a TCP or UDS callback, or each time in case of a script callback.
+Whenever a match is found when searching a logfile, if provided, a callback is called, with optional arguments. If the callback is a script, a list of environment variables is created and passed to the created process. If the callback is a TCP or UDS callback, all data are provided as a JSON string, with the JSON string length provided first. In case of a set of global variables, those are only provided during the first payload sent to the callback in case of a TCP or UDS callback, or each time in case of a script callback. It's the same process for optional 
+arguments: they're only provided once in case of a TCP or UDS callback, every call in case of a script.
 
 Following is the list of created variables:
 
