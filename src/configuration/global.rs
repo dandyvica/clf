@@ -114,12 +114,12 @@ impl Default for GlobalOptions {
 }
 
 #[cfg(test)]
+#[cfg(target_family = "unix")]
 mod tests {
     use super::*;
     use std::str::FromStr;
 
     #[test]
-    #[cfg(target_family = "unix")]
     fn global_options() {
         let mut yaml = r#"
 script_path: /usr/foo1

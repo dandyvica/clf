@@ -175,7 +175,14 @@ impl Callback {
 
                 // send JSON data through TCP socket
                 let stream = handle.tcp_socket.as_ref().unwrap();
-                send_json_data(&self.args, stream, global_vars, runtime_vars, first_time, addr)
+                send_json_data(
+                    &self.args,
+                    stream,
+                    global_vars,
+                    runtime_vars,
+                    first_time,
+                    addr,
+                )
             }
             #[cfg(target_family = "unix")]
             CallbackType::Domain(address) => {
@@ -205,7 +212,14 @@ impl Callback {
 
                 // send JSON data through UNIX socket
                 let stream = handle.domain_socket.as_ref().unwrap();
-                send_json_data(&self.args, stream, global_vars, runtime_vars, first_time, addr)
+                send_json_data(
+                    &self.args,
+                    stream,
+                    global_vars,
+                    runtime_vars,
+                    first_time,
+                    addr,
+                )
             }
         }
     }
@@ -286,6 +300,7 @@ pub struct ChildData {
 
 impl ChildData {
     #[cfg(test)]
+    #[cfg(target_family = "unix")]
     fn exit_code(&mut self) -> AppResult<Option<i32>> {
         // do we have a Child ?
         if self.child.is_none() {

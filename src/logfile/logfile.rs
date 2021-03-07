@@ -266,6 +266,7 @@ impl LogFile {
 
 #[cfg(test)]
 mod tests {
+    #[cfg(target_family = "unix")]
     use std::str::FromStr;
 
     use super::*;

@@ -76,6 +76,7 @@ impl LogFileDef {
 
     // Return the list variant from LogSource
     #[cfg(test)]
+    #[cfg(target_family = "unix")]
     pub fn list(&self) -> &Vec<String> {
         match &self.path {
             LogSource::LogList(list) => list,
@@ -104,6 +105,7 @@ where
 }
 
 #[cfg(test)]
+#[cfg(target_family = "unix")]
 mod tests {
     use super::*;
 

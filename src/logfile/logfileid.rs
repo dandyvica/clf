@@ -33,6 +33,7 @@ pub struct LogFileID {
 impl LogFileID {
     /// Fill all variable fields from declared
     #[cfg(test)]
+    #[cfg(target_family = "unix")]
     pub fn from_declared<P: AsRef<Path>>(path: P, hash_buffer_size: usize) -> AppResult<Self> {
         let mut id = LogFileID::default();
         id.update(path, hash_buffer_size)?;
@@ -72,6 +73,7 @@ impl LogFileID {
 }
 
 #[cfg(test)]
+#[cfg(target_family = "unix")]
 mod tests {
     use super::*;
 

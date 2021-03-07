@@ -42,6 +42,7 @@ pub enum VarType<T> {
 
 impl<T> VarType<T> {
     #[cfg(test)]
+    #[cfg(target_family = "unix")]
     pub fn as_t(&self) -> &T {
         match self {
             VarType::Str(s) => s,

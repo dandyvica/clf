@@ -241,6 +241,8 @@ mod tests {
 
     fn systemtime() -> AppResult<Duration> {
         let sys_time = SystemTime::now();
+        let timeout = std::time::Duration::from_millis(10);
+        std::thread::sleep(timeout);
         let new_sys_time = SystemTime::now();
 
         let difference = sys_time

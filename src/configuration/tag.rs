@@ -70,6 +70,7 @@ impl Tag {
 fromstr!(Tag);
 
 #[cfg(test)]
+#[cfg(target_family = "unix")]
 mod tests {
     use super::*;
     use std::str::FromStr;
