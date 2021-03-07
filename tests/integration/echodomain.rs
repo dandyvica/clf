@@ -5,6 +5,7 @@ use std::io::prelude::*;
 mod testcase;
 use testcase::JSONStream;
 
+#[cfg(target_family = "unix")]
 fn main() -> std::io::Result<()> {
     let args: Vec<String> = env::args().collect();
     let mut file: Option<File> = None;

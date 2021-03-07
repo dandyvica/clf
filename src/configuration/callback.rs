@@ -3,6 +3,7 @@
 //! through environment variables.
 use std::cell::RefCell;
 use std::convert::TryFrom;
+use std::fmt::Debug;
 use std::io::Write;
 use std::net::TcpStream;
 use std::{borrow::Cow, time::Duration};
@@ -173,59 +174,8 @@ impl Callback {
                 }
 
                 // send JSON data through TCP socket
-                let mut stream = handle.tcp_socket.as_ref().unwrap();
-
-                // create a dedicated JSON structure
-                let mut json = match &self.args {
-                    Some(args) => {
-                        if first_time {
-                            json!({
-                                "args": &args,
-                                "global": global_vars,
-                                "vars": runtime_vars
-                            })
-                        } else {
-                            json!({
-                                //"args": &args,
-                                "vars": runtime_vars
-                            })
-                        }
-                    }
-                    None => {
-                        if first_time {
-                            json!({
-                                "global": global_vars,
-                                "vars": runtime_vars
-                            })
-                        } else {
-                            json!({ "vars": runtime_vars })
-                        }
-                    }
-                }
-                .to_string();
-
-                // 64KB a payload is more than enough
-                json.truncate(u16::MAX as usize);
-                let json_raw = json.as_bytes();
-
-                // send data length first in network order, and then send payload
-                let size = u16::try_from(json_raw.len()).unwrap_or_else(|_| {
-                    panic!("unexpected conversion error at {}-{}", file!(), line!())
-                });
-
-                stream.write(&size.to_be_bytes()).map_err(|e| {
-                    context!(
-                        e,
-                        "error writing payload size:{} to address: {:?}",
-                        size,
-                        addr
-                    )
-                })?;
-                stream.write(&json.as_bytes()).map_err(|e| {
-                    context!(e, "error writing JSON data to TCP address: {:?}", addr)
-                })?;
-
-                Ok(None)
+                let stream = handle.tcp_socket.as_ref().unwrap();
+                send_json_data(&self.args, stream, global_vars, runtime_vars, first_time, addr)
             }
             #[cfg(target_family = "unix")]
             CallbackType::Domain(address) => {
@@ -254,59 +204,8 @@ impl Callback {
                 }
 
                 // send JSON data through UNIX socket
-                let mut stream = handle.domain_socket.as_ref().unwrap();
-
-                // create a dedicated JSON structure
-                let mut json = match &self.args {
-                    Some(args) => {
-                        if first_time {
-                            json!({
-                                "args": &args,
-                                "global": global_vars,
-                                "vars": runtime_vars
-                            })
-                        } else {
-                            json!({
-                                //"args": &args,
-                                "vars": runtime_vars
-                            })
-                        }
-                    }
-                    None => {
-                        if first_time {
-                            json!({
-                                "global": global_vars,
-                                "vars": runtime_vars
-                            })
-                        } else {
-                            json!({ "vars": runtime_vars })
-                        }
-                    }
-                }
-                .to_string();
-
-                // 64KB a payload is more than enough
-                json.truncate(u16::MAX as usize);
-                let json_raw = json.as_bytes();
-
-                // send data length first in network order, and then send payload
-                let size = u16::try_from(json_raw.len()).unwrap_or_else(|_| {
-                    panic!("unexpected conversion error at {}-{}", file!(), line!())
-                });
-
-                stream.write(&size.to_be_bytes()).map_err(|e| {
-                    context!(
-                        e,
-                        "error writing payload size: {} to address: {:?}",
-                        size,
-                        addr
-                    )
-                })?;
-                stream.write(&json.as_bytes()).map_err(|e| {
-                    context!(e, "error writing JSON data to Domain socket: {:?}", addr)
-                })?;
-
-                Ok(None)
+                let stream = handle.domain_socket.as_ref().unwrap();
+                send_json_data(&self.args, stream, global_vars, runtime_vars, first_time, addr)
             }
         }
     }
@@ -314,6 +213,67 @@ impl Callback {
 
 // Auto-implement FromStr
 fromstr!(Callback);
+
+// send data through Tcp or Unix stream
+fn send_json_data<T: Write, U: Debug>(
+    args: &Option<Vec<String>>,
+    mut stream: T,
+    global_vars: &GlobalVars,
+    runtime_vars: &RuntimeVars,
+    first_time: bool,
+    addr: U,
+) -> AppResult<Option<ChildData>> {
+    // create a dedicated JSON structure
+    let mut json = match args {
+        Some(args) => {
+            if first_time {
+                json!({
+                    "args": &args,
+                    "global": global_vars,
+                    "vars": runtime_vars
+                })
+            } else {
+                json!({
+                    //"args": &args,
+                    "vars": runtime_vars
+                })
+            }
+        }
+        None => {
+            if first_time {
+                json!({
+                    "global": global_vars,
+                    "vars": runtime_vars
+                })
+            } else {
+                json!({ "vars": runtime_vars })
+            }
+        }
+    }
+    .to_string();
+
+    // 64KB a payload is more than enough
+    json.truncate(u16::MAX as usize);
+    let json_raw = json.as_bytes();
+
+    // send data length first in network order, and then send payload
+    let size = u16::try_from(json_raw.len())
+        .unwrap_or_else(|_| panic!("unexpected conversion error at {}-{}", file!(), line!()));
+
+    stream.write(&size.to_be_bytes()).map_err(|e| {
+        context!(
+            e,
+            "error writing payload size: {} to address: {:?}",
+            size,
+            addr
+        )
+    })?;
+    stream
+        .write(&json.as_bytes())
+        .map_err(|e| context!(e, "error writing JSON data to Domain socket: {:?}", addr))?;
+
+    Ok(None)
+}
 
 /// Return structure from a call to a script. Gathers all relevant data, instead of a mere tuple.
 #[derive(Debug, Default)]
