@@ -51,14 +51,17 @@ pub fn init_log(options: &CliOptions) {
             .truncate(true)
             .create(true)
             .open(logger)
-            .unwrap()
     } else {
-        OpenOptions::new()
-            .append(true)
-            .create(true)
-            .open(logger)
-            .unwrap()
+        OpenOptions::new().append(true).create(true).open(logger)
     };
+
+    // check for opening or creation error
+    if let Err(ref e) = writable {
+        Nagios::exit_critical(&format!(
+            "unable to open or create log file {:?}, error {}",
+            logger, e
+        ));
+    }
 
     // initialize logger
     match WriteLogger::init(
@@ -66,7 +69,7 @@ pub fn init_log(options: &CliOptions) {
         simplelog::ConfigBuilder::new()
             .set_time_format("%Y-%b-%d %H:%M:%S.%f".to_string())
             .build(),
-        writable,
+        writable.unwrap(),
     ) {
         Ok(_) => (),
         Err(e) => {

@@ -141,6 +141,23 @@ fn main() {
         assert_eq!(rc, 0);
     }
 
+    // create or open log error
+    #[cfg(target_family = "unix")]
+    if testcases.is_empty() || testcases.contains(&"show_options") {
+        let tc = TestCase::new("log_error", &mut nb_testcases);
+        let rc = tc.exec(
+            &opts,
+            &[
+                "--config",
+                "./tests/integration/config/generated.yml",
+                "--log",
+                "/bin/foo.log",
+            ],
+        );
+
+        assert_eq!(rc, 2);
+    }
+
     //------------------------------------------------------------------------------------------------
     // genuine search with fastforward
     //------------------------------------------------------------------------------------------------
