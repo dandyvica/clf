@@ -9,7 +9,7 @@ cargo build --release
 cargo build --release --target x86_64-unknown-linux-musl
 
 # copy file into package
-#cp target/$target/clf ./package
+cp target/$target/clf ./package
 strip target/x86_64-unknown-linux-musl/$target/clf
 cp target/x86_64-unknown-linux-musl/$target/clf ./package/clf.musl
 #cp target/$target/integration_test ./package

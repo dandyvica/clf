@@ -36,6 +36,16 @@ pub fn init_config(options: &CliOptions) -> Config {
     config.global.insert_process_vars(&options.config_file);
     config.global.insert_extra_vars(&options.extra_vars);
 
+    // list all variables to log
+    let all_vars: Vec<_> = config
+        .global
+        .global_vars
+        .iter()
+        .map(|(k, v)| format!("{}='{}'", k, v))
+        .collect();
+
+    info!("global variables: {}", all_vars.join(" "));
+
     config
 }
 
